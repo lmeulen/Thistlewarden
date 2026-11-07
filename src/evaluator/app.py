@@ -14,6 +14,7 @@ from evaluator.api.handlers import register_api_handlers
 from evaluator.config import BootstrapSettings, load_bootstrap_settings
 from evaluator.config_io import ConfigurationExchangeService
 from evaluator.costs import CostService, SQLiteCostRepository
+from evaluator.dashboard import DashboardService
 from evaluator.database import SQLiteConnectionFactory
 from evaluator.discovery import ModelDiscoveryClient, ModelDiscoveryService
 from evaluator.endpoints import EndpointService, SQLiteEndpointRepository
@@ -97,6 +98,7 @@ def create_app(
     endpoint_service: EndpointService | None = None
     model_profile_service: ModelProfileService | None = None
     cost_service: CostService | None = None
+    dashboard_service: DashboardService | None = None
     golden_set_service: GoldenSetService | None = None
     model_discovery_service: ModelDiscoveryService | None = None
     judge_profile_service: JudgeProfileService | None = None
@@ -130,6 +132,7 @@ def create_app(
             provider_call_executor,
         )
         cost_service = CostService(SQLiteCostRepository(database_factory), model_profile_repository)
+        dashboard_service = DashboardService(database_factory)
         judge_profile_service = JudgeProfileService(SQLiteJudgeProfileRepository(database_factory))
         run_queue = RunQueue(
             database_factory, max_profiles=resolved_settings.values.max_model_profiles_per_run
@@ -225,6 +228,8 @@ def create_app(
         app.extensions["model_profile_tester"] = model_profile_tester
     if cost_service is not None:
         app.extensions["cost_service"] = cost_service
+    if dashboard_service is not None:
+        app.extensions["dashboard_service"] = dashboard_service
     if golden_set_service is not None:
         app.extensions["golden_set_service"] = golden_set_service
     if model_discovery_service is not None:

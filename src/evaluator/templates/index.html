@@ -1,4 +1,32 @@
 {% extends "base.html" %}{% block content %}
 <h1>Thistlewarden</h1><p>Local evaluation of language models.</p>
-<div class="cards"><section><h2>Evaluate</h2><p>Start runs and compare scores, speed, costs, and quality gates.</p><a class="button" href="{{ url_for('gui.runs_page') }}">View runs</a></section><section><h2>Configure</h2><p>Manage provider endpoints, headers, models, inference parameters, and pricing.</p><a class="button" href="{{ url_for('gui.endpoints_page') }}">View endpoints</a></section><section><h2>Operations</h2><p>View active setting values and their sources.</p><a class="button" href="{{ url_for('gui.settings_page') }}">View settings</a></section></div>
+<div class="cards dashboard-cards">
+  <section aria-labelledby="evaluate-title">
+    <h2 id="evaluate-title">Evaluate</h2>
+    <p class="dashboard-primary"><strong>{{ statistics.total_runs }}</strong> total runs</p>
+    <dl class="dashboard-secondary">
+      <div><dt>Active runs</dt><dd>{{ statistics.active_runs }}</dd></div>
+      <div><dt>Finished runs</dt><dd>{{ statistics.finished_runs }}</dd></div>
+    </dl>
+    <a class="button" href="{{ url_for('gui.runs_page') }}">View runs</a>
+  </section>
+  <section aria-labelledby="configure-title">
+    <h2 id="configure-title">Configure</h2>
+    <p class="dashboard-primary"><strong>{{ statistics.active_model_profiles }}</strong> active model profiles</p>
+    <dl class="dashboard-secondary">
+      <div><dt>Active endpoints</dt><dd>{{ statistics.active_endpoints }}</dd></div>
+      <div><dt>Total model profiles</dt><dd>{{ statistics.total_model_profiles }}</dd></div>
+    </dl>
+    <a class="button" href="{{ url_for('gui.endpoints_page') }}">View endpoints</a>
+  </section>
+  <section aria-labelledby="test-material-title">
+    <h2 id="test-material-title">Test material</h2>
+    <p class="dashboard-primary"><strong>{{ statistics.enabled_cases }}</strong> enabled test cases</p>
+    <dl class="dashboard-secondary">
+      <div><dt>Active golden sets</dt><dd>{{ statistics.active_golden_sets }}</dd></div>
+      <div><dt>Total test cases</dt><dd>{{ statistics.total_cases }}</dd></div>
+    </dl>
+    <a class="button" href="{{ url_for('gui.golden_sets_page') }}">View golden sets</a>
+  </section>
+</div>
 {% endblock %}
