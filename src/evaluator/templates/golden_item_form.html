@@ -4,7 +4,7 @@
 <h1>{{ 'Edit test case' if item else 'Add test case' }}</h1>
 <p>Golden set: <strong>{{ golden_set.data.name }}</strong></p>
 {% set d = item.data if item else none %}
-<form method="post" class="form-grid">
+<form method="post" class="form-grid" id="golden-item-form" data-verify-url="{{ url_for('gui.golden_item_verify', set_id=golden_set.id) }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Case ID<input name="case_id" required value="{{ d.case_id if d else '' }}"></label>
   <label>Category<input name="category" value="{{ d.category or '' if d else '' }}"></label>
@@ -23,6 +23,13 @@
     <textarea name="evaluator_config" id="evaluator-config" rows="12" aria-describedby="config-help">{{ d.evaluator_config|tojson(indent=2) if d else evaluator_examples['exact_match']|tojson(indent=2) }}</textarea>
   </label>
   <p id="config-help" class="help wide">Changing evaluation method replaces configuration with valid example showing available fields. You can edit example before saving. Exact match requires expected answer. LLM judge requires expected answer or item rubric.</p>
+  <section class="panel wide" aria-labelledby="output-tester-title">
+    <h2 id="output-tester-title">Test evaluator</h2>
+    <p>Verify candidate output against current unsaved evaluator settings. Nothing is saved.</p>
+    <label>Test output<textarea name="test_output" id="test-output" rows="6"></textarea></label>
+    <div class="actions"><button type="button" id="verify-output">Verify output</button></div>
+    <div id="verification-result" aria-live="polite"></div>
+  </section>
   <label class="wide">Tags, comma-separated<input name="tags" value="{{ d.tags|join(', ') if d else '' }}"></label>
   <label class="check"><input type="checkbox" name="enabled" {% if not d or d.enabled %}checked{% endif %}> Enabled</label>
   <div class="actions wide"><button>Save</button><a href="{{ url_for('gui.golden_set_edit', set_id=golden_set.id) }}">Back</a></div>
@@ -35,11 +42,50 @@
 {% endif %}
 <script nonce="{{ csp_nonce() }}">
 (function () {
+  var form = document.getElementById('golden-item-form');
   var method = document.getElementById('evaluation-method');
   var config = document.getElementById('evaluator-config');
+  var output = document.getElementById('test-output');
+  var button = document.getElementById('verify-output');
+  var result = document.getElementById('verification-result');
   var examples = {{ evaluator_examples|tojson }};
+  function clearResult() {
+    result.className = '';
+    result.textContent = '';
+  }
   method.addEventListener('change', function () {
     config.value = JSON.stringify(examples[method.value], null, 2);
+    clearResult();
+  });
+  [config, output, form.elements.expected_answer].forEach(function (element) {
+    element.addEventListener('input', clearResult);
+  });
+  button.addEventListener('click', function () {
+    button.disabled = true;
+    button.textContent = 'Verifying…';
+    clearResult();
+    fetch(form.dataset.verifyUrl, {
+      method: 'POST',
+      body: new FormData(form),
+      headers: {'Accept': 'application/json'}
+    }).then(function (response) {
+      return response.json().then(function (data) { return {response: response, data: data}; });
+    }).then(function (value) {
+      var data = value.data;
+      if (!value.response.ok || !data.ok) {
+        result.className = 'message error';
+        result.textContent = 'Unable to verify: ' + (data.message || 'Invalid input.');
+        return;
+      }
+      result.className = data.passed ? 'message success' : 'message error';
+      result.textContent = (data.passed ? 'OK' : 'NOK') + ' · score ' + data.score + ' · ' + data.reason;
+    }).catch(function () {
+      result.className = 'message error';
+      result.textContent = 'Unable to verify output.';
+    }).finally(function () {
+      button.disabled = false;
+      button.textContent = 'Verify output';
+    });
   });
 }());
 </script>

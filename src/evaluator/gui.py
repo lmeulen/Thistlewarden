@@ -32,6 +32,7 @@ from evaluator.dashboard import DashboardService, DashboardStatistics
 from evaluator.discovery import ModelDiscoveryService
 from evaluator.endpoints import EndpointService, HeaderInput
 from evaluator.errors import ConfigurationError
+from evaluator.evaluation_preview import EvaluationPreviewService
 from evaluator.gates import QualityGateService
 from evaluator.golden_sets import GoldenSetService, evaluator_config_examples
 from evaluator.judges import JudgeProfileService
@@ -88,6 +89,10 @@ def _discovery_service() -> ModelDiscoveryService:
 
 def _golden_service() -> GoldenSetService:
     return cast(GoldenSetService, current_app.extensions["golden_set_service"])
+
+
+def _evaluation_preview_service() -> EvaluationPreviewService:
+    return cast(EvaluationPreviewService, current_app.extensions["evaluation_preview_service"])
 
 
 def _judge_service() -> JudgeProfileService:
@@ -635,6 +640,31 @@ def golden_item_new(set_id: UUID) -> str | Response:
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
     return _render_golden_item_form(item=None, golden_set=_golden_service().get_set(set_id))
+
+
+@gui.post("/golden-sets/<uuid:set_id>/items/verify")
+def golden_item_verify(set_id: UUID) -> tuple[Response, int] | Response:
+    _golden_service().get_set(set_id)
+    try:
+        result = _evaluation_preview_service().evaluate(
+            method=request.form.get("evaluation_method", "exact_match"),
+            config=_json_field("evaluator_config"),
+            expected_answer=request.form.get("expected_answer") or None,
+            candidate=request.form.get("test_output", ""),
+        )
+    except (ValidationApiError, json.JSONDecodeError) as exc:
+        message = (
+            exc.message
+            if isinstance(exc, ValidationApiError)
+            else "Evaluator configuration is invalid JSON."
+        )
+        details = (
+            [detail.as_dict() for detail in exc.details]
+            if isinstance(exc, ValidationApiError)
+            else []
+        )
+        return jsonify({"ok": False, "message": message, "details": details}), 400
+    return jsonify({"ok": True, **result.model_dump()})
 
 
 @gui.route("/golden-items/<uuid:item_id>", methods=["GET", "POST"])
