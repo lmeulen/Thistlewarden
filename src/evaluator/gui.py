@@ -28,6 +28,7 @@ from werkzeug.wrappers import Response
 from evaluator.aggregates import AggregateService
 from evaluator.api.errors import ApiError, ValidationApiError
 from evaluator.config_io import ConfigurationExchangeService, ImportPlan
+from evaluator.dashboard import DashboardService, DashboardStatistics
 from evaluator.discovery import ModelDiscoveryService
 from evaluator.endpoints import EndpointService, HeaderInput
 from evaluator.errors import ConfigurationError
@@ -296,7 +297,13 @@ def _model_payload() -> dict[str, Any]:
 
 @gui.get("/")
 def dashboard() -> str:
-    return render_template("index.html")
+    service = current_app.extensions.get("dashboard_service")
+    statistics = (
+        cast(DashboardService, service).statistics()
+        if service is not None
+        else DashboardStatistics()
+    )
+    return render_template("index.html", statistics=statistics)
 
 
 @gui.get("/instellingen")

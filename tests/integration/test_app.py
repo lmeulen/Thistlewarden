@@ -6,6 +6,7 @@ import pytest
 
 from evaluator import create_app
 from evaluator.config import load_bootstrap_settings
+from evaluator.dashboard import DashboardStatistics
 
 pytestmark = pytest.mark.integration
 
@@ -39,7 +40,7 @@ def test_health_has_stable_database_independent_contract(app) -> None:
     }
 
 
-def test_index_renders_english_page(app) -> None:
+def test_index_renders_english_page_with_empty_dashboard(app) -> None:
     response = app.test_client().get("/")
 
     assert response.status_code == 200
@@ -48,6 +49,36 @@ def test_index_renders_english_page(app) -> None:
     assert "Thistlewarden" in page
     assert "Local evaluation of language models." in page
     assert '<html lang="en">' in page
+    assert page.count("<section aria-labelledby=") == 3
+    assert "<strong>0</strong> total runs" in page
+    assert "<strong>0</strong> active model profiles" in page
+    assert "<strong>0</strong> enabled test cases" in page
+    assert 'href="/runs"' in page
+    assert 'href="/endpoints"' in page
+    assert 'href="/golden-sets"' in page
+
+
+def test_index_renders_all_dashboard_statistics(app) -> None:
+    class StubDashboardService:
+        def statistics(self) -> DashboardStatistics:
+            return DashboardStatistics(9, 2, 7, 3, 4, 5, 6, 7, 8)
+
+    app.extensions["dashboard_service"] = StubDashboardService()
+    page = app.test_client().get("/").get_data(as_text=True)
+
+    for label, value in (
+        ("total runs", 9),
+        ("Active runs", 2),
+        ("Finished runs", 7),
+        ("active model profiles", 3),
+        ("Active endpoints", 4),
+        ("Total model profiles", 5),
+        ("enabled test cases", 6),
+        ("Active golden sets", 7),
+        ("Total test cases", 8),
+    ):
+        assert label in page
+        assert f">{value}<" in page
 
 
 def test_openapi_uses_product_name(app) -> None:
