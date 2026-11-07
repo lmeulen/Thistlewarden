@@ -18,6 +18,7 @@ from evaluator.dashboard import DashboardService
 from evaluator.database import SQLiteConnectionFactory
 from evaluator.discovery import ModelDiscoveryClient, ModelDiscoveryService
 from evaluator.endpoints import EndpointService, SQLiteEndpointRepository
+from evaluator.evaluation_preview import EvaluationPreviewService
 from evaluator.gates import QualityGateService
 from evaluator.golden_sets import GoldenSetLimits, GoldenSetService, SQLiteGoldenSetRepository
 from evaluator.gui import csrf_token, gui
@@ -92,6 +93,9 @@ def create_app(
 
     resolved_settings = SettingsResolver(repository).resolve(environment)
     settings_service = SettingsService(repository, environment)
+    evaluation_preview_service = EvaluationPreviewService(
+        max_candidate_chars=resolved_settings.values.max_model_answer_chars
+    )
     endpoint_limiter = CentralEndpointLimiter()
     provider_call_executor = ProviderCallExecutor(endpoint_limiter, RetryPolicy())
     secret_repository: SQLiteSecretRepository | None = None
@@ -209,6 +213,7 @@ def create_app(
     app.extensions["settings_repository"] = repository
     app.extensions["settings"] = resolved_settings
     app.extensions["settings_service"] = settings_service
+    app.extensions["evaluation_preview_service"] = evaluation_preview_service
     app.extensions["endpoint_limiter"] = endpoint_limiter
     app.extensions["provider_call_executor"] = provider_call_executor
     app.extensions["target_call_executor"] = provider_call_executor

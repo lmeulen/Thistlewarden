@@ -125,6 +125,93 @@ def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
     assert rendered_config["case_sensitive"] is False
 
 
+def test_output_tester_uses_unsaved_fields_without_persistence(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    path = f"/golden-sets/{set_id}/items/nieuw"
+    token = _csrf(client, path)
+    page = client.get(path).get_data(as_text=True)
+    assert 'id="test-output"' in page
+    assert 'id="verify-output"' in page
+    assert 'id="verification-result" aria-live="polite"' in page
+    assert f'data-verify-url="/golden-sets/{set_id}/items/verify"' in page
+
+    base = {
+        "csrf_token": token,
+        "case_id": "unsaved",
+        "prompt": "Unsaved prompt",
+        "expected_answer": "Expected unsaved value",
+        "evaluation_method": "exact_match",
+        "evaluator_config": json.dumps({"trim": True}),
+        "weight": "1",
+        "enabled": "on",
+    }
+    passed = client.post(
+        f"/golden-sets/{set_id}/items/verify",
+        data={**base, "test_output": "Expected unsaved value"},
+    )
+    assert passed.status_code == 200
+    assert passed.get_json() == {
+        "ok": True,
+        "method": "exact_match",
+        "passed": True,
+        "score": "1",
+        "reason": "Normalized values match.",
+    }
+
+    marker = "candidate-must-not-be-returned"
+    failed = client.post(
+        f"/golden-sets/{set_id}/items/verify",
+        data={**base, "test_output": marker},
+    )
+    assert failed.status_code == 200
+    assert failed.get_json()["passed"] is False
+    assert marker not in failed.get_data(as_text=True)
+    service = app.extensions["golden_set_service"]
+    assert (
+        service.list_items(
+            UUID(set_id), page=1, per_page=100, category=None, tag=None, enabled=None
+        )[1]
+        == 0
+    )
+
+
+def test_output_tester_rejects_invalid_config_and_llm_judge(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    path = f"/golden-sets/{set_id}/items/verify"
+    token = _csrf(client, f"/golden-sets/{set_id}/items/nieuw")
+    base = {
+        "csrf_token": token,
+        "case_id": "preview",
+        "prompt": "Prompt",
+        "expected_answer": "Expected",
+        "weight": "1",
+        "test_output": "candidate",
+    }
+    invalid = client.post(
+        path,
+        data={
+            **base,
+            "evaluation_method": "regex",
+            "evaluator_config": "not-json",
+        },
+    )
+    assert invalid.status_code == 400
+    assert invalid.get_json()["message"] == "Evaluator configuration is invalid JSON."
+
+    judge = client.post(
+        path,
+        data={
+            **base,
+            "evaluation_method": "llm_judge",
+            "evaluator_config": json.dumps({}),
+        },
+    )
+    assert judge.status_code == 400
+    assert "requires a run" in judge.get_json()["message"]
+
+
 @pytest.mark.parametrize(
     ("method", "expected", "config"),
     [
