@@ -1001,6 +1001,32 @@ Use **JSON Schema** for structured JSON output. Candidate must be standalone val
 
 Set `allow_markdown_code_fence` to accept a single complete fenced block labelled `json` or unlabeled. Otherwise markdown fences fail. Add optional `expected_value` to require parsed JSON equal exact configured value as well as schema-valid.
 
+Thistlewarden supports JSON Schema Draft 2020-12 only. `schema_draft` is persisted explicit configuration metadata and currently accepts only `"2020-12"`; it is not a runtime draft selector. The application validates both schema syntax and candidate output with Draft 2020-12. You may omit `schema_draft`; its default is `"2020-12"`.
+
+Example with `expected_value`: this accepts only exact parsed value `{\"label\": \"positive\", \"confidence\": 0.9}` after schema validation.
+
+```json
+{
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["label", "confidence"],
+    "properties": {
+      "label": {"type": "string"},
+      "confidence": {"type": "number"}
+    }
+  },
+  "expected_value": {
+    "label": "positive",
+    "confidence": 0.9
+  },
+  "allow_markdown_code_fence": false,
+  "schema_draft": "2020-12"
+}
+```
+
+For this example, `{\"label\": \"positief\", \"confidence\": 0.9}` is schema-valid but fails because `expected_value` requires full exact JSON-value equality. Omit `expected_value` when only structure, required fields, and field types matter.
+
 Use schema to enforce keys, types, arrays, enums, and required fields. Add `additionalProperties: false` when unknown keys must fail. Keep schema focused on contract; use expected value only where exact data matters. Validate schema and realistic candidate examples with output tester before run.
 
 [Back to top](#manual-top)
