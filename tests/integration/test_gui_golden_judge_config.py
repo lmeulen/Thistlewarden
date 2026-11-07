@@ -138,11 +138,11 @@ def test_output_tester_uses_unsaved_fields_without_persistence(app) -> None:
 
     base = {
         "csrf_token": token,
-        "case_id": "unsaved",
-        "prompt": "Unsaved prompt",
+        "case_id": "",
+        "prompt": "",
         "expected_answer": "Expected unsaved value",
-        "evaluation_method": "exact_match",
-        "evaluator_config": json.dumps({"trim": True}),
+        "evaluation_method": "regex",
+        "evaluator_config": json.dumps({"pattern": r"^Expected unsaved value$"}),
         "weight": "1",
         "enabled": "on",
     }
@@ -153,10 +153,10 @@ def test_output_tester_uses_unsaved_fields_without_persistence(app) -> None:
     assert passed.status_code == 200
     assert passed.get_json() == {
         "ok": True,
-        "method": "exact_match",
+        "method": "regex",
         "passed": True,
         "score": "1",
-        "reason": "Normalized values match.",
+        "reason": "Regular expression matched.",
     }
 
     marker = "candidate-must-not-be-returned"

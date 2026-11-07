@@ -8,16 +8,6 @@ from evaluator.evaluation_preview import EvaluationPreviewService
 pytestmark = pytest.mark.unit
 
 
-def payload(method: str = "exact_match", config: dict[str, object] | None = None):
-    return {
-        "case_id": "preview",
-        "prompt": "Prompt is not evaluated.",
-        "expected_answer": "Expected",
-        "evaluation_method": method,
-        "evaluator_config": config or {},
-    }
-
-
 @pytest.mark.parametrize(
     ("method", "config", "candidate", "passed"),
     [
@@ -33,7 +23,10 @@ def test_preview_uses_production_evaluators(
     method: str, config: dict[str, object], candidate: str, passed: bool
 ) -> None:
     result = EvaluationPreviewService(max_candidate_chars=1000).evaluate(
-        payload(method, config), candidate
+        method=method,
+        config=config,
+        expected_answer="Expected",
+        candidate=candidate,
     )
     assert result.method == method
     assert result.passed is passed
@@ -44,17 +37,20 @@ def test_preview_uses_production_evaluators(
 def test_preview_rejects_invalid_config_and_large_candidate() -> None:
     service = EvaluationPreviewService(max_candidate_chars=5)
     with pytest.raises(ValidationApiError):
-        service.evaluate(payload("regex", {"pattern": "["}), "value")
+        service.evaluate(
+            method="regex", config={"pattern": "["}, expected_answer=None, candidate="value"
+        )
     with pytest.raises(ValidationApiError, match="maximum length"):
-        service.evaluate(payload(), "123456")
+        service.evaluate(
+            method="exact_match", config={}, expected_answer="Expected", candidate="123456"
+        )
 
 
 def test_preview_rejects_llm_judge_without_calling_provider() -> None:
     with pytest.raises(ValidationApiError, match="requires a run"):
         EvaluationPreviewService(max_candidate_chars=100).evaluate(
-            payload(
-                "llm_judge",
-                {"rubric": [{"id": "correct", "description": "Correct"}]},
-            ),
-            "candidate",
+            method="llm_judge",
+            config={"rubric": [{"id": "correct", "description": "Correct"}]},
+            expected_answer=None,
+            candidate="candidate",
         )

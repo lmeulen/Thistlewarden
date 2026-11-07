@@ -647,7 +647,10 @@ def golden_item_verify(set_id: UUID) -> tuple[Response, int] | Response:
     _golden_service().get_set(set_id)
     try:
         result = _evaluation_preview_service().evaluate(
-            _item_payload(), request.form.get("test_output", "")
+            method=request.form.get("evaluation_method", "exact_match"),
+            config=_json_field("evaluator_config"),
+            expected_answer=request.form.get("expected_answer") or None,
+            candidate=request.form.get("test_output", ""),
         )
     except (ValidationApiError, json.JSONDecodeError) as exc:
         message = (

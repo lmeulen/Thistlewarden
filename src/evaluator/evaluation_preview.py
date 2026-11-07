@@ -36,11 +36,26 @@ class EvaluationPreviewService:
         self._max_candidate_chars = max_candidate_chars
         self._evaluators = evaluators or EvaluatorRegistry()
 
-    def evaluate(self, payload: Any, candidate: str) -> EvaluationPreviewResult:
+    def evaluate(
+        self,
+        *,
+        method: str,
+        config: Any,
+        expected_answer: str | None,
+        candidate: str,
+    ) -> EvaluationPreviewResult:
         if len(candidate) > self._max_candidate_chars:
             raise ValidationApiError("Test output exceeds maximum length.")
         try:
-            data = GoldenSetItemInput.model_validate(payload)
+            data = GoldenSetItemInput.model_validate(
+                {
+                    "case_id": "evaluation-preview",
+                    "prompt": "Evaluation preview",
+                    "expected_answer": expected_answer,
+                    "evaluation_method": method,
+                    "evaluator_config": config,
+                }
+            )
         except ValidationError as exc:
             raise ValidationApiError.from_pydantic(exc) from exc
         if data.evaluation_method == "llm_judge":
