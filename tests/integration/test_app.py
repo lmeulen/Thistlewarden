@@ -60,3 +60,27 @@ def test_openapi_uses_product_name(app) -> None:
 def test_app_start_does_not_create_runtime_files(app, tmp_path: Path) -> None:
     assert not (tmp_path / "data").exists()
     assert not (tmp_path / "exports").exists()
+
+
+def test_app_factory_accepts_container_bind_environment(tmp_path: Path) -> None:
+    environment = {
+        "CONTAINER_MODE": "true",
+        "HOST": "0.0.0.0",
+        "DATABASE_PATH": str(tmp_path / "container.db"),
+        "EXPORT_PATH": str(tmp_path / "exports"),
+        "LOG_LEVEL": "WARNING",
+        "ENCRYPTION_KEY": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
+    }
+    settings = load_bootstrap_settings(env_file=None, environment=environment)
+
+    container_app = create_app(
+        settings=settings,
+        settings_environment=environment,
+        initialize_database=True,
+        test_config={"TESTING": True},
+    )
+
+    assert container_app.extensions["settings"].values.host == "0.0.0.0"
+    assert container_app.extensions["settings"].values.container_mode is True
+    assert (tmp_path / "container.db").exists()
+    container_app.extensions["shutdown_services"]()

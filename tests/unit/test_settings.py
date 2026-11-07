@@ -99,6 +99,18 @@ def test_active_run_concurrency_must_not_exceed_maximum() -> None:
         )
 
 
+def test_container_bind_requires_explicit_container_mode() -> None:
+    resolver = SettingsResolver(InMemorySettingsRepository())
+
+    with pytest.raises(ConfigurationError, match="loopback"):
+        resolver.resolve({"HOST": "0.0.0.0"})
+
+    resolved = resolver.resolve({"HOST": "0.0.0.0", "CONTAINER_MODE": "true"})
+
+    assert resolved.values.host == "0.0.0.0"
+    assert resolved.values.container_mode is True
+
+
 @pytest.mark.parametrize(
     "name",
     [

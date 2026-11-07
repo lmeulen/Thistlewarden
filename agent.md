@@ -35,11 +35,10 @@ Hoofddocumenten:
 
 Oorspronkelijke MVP-functionaliteit is geïmplementeerd: zes evaluatoren, providerintegratie, centrale limiter, kosten, queue/leases/recovery, immutable case/model/judgesnapshots, gates, configuratie-import/export, runexports, retentie, Nederlandse GUI en securityhardening.
 
-**Release is momenteel no-go.** Los minimaal deze bevestigde blockers op vóór stabiele release:
+**Release is momenteel no-go.** Compose-hostvalidatie is hersteld: bootstrap- en operationele settings staan `HOST=0.0.0.0` uitsluitend toe bij `CONTAINER_MODE=true`, terwijl Compose extern loopback-only publiceert. Los minimaal deze resterende bevestigde blockers op vóór stabiele release:
 
-1. **Critical — Compose start niet.** `BootstrapSettings` staat `HOST=0.0.0.0` toe bij `CONTAINER_MODE=true`; `ApplicationSettings` weigert iedere niet-loopbackhost. Zie `src/evaluator/config.py`, `src/evaluator/settings.py`, `src/evaluator/app.py`, `compose.yaml`.
-2. **High — migratie 9 is niet atomair.** `_migration_9()` gebruikt `sqlite3.executescript()`, dat impliciet commit en transactionele garanties breekt. Zie `src/evaluator/migrations.py`.
-3. **High — runs zijn niet volledig snapshotgedreven.** Cases, modellen, judge en gates zijn gesnapshot, maar `StreamingTargetCaller` en `JudgeCaller` laden actuele endpointconfiguratie en headers opnieuw. Endpointwijziging of deactivatie na queueing kan runuitvoering veranderen.
+1. **High — migratie 9 is niet atomair.** `_migration_9()` gebruikt `sqlite3.executescript()`, dat impliciet commit en transactionele garanties breekt. Zie `src/evaluator/migrations.py`.
+2. **High — runs zijn niet volledig snapshotgedreven.** Cases, modellen, judge en gates zijn gesnapshot, maar `StreamingTargetCaller` en `JudgeCaller` laden actuele endpointconfiguratie en headers opnieuw. Endpointwijziging of deactivatie na queueing kan runuitvoering veranderen.
 
 Belangrijke open punten daarna:
 
@@ -55,7 +54,7 @@ Belangrijke open punten daarna:
 - Judgeveld `prompt_template` wordt opgeslagen en gesnapshot, maar `build_judge_prompt()` gebruikt het niet.
 - Model-prijzen zijn nulplaceholders; presenteer deze niet als financiële schatting.
 
-Recente volledige suite vóór laatste wijzigingen: 376 tests groen. Latere kosten-, judge-, runview- en golden-setwijzigingen kregen gerichte tests, maar volledige suite en leakscan moeten opnieuw draaien.
+Recente volledige suite: 383 tests groen op 2026-11-07 via `venv/Scripts/python.exe -m pytest` (Python 3.12.10, pytest 8.4.2). Ruff check, Ruff format check en strict Mypy zijn groen. Leakscan en Docker E2E zijn daarbij niet gedraaid.
 
 Omgevingsbeperkingen van huidige werkmap kunnen veranderen, maar waren laatst:
 
@@ -290,6 +289,8 @@ Bij databaseonderzoek:
 
 ## 10. Test- en kwaliteitscommando's
 
+Gebruik voor alle Python-commando's uitsluitend de interpreter uit `venv/`; gebruik geen globale Python. In deze Windows/WSL-werkmap is dat `./venv/Scripts/python.exe`. Op POSIX is dat `./venv/bin/python`.
+
 Windows/WSL-werkmap:
 
 ```bash
@@ -299,7 +300,7 @@ Windows/WSL-werkmap:
 ./venv/Scripts/python.exe -m pytest -q tests/unit tests/integration
 ```
 
-POSIX-venv gebruikt overeenkomstig `python -m ...`.
+POSIX-venv gebruikt overeenkomstig `./venv/bin/python -m ...`.
 
 Gerichte tests volgen modulestructuur, bijvoorbeeld:
 
