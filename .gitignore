@@ -29,6 +29,8 @@ Thumbs.db
 # Project-specific files
 reviews/
 scripts/
+!scripts/
+!scripts/e2e_release.py
 testsets/
 issues.txt
 issues.md

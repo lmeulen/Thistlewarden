@@ -31,14 +31,14 @@ class InstanceLock:
         handle = self.path.open("r+b")
         try:
             if os.name == "nt":
-                import msvcrt
+                windows_lock = cast(Any, import_module("msvcrt"))
 
                 handle.seek(0)
                 if handle.read(1) == b"":
                     handle.write(b"0")
                     handle.flush()
                 handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                windows_lock.locking(handle.fileno(), windows_lock.LK_NBLCK, 1)
             else:
                 posix_lock = cast(Any, import_module("fcntl"))
                 posix_lock.flock(handle.fileno(), posix_lock.LOCK_EX | posix_lock.LOCK_NB)
