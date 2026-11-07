@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import sqlite3
+from copy import deepcopy
 from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal, cast
@@ -139,6 +140,59 @@ EvaluatorConfig = Annotated[
     Field(discriminator="evaluation_method"),
 ]
 _CONFIG_ADAPTER: TypeAdapter[EvaluatorConfig] = TypeAdapter(EvaluatorConfig)
+_EVALUATOR_CONFIG_EXAMPLES: dict[str, dict[str, Any]] = {
+    "exact_match": {
+        "trim": True,
+        "case_sensitive": True,
+        "normalize_newlines": True,
+        "collapse_whitespace": False,
+    },
+    "contains": {
+        "expected_fragments": ["required text"],
+        "match_mode": "all",
+        "case_sensitive": True,
+        "normalize_newlines": True,
+        "collapse_whitespace": False,
+    },
+    "regex": {
+        "pattern": "^required text$",
+        "full_match": False,
+        "case_sensitive": True,
+        "multiline": False,
+        "dot_all": False,
+    },
+    "numeric": {
+        "expected_value": "42",
+        "absolute_tolerance": "0.1",
+        "relative_tolerance_percent": None,
+        "extraction": "entire_answer",
+        "decimal_separator": ".",
+        "allow_thousands_separator": False,
+    },
+    "json_schema": {
+        "schema": {"type": "object", "required": ["answer"]},
+        "allow_markdown_code_fence": True,
+        "schema_draft": "2020-12",
+    },
+    "llm_judge": {
+        "rubric": [
+            {
+                "id": "correct",
+                "description": "Answer is correct and complete.",
+                "weight": "1",
+            }
+        ],
+        "rubric_mode": "augment",
+        "threshold": "0.8",
+        "context": None,
+    },
+}
+
+
+def evaluator_config_examples() -> dict[str, dict[str, Any]]:
+    """Return editable examples without exposing shared configuration state."""
+
+    return deepcopy(_EVALUATOR_CONFIG_EXAMPLES)
 
 
 def validate_evaluator_config(method: str, config: Any) -> EvaluatorConfig:

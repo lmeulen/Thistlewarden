@@ -5,7 +5,11 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from evaluator.golden_sets import GoldenSetItemInput, validate_evaluator_config
+from evaluator.golden_sets import (
+    GoldenSetItemInput,
+    evaluator_config_examples,
+    validate_evaluator_config,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -52,6 +56,25 @@ def test_prompt_is_required_and_only_one_optional_system_prompt_exists() -> None
 def test_each_evaluator_method_selects_its_schema(method: str, config: dict[str, object]) -> None:
     result = validate_evaluator_config(method, config)
     assert result.evaluation_method == method
+
+
+def test_evaluator_config_examples_are_complete_valid_and_independent() -> None:
+    expected_methods = {
+        "exact_match",
+        "contains",
+        "regex",
+        "numeric",
+        "json_schema",
+        "llm_judge",
+    }
+    examples = evaluator_config_examples()
+    assert set(examples) == expected_methods
+    for method, config in examples.items():
+        assert "evaluation_method" not in config
+        assert validate_evaluator_config(method, config).evaluation_method == method
+
+    examples["contains"]["expected_fragments"][0] = "changed"
+    assert evaluator_config_examples()["contains"]["expected_fragments"] == ["required text"]
 
 
 def test_invalid_method_specific_configuration_fails() -> None:
