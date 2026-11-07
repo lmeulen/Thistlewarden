@@ -18,7 +18,7 @@ _JUDGE_TYPE_LABELS = {
     "exact_match": "Exact match",
     "contains": "Contains",
     "regex": "Regex",
-    "numeric": "Numeriek",
+    "numeric": "Numeric",
     "json_schema": "JSON Schema",
     "llm_judge": "LLM judge",
 }
@@ -49,26 +49,26 @@ class ResultQuery:
     def parse(cls, values: Any) -> ResultQuery:
         status = (values.get("status") or "").strip() or None
         if status not in _RESULT_STATUSES | {None}:
-            raise ValidationApiError("Ongeldig resultaatfilter.")
+            raise ValidationApiError("Invalid result filter.")
         model = (values.get("model") or "").strip()
         try:
             model_id = UUID(model) if model else None
         except ValueError as exc:
-            raise ValidationApiError("Ongeldig modelfilter.") from exc
+            raise ValidationApiError("Invalid model filter.") from exc
         judge_type = (values.get("judge_type") or "").strip() or None
         if judge_type not in _JUDGE_TYPES | {None}:
-            raise ValidationApiError("Ongeldig judgetypefilter.")
+            raise ValidationApiError("Invalid judge type filter.")
         sort = (values.get("sort") or "case").strip()
         direction = (values.get("direction") or "asc").strip()
         if sort not in _SORT_COLUMNS or direction not in {"asc", "desc"}:
-            raise ValidationApiError("Ongeldige sortering.")
+            raise ValidationApiError("Invalid sorting.")
         case_query = (values.get("case") or "").strip()[:200] or None
         try:
             page = int(values.get("page") or 1)
         except (TypeError, ValueError) as exc:
-            raise ValidationApiError("Ongeldige pagina.") from exc
+            raise ValidationApiError("Invalid page.") from exc
         if page < 1 or page > 100_000:
-            raise ValidationApiError("Ongeldige pagina.")
+            raise ValidationApiError("Invalid page.")
         return cls(
             status=status,
             model_snapshot_id=model_id,
@@ -112,7 +112,7 @@ class RunViewService:
                 (str(run_id),),
             ).fetchone()
             if row is None:
-                raise NotFoundError("Run is niet gevonden.")
+                raise NotFoundError("Run not found.")
             run = self._run_row(dict(row))
             self._add_weighted_scores(connection, [run])
             return run
@@ -238,7 +238,7 @@ class RunViewService:
                 (str(run_id), str(result_id)),
             ).fetchone()
             if row is None:
-                raise NotFoundError("Resultaat is niet gevonden.")
+                raise NotFoundError("Result not found.")
             return self._result(dict(row))
         finally:
             connection.close()
@@ -321,25 +321,25 @@ def decimal_or_none(value: Any) -> Decimal | None:
 def display_metric(value: Any, *, places: int = 2, suffix: str = "") -> str:
     number = decimal_or_none(value)
     if number is None:
-        return "Onbekend"
+        return "Unknown"
     return f"{number:.{places}f}{suffix}"
 
 
 def display_money(value: Any) -> str:
     number = decimal_or_none(value)
-    return "Onbekend" if number is None else f"{number:.8f}"
+    return "Unknown" if number is None else f"{number:.8f}"
 
 
 def status_label(status: str) -> str:
     return {
-        "pending": "Wachtend",
-        "running": "Bezig",
-        "completed": "Voltooid",
-        "completed_with_errors": "Voltooid met fouten",
-        "failed": "Mislukt",
-        "cancelled": "Geannuleerd",
-        "passed": "Geslaagd",
-        "error": "Fout",
-        "not_evaluated": "Niet geëvalueerd",
-        "indeterminate": "Onbepaald",
+        "pending": "Pending",
+        "running": "Running",
+        "completed": "Completed",
+        "completed_with_errors": "Completed with errors",
+        "failed": "Failed",
+        "cancelled": "Cancelled",
+        "passed": "Passed",
+        "error": "Error",
+        "not_evaluated": "Not evaluated",
+        "indeterminate": "Indeterminate",
     }.get(status, status.replace("_", " ").capitalize())

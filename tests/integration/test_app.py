@@ -39,15 +39,15 @@ def test_health_has_stable_database_independent_contract(app) -> None:
     }
 
 
-def test_index_renders_dutch_page(app) -> None:
+def test_index_renders_english_page(app) -> None:
     response = app.test_client().get("/")
 
     assert response.status_code == 200
     assert response.content_type.startswith("text/html")
     page = response.get_data(as_text=True)
     assert "Thistlewarden" in page
-    assert "Lokale evaluatie van taalmodellen." in page
-    assert '<html lang="nl">' in page
+    assert "Local evaluation of language models." in page
+    assert '<html lang="en">' in page
 
 
 def test_openapi_uses_product_name(app) -> None:

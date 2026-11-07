@@ -2,31 +2,31 @@
 
 Status: implemented. Core contract, app-wide correlation, semantic mutation events, worker/provider diagnostics, CLI lifecycle events, and leak-focused tests are active. Optional future JSON/file logging remains deferred as described below.
 
-## 1. Doel en uitgangspunten
+## 1. Purpose and principles
 
-Logging moet lokaal beheer ondersteunen zonder database of GUI te vervangen.
+Logging should support local management without replacing database or GUI.
 
-- `INFO`: chronologisch overzicht van lifecycle, gebruikersmutaties en runvoortgang op hoofdlijnen.
-- `DEBUG`: technische stappen binnen dezelfde actie, nuttig voor diagnose.
-- `WARNING`: verwachte maar afwijkende toestand die aandacht kan vragen.
-- `ERROR`: actie of job mislukt door applicatie-, opslag- of providerfout.
-- `CRITICAL`: proces kan niet veilig starten of doorgaan.
+- `INFO`: chronological overview of lifecycle, user changes and run progress in outline.
+- `DEBUG`: technical steps within the same action, useful for diagnosis.
+- `WARNING`: expected but abnormal condition that may require attention.
+- `ERROR`: Action or job failed due to application, storage or provider error.
+- `CRITICAL`: Process cannot start or continue safely.
 
-Logs zijn operationele metadata. Prompts, antwoorden, expected answers, rubrics, providerresponsebody's, API-keys, secret headers, cookies, CSRF-tokens en volledige import/exportinhoud worden nooit gelogd.
+Logs are operational metadata. Prompts, answers, expected answers, rubrics, provider response bodies, API keys, secret headers, cookies, CSRF tokens and complete import/export content are never logged.
 
-## 2. Uitvoer en configuratie
+## 2. Output and configuration
 
 ### Eerste implementatie
 
-Behoud één `StreamHandler` naar `stderr`. Dit past bij native terminals, systemd en containers.
+Keep one `StreamHandler` to `stderr`. This fits native terminals, systemd and containers.
 
 ```text
 LOG_LEVEL=INFO
 ```
 
-- Native zichtbaar in actieve terminal; redirect/Tee voor bestand.
-- Docker zichtbaar via `docker compose logs -f evaluator`.
-- Geen ingebouwde logfile of rotatie in fase 1; procesmanager/containerplatform beheert retentie.
+- Native visible in active terminal; redirect/Tee for file.
+- Docker visible via `docker compose logs -f evaluator`.
+- No built-in log file or rotation in phase 1; process manager/container platform manages retention.
 
 Latere optionele uitbreiding:
 
@@ -37,7 +37,7 @@ LOG_FILE_MAX_BYTES=10485760
 LOG_FILE_BACKUP_COUNT=5
 ```
 
-Bestandlogging gebruikt alleen `RotatingFileHandler`, weigert netwerkfilesystem en heeft dezelfde redactionfilter.
+File logging uses only `RotatingFileHandler`, denies network filesystem and has the same editorial filter.
 
 ## 3. Vast eventcontract
 
@@ -47,83 +47,83 @@ Elke regel bevat bestaande basisvelden:
 timestamp level component request_id run_id case_id execution_id message
 ```
 
-`message` begint met stabiele Engelse `snake_case` eventnaam. Daarna alleen allowlisted `key=value`-velden. Eventnamen en velden zijn API-achtig stabiel; menselijke Nederlandse GUI-tekst wordt niet gebruikt als eventnaam.
+`message` starts with stable English `snake_case` event name. After that, only allowlisted `key=value` fields. Event names and fields are API-like stable; human Dutch GUI text is not used as event name.
 
 Aanvullende veilige velden:
 
-- request: `method`, route-template, `status`, `duration_ms`, `interface=gui|api`;
-- object: UUID, technisch type, niet-gevoelige naam indien nodig;
-- import: modus, preview/commit, objectaantallen, conflict- en missing-secret-aantallen;
-- run: status, jobs total/done/error, modelaantal, caseaantal, gate-status;
-- provider: endpoint-ID, model-ID, poging, statuscategorie, latency, TTFT, tokenaantallen;
-- worker: lease generation, resultaatstatus, evaluator-methode, foutcode.
+- request: `method`, route template, `status`, `duration_ms`, `interface=gui|api`;
+- object: UUID, technical type, non-sensitive name if necessary;
+- import: mode, preview/commit, object counts, conflict and missing-secret counts;
+- run: status, jobs total/done/error, model number, case number, gate status;
+- provider: endpoint ID, model ID, attempt, status category, latency, TTFT, token counts;
+- worker: lease generation, result status, evaluator method, error code.
 
-Niet loggen:
+Do not log:
 
-- URL querystring; routeparameter mag alleen UUID zijn;
-- request-/responsebody, multipartbestandsnaam of inhoud;
-- endpointheaders of providerheaders;
-- exceptiontekst van provider of parser wanneer die bodydata kan bevatten;
-- gebruikersnotitie, prompt, kandidaatantwoord, context of schema-inhoud;
-- lokale API-key, encryptiesleutel, sessiecookie of token.
+- URL query string; route parameter can only be UUID;
+- request/response body, multipart file name or content;
+- endpoint headers or provider headers;
+- exception text from provider or parser when it can contain body data;
+- user note, prompt, candidate answer, context or schema content;
+- local API key, encryption key, session cookie or token.
 
 ## 4. Correlatie
 
-1. Ken **iedere** GUI- en API-request een `request_id` toe, niet alleen `/api/v1`.
-2. Accepteer geen willekeurige externe request-ID als logveld; genereer server-side UUID.
-3. Bind routebekende `run_id` met `log_context`.
-4. Bind workerclaim aan `run_id`, `case_id` en nieuwe willekeurige `execution_id`.
-5. Judgecall houdt dezelfde workercontext.
-6. Providerretry behoudt context en voegt alleen `attempt` toe.
+1. Assign **every** GUI and API request a `request_id`, not just `/api/v1`.
+2. Do not accept arbitrary external request ID as a log field; generate server-side UUID.
+3. Bind route known `run_id` with `log_context`.
+4. Bind worker claim to `run_id`, `case_id` and new random `execution_id`.
+5. Judgecall keeps the same worker context.
+6. Provider retrieval preserves context and adds only `attempt`.
 
-Responseheader `X-Request-ID` wordt voor GUI en API geretourneerd. Foutpagina toont request-ID zodat gebruiker één actie kan terugvinden.
+Response header `X-Request-ID` is returned for GUI and API. Error page shows request ID so user can find one action.
 
 ## 5. INFO-eventcatalogus
 
-INFO toont betekenisvolle veranderingen, niet elke GET of pollingcall.
+INFO shows meaningful changes, not every GET or polling call.
 
 ### Proces en beheer
 
-| Event | Wanneer | Kernvelden |
+| Event | When | Core fields |
 |---|---|---|
-| `application_initialized` | database/migraties/config gereed | host, port, workers_enabled, database |
-| `recovery_completed` | startup recovery uitgevoerd | recovered_runs, recovered_jobs |
-| `worker_runtime_started` | workers gestart | concurrency |
-| `http_server_listening` | server gereed | host, port |
-| `shutdown_started` / `shutdown_completed` | gecontroleerde stop | geen gevoelige velden |
-| `backup_completed` / `restore_completed` | CLI-actie gereed | doelpad, bytes/duration |
-| `retention_cleanup_completed` | retentieactie | deleted_runs |
+| `application_initialized` | database/migrations/config ready | host, port, workers_enabled, database |
+| `recovery_completed` | startup recovery performed | recovered_runs, recovered_jobs |
+| `worker_runtime_started` | workers started | concurrency |
+| `http_server_listening` | server ready | host, port |
+| `shutdown_started` / `shutdown_completed` | controlled stop | no sensitive fields |
+| `backup_completed` / `restore_completed` | CLI action done | target path, bytes/duration |
+| `retention_cleanup_completed` | retention action | deleted_runs |
 
 ### Gebruikersacties via GUI en API
 
-Elke geslaagde mutatie krijgt precies één semantisch INFO-event in servicelaag, zodat GUI en API hetzelfde event leveren.
+Each successful mutation receives exactly one semantic INFO event in service layer, so that GUI and API deliver the same event.
 
-| Gebied | Events |
+| Area | Events |
 |---|---|
-| Settings | `setting_updated` met settingnaam en bron, nooit secretwaarde |
+| Settings | `setting_updated` with setting name and source, never secret value |
 | Endpoints | `endpoint_created`, `endpoint_updated`, `endpoint_deleted`, `endpoint_connection_tested` |
 | Discovery | `model_discovery_completed`, `discovered_models_imported` |
 | Models | `model_profile_created`, `model_profile_updated`, `model_profile_deleted` |
 | Golden sets | `golden_set_created`, `golden_set_updated`, `golden_set_deleted`, `golden_set_import_previewed`, `golden_set_imported`, `golden_set_exported` |
 | Cases | `golden_item_created`, `golden_item_updated`, `golden_item_deleted` |
 | Judges | `judge_profile_created`, `judge_profile_updated`, `judge_profile_deleted`, `golden_set_judge_changed` |
-| Gates | `quality_gates_updated` met alleen geconfigureerde gate-namen |
-| Config exchange | `configuration_exported`, `configuration_import_previewed`, `configuration_imported` met aantallen |
+| Gates | `quality_gates_updated` with only gate names configured |
+| Config exchange | `configuration_exported`, `configuration_import_previewed`, `configuration_imported` with numbers |
 | Runs | `run_created`, `run_cancel_requested`, `run_failures_rerun`, `run_deleted`, `run_exported` |
 
-Leesacties (`GET` pagina, statuspolling, lijsten) komen niet op INFO. Daardoor blijft INFO leesbaar als auditachtig hoofdoverzicht. Authenticatie bestaat niet, dus log geen verzonnen gebruiker; gebruik `actor=local_gui` of `actor=api`.
+Read actions (`GET` page, status polling, lists) do not appear on INFO. This means that INFO remains readable as an audit-like main overview. Authentication doesn't exist, so don't log a made-up user; use `actor=local_gui` or `actor=api`.
 
 ### Runuitvoering
 
-| Event | Wanneer | Kernvelden |
+| Event | When | Core fields |
 |---|---|---|
-| `run_started` | eerste job claimt pending run | jobs_total, target_models |
-| `run_progress` | maximaal per 10 afgeronde jobs of 10% | done, total, errors |
-| `run_completed` | terminale run | status, passed, failed, errors, gate_status |
-| `run_cancelled` | cancellation effectief | done, total |
-| `job_failed` | testcase eindigt als error | error_code, evaluator_method |
+| `run_started` | first job claims pending run | jobs_total, target_models |
+| `run_progress` | maximum per 10 completed jobs or 10% | done, total, errors |
+| `run_completed` | terminal run | status, passed, failed, errors, gate_status |
+| `run_cancelled` | cancellation effective | done, total |
+| `job_failed` | test case ends as error | error_code, evaluator_method |
 
-Succes per testcase staat niet op INFO; honderd cases zouden hoofdlijnen verdringen.
+Success per test case is not listed on INFO; a hundred cases would crowd out the main points.
 
 ## 6. DEBUG-eventcatalogus
 
@@ -131,18 +131,18 @@ DEBUG beschrijft stappen, maar nooit inhoud.
 
 ### HTTP
 
-- `request_started`: method, route-template, interface, content_length.
+- `request_started`: method, route template, interface, content_length.
 - `request_completed`: status, duration_ms.
-- `csrf_validated`, `origin_validated`, `host_validated`: alleen resultaat/beleid, geen token/headerwaarde.
-- `payload_validated`: modelnaam en objectaantal.
+- `csrf_validated`, `origin_validated`, `host_validated`: result/policy only, no token/header value.
+- `payload_validated`: model name and object quantity.
 
-Health/readiness en `/runs/<id>/status` mogen op DEBUG maar niet INFO.
+Health/readiness and `/runs/<id>/status` are allowed on DEBUG but not INFO.
 
 ### Database en transacties
 
-- `transaction_started`, `transaction_committed`, `transaction_rolled_back`: operationele naam en duration.
-- Geen SQL-parameters. Raw SQL alleen indien statisch en expliciet veilig; standaard niet loggen.
-- `migration_started`, `migration_applied`, `migration_completed`: versienummers.
+- `transaction_started`, `transaction_committed`, `transaction_rolled_back`: operational name and duration.
+- No SQL parameters. Raw SQL only if static and explicitly safe; no logging by default.
+- `migration_started`, `migration_applied`, `migration_completed`: version numbers.
 
 ### Queue en workers
 
@@ -154,40 +154,40 @@ Health/readiness en `/runs/<id>/status` mogen op DEBUG maar niet INFO.
 - `judge_call_started`, `judge_parse_started`, `judge_parse_retry`, `judge_call_completed`.
 - `job_result_committed`, `run_status_refreshed`, `quality_gates_evaluated`.
 
-Heartbeatlogging kan luid zijn. Log alleen eerste heartbeat en daarna maximaal één per 30 seconden per job, of maak het `DEBUG` met sampling.
+Heartbeatlogging can be loud. Log only first heartbeat and then a maximum of one every 30 seconds per job, or make it `DEBUG` with sampling.
 
 ### Provider en limiter
 
-- `destination_validated`: scheme en classificatie, niet volledige URL.
-- `rate_limit_wait_started/completed`: endpoint-ID en wait_ms.
-- `provider_attempt_started/completed`: poging, statuscodecategorie, duration.
-- `provider_retry_scheduled`: foutcategorie en backoff_ms.
+- `destination_validated`: scheme and classification, not full URL.
+- `rate_limit_wait_started/completed`: endpoint ID and wait_ms.
+- `provider_attempt_started/completed`: attempt, status code category, duration.
+- `provider_retry_scheduled`: error category and backoff_ms.
 - `sse_stream_opened/completed`: event_count, byte_count, finish_reason, usage_present.
 
 Geen SSE-chunks, JSON-body of responseheaders loggen.
 
 ### Import/export
 
-- parse-, schema-, referentie- en planstappen met objectaantallen;
-- geen payloadfragmenten;
-- bij validatiefout alleen veilig fouttype, veldpad en row number wanneer dit geen content bevat.
+- parse, schedule, reference and plan steps with object counts;
+- no payload fragments;
+- in case of validation error, only safe error type, field path and row number if it contains no content.
 
 ## 7. WARNING-, ERROR- en CRITICAL-beleid
 
 ### WARNING
 
-- providerretry of rate-limitbackoff;
+- provider retry or rate limit backoff;
 - expired lease/recovery;
-- ontbrekend endpointsecret blokkeert call;
-- partial/invalid stream afgewezen;
-- run voltooid met fouten;
-- gate-status failed/indeterminate;
+- missing endpoint secret blocks call;
+- partial/invalid stream rejected;
+- run completed with errors;
+- gate status failed/indeterminate;
 - shutdown timeout;
-- importpreview met remaps/conflicten.
+- import preview with remaps/conflicts.
 
 ### ERROR
 
-Gebruik `logger.exception` alleen voor interne onverwachte exceptions. Voor bekende fouten log event plus veilige `error_code` en `exception_type`, niet `str(exception)` als provider-/payloadinhoud kan lekken.
+Use `logger.exception` only for internal unexpected exceptions. For known errors log event plus safe `error_code` and `exception_type`, not `str(exception)` as provider/payload content can leak.
 
 - definitieve providercallfout;
 - jobcommit/queuefencing mislukt;
@@ -197,12 +197,12 @@ Gebruik `logger.exception` alleen voor interne onverwachte exceptions. Voor beke
 
 ### CRITICAL
 
-- instance lock niet verkrijgbaar;
-- database migratie/integriteitscontrole mislukt;
-- ongeldige bootstrapconfig;
-- server kan niet binden/starten.
+- instance lock not available;
+- database migration/integrity check failed;
+- invalid bootstrapconfig;
+- server cannot bind/start.
 
-Startupfouten vóór `configure_logging()` krijgen een minimale bootstraphandler op `stderr`.
+Startup errors before `configure_logging()` get a minimal bootstrap handler at `stderr`.
 
 ## 8. Implementatiearchitectuur
 
@@ -217,11 +217,11 @@ Voeg `log_event(logger, level, event, **safe_fields)` toe in `logging_config.py`
 - converteer UUID/Decimal veilig;
 - ondersteun tekst- en toekomstige JSON-formatter vanuit hetzelfde record.
 
-Geen verspreide f-strings met willekeurige objecten.
+No scattered f-strings with random objects.
 
 ### Requestinstrumentatie
 
-Breid `api/handlers.py` uit naar applicatiebrede requestcorrelatie:
+Extend `api/handlers.py` to application-wide request correlation:
 
 - `before_request`: request-ID, monotone starttijd, DEBUG request-start;
 - `after_request`: duration, responseheader, DEBUG request-end;
@@ -229,85 +229,85 @@ Breid `api/handlers.py` uit naar applicatiebrede requestcorrelatie:
 
 ### Servicelaag
 
-Plaats INFO-events pas na succesvolle transactionele commit. Previewevents na volledige validatie. Fouten worden op grenslaag één keer gelogd om dubbele regels te voorkomen.
+Post INFO events only after successful transactional commit. Preview events after full validation. Errors are logged once at the boundary layer to avoid duplicate lines.
 
 ### Workerlaag
 
-`WorkerPipeline.run_once` bindt context en emit DEBUG-stappen. `RunQueue.refresh_run_status` emit alleen transition-events, niet bij ongewijzigde status. Progress wordt gethrottled via databasewaarden, niet per threadgeheugen alleen.
+`WorkerPipeline.run_once` binds context and emit DEBUG steps. `RunQueue.refresh_run_status` only emits transition events, not unchanged status. Progress is throttled via database values, not per thread memory alone.
 
 ## 9. Prestatie- en volumebudget
 
-Voor baseline van 100 cases, één targetmodel en judge:
+For baseline of 100 cases, one target model and judge:
 
-- INFO: minder dan circa 30 regels exclusief joberrors;
-- DEBUG: circa 8–20 regels per job, zonder chunks/heartbeatspam;
-- logcalls mogen providerstream niet blokkeren met netwerk-I/O;
-- tekstformattering wordt door logging-level guard overgeslagen waar velden duur zijn;
-- maximaal 8 KiB per logregel.
+- INFO: less than approximately 30 lines excluding job errors;
+- DEBUG: approximately 8–20 lines per job, without chunks/heartbeat spam;
+- logcalls should not block provider stream with network I/O;
+- text formatting is skipped by logging-level guard where fields are expensive;
+- maximum 8 KiB per log line.
 
 ## 10. Teststrategie
 
 ### Unit
 
-- INFO/DEBUG-filtering;
-- eventveldallowlist en lengtebegrenzing;
-- redactie van secrets in message, args en extra fields;
-- verbod op prompt/body/header/cookievelden;
-- context bind/reset over threads;
-- deterministische text- en JSON-output;
-- exceptionlogging toont type maar geen gevoelige tekst.
+- INFO/DEBUG filtering;
+- event field allow list and length limit;
+- editing secrets in message, args and extra fields;
+- ban on prompt/body/header/cookie fields;
+- context bind/reset across threads;
+- deterministic text and JSON output;
+- exception logging shows type but not sensitive text.
 
 ### Integratie
 
-- GUI-mutatie en equivalente API-mutatie leveren zelfde semantische event;
-- GET/statuspolling levert geen INFO;
-- request-ID staat in log en response;
-- configuratie-import preview/commit logt alleen aantallen;
-- endpoint met fixturesecret: secret komt nergens in logs;
-- run van alle zes evaluatoren produceert lifecycle/progress/gate-events;
-- retry en failed stream produceren veilige WARNING/ERROR-events;
-- parallelle workers behouden correcte run/case/executioncontext.
+- GUI mutation and equivalent API mutation deliver the same semantic event;
+- GET/status polling does not provide INFO;
+- request ID is in log and response;
+- configuration import preview/commit only logs quantities;
+- endpoint with fixturesecret: secret doesn't appear anywhere in logs;
+- run of all six evaluators produces lifecycle/progress/gate events;
+- retry and failed stream produce safe WARNING/ERROR events;
+- parallel workers maintain correct run/case/execution context.
 
 ### Releasegate
 
-CI draait E2E met `LOG_LEVEL=DEBUG`, slaat stderr op en faalt wanneer:
+CI runs E2E with `LOG_LEVEL=DEBUG`, saves stderr and fails when:
 
-- bekende fixturesecrets voorkomen;
-- fixtureprompt of kandidaatantwoord voorkomt;
-- vereist lifecycle-event ontbreekt;
-- logregel groter dan limiet is;
-- traceback voorkomt bij succesvolle E2E.
+- prevent known fixture secrets;
+- fixture prompt or candidate response occurs;
+- required lifecycle event missing;
+- log line is greater than limit;
+- traceback prevents successful E2E.
 
 ## 11. Gefaseerd implementatieplan
 
-1. **Contract en helper**: `log_event`, allowlists, formatter, redaction en tests.
-2. **Requestcorrelatie**: alle GUI/API-requests, timing en responseheader.
-3. **Lifecycle**: startup, migraties, recovery, workers, server en shutdown.
-4. **Gebruikersmutaties**: semantische INFO-events in services voor instellingen, endpoints, modellen, sets, judges, configuratie en runs.
-5. **Queue/run**: transitions, progress-throttling, cancellation, rerun, retention en gates.
-6. **Provider DEBUG**: limiter, retries, DNS-classificatie, streamingmetrics en judgeparser zonder content.
-7. **CLI**: migrate, backup en restore events.
-8. **E2E leakscan en volumetest**.
-9. **Documentatie**: eventcatalogus, troubleshooting, native/Docker capture en retentie.
-10. **Optioneel**: JSON-format en roterend lokaal bestand na operationele behoefte.
+1. **Contract and helper**: `log_event`, allowlists, formatter, editing and tests.
+2. **Request correlation**: all GUI/API requests, timing and response header.
+3. **Lifecycle**: startup, migrations, recovery, workers, server and shutdown.
+4. **User changes**: semantic INFO events in services for settings, endpoints, models, sets, judges, configuration and runs.
+5. **Queue/run**: transitions, progress-throttling, cancellation, rerun, retention and gates.
+6. **Provider DEBUG**: limiter, retries, DNS classification, streaming metrics and judge parser without content.
+7. **CLI**: migrate, backup and restore events.
+8. **E2E leak scan and volume test**.
+9. **Documentation**: event catalog, troubleshooting, native/Docker capture and retention.
+10. **Optional**: JSON format and rotating local file after operational need.
 
-Elke fase vereist Ruff, strict Mypy, unit/integratietests en secret-leakscan voordat volgende fase start.
+Each phase requires Ruff, strict Mypy, unit/integration tests, and a secret leak scan before the next phase starts.
 
 ## 12. Acceptatiecriteria
 
-Bij `LOG_LEVEL=INFO` kan beheerder uit logs reconstrueren:
+At `LOG_LEVEL=INFO`, administrator can reconstruct from logs:
 
-- wanneer app startte en stopte;
-- welke lokale mutaties via GUI/API zijn uitgevoerd;
-- welke run gestart, geannuleerd of voltooid is;
-- voortgang en aantallen zonder testcase-inhoud;
-- welke provider-/jobcategorie faalde;
-- gate-eindstatus.
+- when app started and stopped;
+- which local changes have been carried out via GUI/API;
+- which run has been started, canceled or completed;
+- progress and numbers without test case content;
+- which provider/job category failed;
+- gate end status.
 
-Bij `LOG_LEVEL=DEBUG` kan ontwikkelaar daarnaast reconstrueren:
+At `LOG_LEVEL=DEBUG`, the developer can also reconstruct:
 
-- request- en workerstappen met gedeelde correlatie-ID's;
-- queueclaim, lease, providerpogingen, streamingmetrics, evaluator- en commitstappen;
-- retry/backoff en veilige foutclassificatie.
+- request and worker steps with shared correlation IDs;
+- queue claim, lease, provider attempts, streaming metrics, evaluator and commit steps;
+- retry/backoff and safe fault classification.
 
-Geen niveau onthult secrets of prompt-/antwoordinhoud.
+No level reveals secrets or prompt/answer content.

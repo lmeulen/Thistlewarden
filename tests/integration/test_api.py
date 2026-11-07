@@ -54,7 +54,7 @@ def test_unknown_api_route_has_uniform_json_error(app) -> None:
     assert response.content_type.startswith("application/json")
     assert response.get_json()["error"] == {
         "code": "NOT_FOUND",
-        "message": "API-route is niet gevonden.",
+        "message": "API route not found.",
         "details": [],
         "request_id": response.headers["X-Request-ID"],
     }

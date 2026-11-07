@@ -1,125 +1,125 @@
 # Agent guide — Thistlewarden
 
-Dit bestand is primaire overdracht voor iedere nieuwe coding-agent. Lees dit volledig vóór wijzigingen. Controleer daarna relevante broncode en tests; documentatie kan achterlopen op code.
+This file is primary transfer for any new coding agent. Please read this in full before any changes. Then check relevant source code and tests; documentation can lag behind code.
 
 ## 1. Opdracht en productgrens
 
-Thistlewarden is een lokale single-user webapp voor reproduceerbare evaluatie van OpenAI-compatible taalmodellen. Gebruiker beheert endpoints, modelprofielen, golden sets, judgeprofielen en runs. Runs vergelijken meerdere targetmodellen op vaste cases, streamingmetrics, targetkosten en quality gates.
+Thistlewarden is a local single-user web app for reproducible evaluation of OpenAI-compatible language models. User manages endpoints, model profiles, golden sets, judge profiles and runs. Runs compare multiple target models on fixed cases, streaming metrics, target costs and quality gates.
 
-Niet veranderen zonder expliciete productbeslissing:
+Do not change without explicit product decision:
 
-- Nederlandse GUI en gebruikersmeldingen.
-- Engelse code, API-velden, logs en technische documentatie.
-- Python 3.12+, Flask, SQLite, Pydantic en lichte browser-JavaScript.
-- Server-rendered HTML/SVG; geen zware frontendstack of externe chartdependency.
-- Eén OS-host, één applicatieproces, lokaal filesystem, begrensde threads.
-- Geen authenticatie: hostpublicatie blijft loopback-only.
-- Targetcalls zijn SSE-streaming; judgecalls zijn non-streaming.
-- OpenAI-compatible calls gebeuren uitsluitend server-side.
-- Geld, prijzen, scores, gewichten en evaluatorgetallen gebruiken `Decimal`, nooit `float` voor domeinberekeningen.
+- Dutch GUI and user notifications.
+- English code, API fields, logs and technical documentation.
+- Python 3.12+, Flask, SQLite, Pydantic and light browser JavaScript.
+- Server-rendered HTML/SVG; no heavy frontend stack or external chart dependency.
+- One OS host, one application process, local filesystem, bounded threads.
+- No authentication: host publishing remains loopback-only.
+- Target calls are SSE streaming; judge calls are non-streaming.
+- OpenAI-compatible calls are made exclusively server-side.
+- Money, prizes, scores, weights and evaluator numbers use `Decimal`, never `float` for domain calculations.
 
 Hoofddocumenten:
 
-- `specification.md`: requirements en invarianten.
-- `implementation.md`: oorspronkelijk 30-stappenplan.
-- `README.md`: installatie en gebruikersingang.
-- `SECURITY.md`: ondersteunde threat boundary.
-- `docs/configuration.md`: configuratiecontracten.
-- `docs/operations.md`: lifecycle, backup en recovery.
-- `docs/release.md`: releasegate en offline E2E.
-- `docs/logging-plan.md`: loggingbeleid.
-- `reviews/combined_results.md`: actuele geconsolideerde review en releaseblokkers.
-- `hardening-report.md`: hardeningbewijs en restrisico's.
+- `specification.md`: requirements and invariants.
+- `implementation.md`: original 30-step plan.
+- `README.md`: installation and user entrance.
+- `SECURITY.md`: supported threat boundary.
+- `docs/configuration.md`: configuration contracts.
+- `docs/operations.md`: lifecycle, backup and recovery.
+- `docs/release.md`: release gate and offline E2E.
+- `docs/logging-plan.md`: logging policy.
+- `reviews/combined_results.md`: Current consolidated review and release blockers.
+- `hardening-report.md`: hardening evidence and residual risks.
 
-## 2. Huidige status
+## 2. Current status
 
-Oorspronkelijke MVP-functionaliteit is geïmplementeerd: zes evaluatoren, providerintegratie, centrale limiter, kosten, queue/leases/recovery, immutable case/model/judgesnapshots, gates, configuratie-import/export, runexports, retentie, Nederlandse GUI en securityhardening.
+Original MVP functionality has been implemented: six evaluators, provider integration, central limiter, costs, queue/leases/recovery, immutable case/model/judgesnapshots, gates, configuration import/export, run exports, retention, Dutch GUI and security hardening.
 
-**Release is momenteel no-go.** Compose-hostvalidatie is hersteld: bootstrap- en operationele settings staan `HOST=0.0.0.0` uitsluitend toe bij `CONTAINER_MODE=true`, terwijl Compose extern loopback-only publiceert. Los minimaal deze resterende bevestigde blockers op vóór stabiele release:
+**Release is currently no-go.** Compose host validation has been fixed: bootstrap and operational settings allow `HOST=0.0.0.0` only with `CONTAINER_MODE=true`, while Compose publishes externally loopback-only. At a minimum, resolve these remaining confirmed blockers before stable release:
 
-1. **High — migratie 9 is niet atomair.** `_migration_9()` gebruikt `sqlite3.executescript()`, dat impliciet commit en transactionele garanties breekt. Zie `src/evaluator/migrations.py`.
-2. **High — runs zijn niet volledig snapshotgedreven.** Cases, modellen, judge en gates zijn gesnapshot, maar `StreamingTargetCaller` en `JudgeCaller` laden actuele endpointconfiguratie en headers opnieuw. Endpointwijziging of deactivatie na queueing kan runuitvoering veranderen.
+1. **High — migration 9 is not atomic.** `_migration_9()` uses `sqlite3.executescript()`, which implicitly commit and breaks transactional guarantees. See `src/evaluator/migrations.py`.
+2. **High — runs are not fully snapshot driven.** Cases, models, judge and gates are snapshotted, but `StreamingTargetCaller` and `JudgeCaller` reload current endpoint configuration and headers. Endpoint change or deactivation after queuing can change run execution.
 
-Belangrijke open punten daarna:
+Important open points afterwards:
 
-- Streamingclient vertaalt netwerk-/timeoutfouten naar resultaten, waardoor executor-retries kunnen worden omzeild.
-- Runannulering en shutdown breken actieve providercalls niet af.
-- GUI-instellingen kunnen opgeslagen lijken terwijl constructorgebonden runtimecomponenten oude waarden blijven gebruiken.
-- `max_model_answer_chars` is niet volledig aangesloten; totale jobs per run zijn onvoldoende begrensd.
-- DNS-validatie heeft SSRF/DNS-TOCTOU-restrisico omdat connectie-IP niet gepind wordt.
-- Endpoint- en secretupdates gebruiken meerdere transacties.
-- `/ready` controleert SQLite, niet workerbeschikbaarheid.
-- Future-schema's worden niet volledig fail-closed geweigerd.
-- CSV-output neutraliseert spreadsheetformules niet.
-- Judgeveld `prompt_template` wordt opgeslagen en gesnapshot, maar `build_judge_prompt()` gebruikt het niet.
-- Model-prijzen zijn nulplaceholders; presenteer deze niet als financiële schatting.
+- Streaming client translates network/timeout errors into results, allowing to bypass executor retries.
+- Run cancellation and shutdown do not abort active provider calls.
+- GUI settings may appear saved while constructor-bound runtime components continue to use old values.
+- `max_model_answer_chars` is not fully connected; total jobs per run are not sufficiently limited.
+- DNS validation has SSRF/DNS-TOCTOU residual risk because connection IP is not pinned.
+- Endpoint and secret updates use multiple transactions.
+- `/ready` checks SQLite, not worker availability.
+- Future schedules are not rejected completely fail-closed.
+- CSV output does not neutralize spreadsheet formulas.
+- Judge field `prompt_template` is saved and snapshotted, but `build_judge_prompt()` does not use it.
+- Model prices are zero placeholders; do not present this as a financial estimate.
 
-Recente volledige suite: 383 tests groen op 2026-11-07 via `venv/Scripts/python.exe -m pytest` (Python 3.12.10, pytest 8.4.2). Ruff check, Ruff format check en strict Mypy zijn groen. Leakscan en Docker E2E zijn daarbij niet gedraaid.
+Recent full suite: 383 tests green on 2026-11-07 via `venv/Scripts/python.exe -m pytest` (Python 3.12.10, pytest 8.4.2). Ruff check, Ruff format check and strict Mypy are green. Leakscan and Docker E2E were not run.
 
-Omgevingsbeperkingen van huidige werkmap kunnen veranderen, maar waren laatst:
+Environment constraints of current workbook may change, but were most recently:
 
 - Native interpreter: `venv/Scripts/python.exe` (Python 3.12.10, editable install).
-- Docker niet beschikbaar in huidige WSL-host; CI bevat Dockergate.
-- Werkmap was geen Git-repository. Vertrouw niet op `git diff/status` zonder eerst te controleren.
+- Docker not available in current WSL host; CI includes Dockergate.
+- Workbook was not a Git repository. Do not trust `git diff/status` without checking first.
 
-## 3. Niet-onderhandelbare invarianten
+## 3. Non-negotiable invariants
 
 ### Runtime en tijd
 
-- Exact één proces. Geen Gunicorn-multiprocess, meerdere replicas of netwerkfilesystem.
-- `python -m evaluator` neemt process-lifetime `InstanceLock` vóór initialisatie.
-- Waitress gebruikt één proces en vier HTTP-threads; workerthreads volgen `RUN_CONCURRENCY`.
-- SQLite, WAL, backups en exports moeten op lokaal filesystem staan.
-- Persistente timestamps en leases: timezone-aware UTC via `evaluator.time`.
-- Latency, backoff en wachtduren: monotone klok.
-- Queuewrites moeten fenced blijven op lease-owner, generation, expiry en actieve runstatus.
-- Actieve providercalls kunnen nu niet hard worden afgebroken; timeouts en lease recovery begrenzen schade.
+- Exactly one process. No Gunicorn multiprocess, multiple replicas or network filesystem.
+- `python -m evaluator` takes process lifetime `InstanceLock` before initialization.
+- Waitress uses one process and four HTTP threads; worker threads follow `RUN_CONCURRENCY`.
+- SQLite, WAL, backups and exports must be on the local file system.
+- Persistent timestamps and leases: timezone-aware UTC via `evaluator.time`.
+- Latency, backoff and waiting times: monotonic clock.
+- Queuewrites must remain fenced on lease-owner, generation, expiry and active run status.
+- Active provider calls can now not be harshly aborted; timeouts and lease recovery limit damage.
 
-### Configuratie
+### Configuration
 
-- Prioriteit: `.env > GUI/database > default`.
-- `.env` wordt bewust geladen met `python-dotenv override=True`; bestand overschrijft procesenvironment.
-- Environmentgestuurde settings zijn read-only in GUI/API.
-- Bootstrapsettings en operationele settings zijn nu twee modellen; voorkom verdere duplicatie en herstel hostinconsistentie.
-- Classificeer nieuwe settings expliciet als bootstrap, restart-required of werkelijk live.
+- Priority: `.env > GUI/database > default`.
+- `.env` is deliberately loaded with `python-dotenv override=True`; file overwrites processenvironment.
+- Environment-controlled settings are read-only in GUI/API.
+- Bootstrap settings and operational settings are now two models; prevent further duplication and fix host inconsistency.
+- Explicitly classify new settings as bootstrap, restart-required or truly live.
 
 ### Secrets en gevoelige data
 
-- `ENCRYPTION_KEY`: URL-safe base64 van exact 32 random bytes.
-- Endpointsecrets: AES-256-GCM, random nonce, recordgebonden AAD en key versioning.
-- Nooit secretwaarden in logs, exports, API-/frontendresponses, snapshots, tests, fixtures of documentatie.
-- Configuratie-export bevat geen secrets; secretvelden zijn leeg/null.
-- Prompts, expected answers, modelantwoorden en judgedetails staan bewust plaintext in SQLite en runexports. Behandel database, WAL, backups en exports als gevoelig.
-- Lees of toon lokale `.env`, providercredentials of productie-inhoud niet tenzij gebruiker dit expliciet en veilig vraagt.
+- `ENCRYPTION_KEY`: URL-safe base64 of exactly 32 random bytes.
+- Endpoint secrets: AES-256-GCM, random nonce, record-bound AAD and key versioning.
+- Never include secret values ​​in logs, exports, API/frontend responses, snapshots, tests, fixtures or documentation.
+- Configuration export does not contain secrets; secret fields are empty/null.
+- Prompts, expected answers, model answers and judge details are deliberately plaintext in SQLite and run exports. Treat database, WAL, backups and exports as sensitive.
+- Do not read or display local `.env`, provider credentials, or production content unless explicitly and safely requested by user.
 
 ### Netwerk en browser
 
-- Provider-HTTPS standaard verplicht. HTTP alleen localhost of expliciet vertrouwd intern endpoint met bevestigde waarschuwing.
-- Providerclients: `follow_redirects=False`, `trust_env=False`, harde responslimieten.
-- Eén centrale thread-safe limiter delen target-, judge-, discovery-, verbindingstest- en modeltestcalls.
-- Host-/Originvalidatie, CSP-nonces en sessiegebonden CSRF blijven actief.
-- `Origin: null` alleen voor GUI-mutaties met geldig sessie-CSRF; nooit voor `/api/v1`.
-- App niet naar LAN/internet exposen; authenticatie en tenantisolatie bestaan niet.
-- Geen inline JavaScript-handlers. Gebruik nonce-script en eventlisteners.
+- Provider HTTPS standard required. HTTP only localhost or explicitly trusted internal endpoint with acknowledged warning.
+- Provider clients: `follow_redirects=False`, `trust_env=False`, hard response limits.
+- One central thread-safe limiter sharing target, judge, discovery, connection test and model test calls.
+- Host/Origin validation, CSP nonces and session-bound CSRF remain active.
+- `Origin: null` only for GUI transactions with valid session CSRF; never for `/api/v1`.
+- App not exposed to LAN/internet; authentication and tenant isolation do not exist.
+- No inline JavaScript handlers. Use nonce script and event listeners.
 
 ### Logging
 
-- Eén `StreamHandler` naar `stderr`.
-- Gebruik `log_event(...)` en allowlisted velden.
-- `INFO`: lifecycle, semantische gebruikersacties, runvoortgang; geen normale GET-/pollingruis.
-- `DEBUG` mag technische metadata tonen, nooit prompts, antwoorden, expected answers, bodies, SSE-chunks, cookies, CSRF, secrets of geheime headers.
-- Ruwe providerfouten nooit loggen, opslaan of exporteren.
-- Handmatige modeltestdiagnostiek is response-lokaal, maximaal 32 KiB, alleen tekst/JSON, HTML-escaped en met bekende headerwaarden geredigeerd. Alleen `ModelProfileTester.test()` gebruikt `diagnostic_mode=True`.
+- One `StreamHandler` to `stderr`.
+- Use `log_event(...)` and allowlisted fields.
+- `INFO`: lifecycle, semantic user actions, run progress; no normal GET/polling noise.
+- `DEBUG` may show technical metadata, never prompts, answers, expected answers, bodies, SSE chunks, cookies, CSRF, secrets or secret headers.
+- Never log, save or export raw provider errors.
+- Manual model test diagnostics are response-local, 32 KiB maximum, text/JSON only, HTML escaped and redacted with known header values. Only `ModelProfileTester.test()` uses `diagnostic_mode=True`.
 
-### Kosten en usage
+### Costs and usage
 
-- Zichtbare run-/modelkosten en cost gates zijn uitsluitend targetkosten.
-- `judge_cost` blijft alleen auditdata in opslag/export; nooit optellen bij totalen, ranking of gates.
-- `total_cost` is strikt onbekend als niet alle targetkosten bekend zijn.
-- `known_total_cost` telt bekende targetkosten; toon bekende teller apart.
-- Targetruntime normaliseert ontbrekende usagecomponenten intern naar nul voor prijsberekening, zodat fixed request cost blijft tellen.
-- Niet-gerapporteerde providertokens blijven in opslag `NULL`.
-- Generieke kosten-API blijft strikt bij ontbrekende usage; verruim deze niet stilzwijgend.
+- Visible run/model costs and cost gates are target costs only.
+- `judge_cost` only audit data remains in storage/export; never add to totals, rankings or gates.
+- `total_cost` is strictly unknown if not all target costs are known.
+- `known_total_cost` counts known target costs; show known counter separately.
+- Targetruntime internally normalizes missing usage components to zero for price calculation, so that fixed request costs continue to count.
+- Unreported provider tokens remain in storage `NULL`.
+- Generic cost API remains strict with missing usage; do not expand it silently.
 
 ## 4. Architectuurkaart
 
@@ -137,7 +137,7 @@ Startupvolgorde: settings laden → instance lock → migreren → services bouw
 
 ### Weblagen
 
-- `src/evaluator/gui.py`: Nederlandse GUI-routes en form parsing.
+- `src/evaluator/gui.py`: GUI routes and form parsing.
 - `src/evaluator/templates/`: server-rendered Jinja.
 - `src/evaluator/static/app.css`: layout en responsieve styling.
 - `src/evaluator/api/routes.py`: `/api/v1` JSON-routes.
@@ -145,43 +145,43 @@ Startupvolgorde: settings laden → instance lock → migreren → services bouw
 - `src/evaluator/api/handlers.py`: veilige foutmapping.
 - `src/evaluator/web_security.py`: host/origin/CSRF/CSP/securityheaders.
 
-GUI en API horen dezelfde services en Pydantic-validatie te gebruiken. Nieuwe mutatie vereist GUI-CSRF; automation-API behoudt eigen originbeleid. Werk OpenAPI, GUI, config import/export en tests samen bij wanneer veldcontract wijzigt.
+GUI and API should use the same services and Pydantic validation. New mutation requires GUI-CSRF; automation-API retains its own origin policy. Update OpenAPI, GUI, config import/export and tests together when field contract changes.
 
 ### Domeinen
 
-- `endpoints.py`, `secrets.py`: providerendpoint, headers en versleutelde secrets.
-- `models.py`: modelprofielen, inferencebindings en prijzen.
+- `endpoints.py`, `secrets.py`: provider endpoint, headers and encrypted secrets.
+- `models.py`: model profiles, inference bindings and prices.
 - `golden_sets.py`, `golden_set_io.py`: set/case CRUD, evaluatorconfig, import/export.
-- `judges.py`: judgeprofielen, rubric, promptcontract en strikte parser.
-- `evaluators/`: deterministic evaluatorregistry.
-- `runs.py`: runcreatie, snapshots, queue, leases, resultaten en status.
+- `judges.py`: judge profiles, rubric, prompt contract and strict parser.
+- `evaluators/`: deterministic evaluator registry.
+- `runs.py`: run creation, snapshots, queue, leases, results and status.
 - `workers.py`: claim → heartbeat → target → evaluator/judge → fenced commit → gates.
-- `worker_runtime.py`: echte target/judge adapters en workerthreads.
-- `streaming.py`: SSE-targetclient en usage/TTFT/TPS.
-- `provider.py`: non-streaming judgeclient en headers.
-- `rate_limits.py`: centrale limiter en retryexecutor.
-- `costs.py`: exacte kostenberekening.
-- `aggregates.py`, `gates.py`: run/modelaggregaten en quality gates.
-- `run_views.py`, `run_exports.py`: GUI-projecties en JSON/CSV/HTML-export.
-- `config_io.py`: secretvrije configuratiebundle.
+- `worker_runtime.py`: real target/judge adapters and worker threads.
+- `streaming.py`: SSE target client and usage/TTFT/TPS.
+- `provider.py`: non-streaming judge client and headers.
+- `rate_limits.py`: central limiter and retry executor.
+- `costs.py`: exact cost calculation.
+- `aggregates.py`, `gates.py`: run/model aggregates and quality gates.
+- `run_views.py`, `run_exports.py`: GUI projections and JSON/CSV/HTML export.
+- `config_io.py`: secret-free configuration bundle.
 
 ### Runflow
 
-1. `RunQueue.create_run()` valideert actieve set/modellen/judge.
-2. Cases, modellen, judge en gates worden in één transactie gesnapshot.
-3. Alleen gekozen targetmodellen krijgen jobs; judge-only model kan extra snapshot krijgen.
-4. Worker claimt één job met owner/generation/expiry.
-5. Heartbeat verlengt lease; stale worker mag niet committen.
-6. Targetcall streamt SSE en verzamelt content, latency, TTFT, TPS en usage.
-7. Deterministische evaluator of LLM-judge produceert `EvaluationResult`.
-8. Resultaat en metrics worden fenced opgeslagen.
-9. Runstatus wordt ververst; terminale run evalueert gates.
+1. `RunQueue.create_run()` validates active set/models/judge.
+2. Cases, models, judge and gates are snapshotted in one transaction.
+3. Only selected target models get jobs; judge-only model can get extra snapshot.
+4. Worker claims one job with owner/generation/expiry.
+5. Heartbeat extends lease; stale worker is not allowed to commit.
+6. Targetcall streams SSE and collects content, latency, TTFT, TPS and usage.
+7. Deterministic evaluator or LLM judge produces `EvaluationResult`.
+8. Result and metrics are stored fenced.
+9. Run status is refreshed; terminal run evaluates gates.
 
 Behoud onderscheid:
 
-- `failed` evaluatorresultaat = technisch correcte uitvoering, inhoud niet geslaagd.
-- `error` resultaat/job `failed` = technische pipelinefout.
-- `completed_with_errors` = terminale run met sommige technische fouten.
+- `failed` evaluator result = technically correct execution, content failed.
+- `error` result/job `failed` = technical pipeline error.
+- `completed_with_errors` = terminal run with some technical errors.
 
 ## 5. Evaluatorcontracten
 
@@ -194,54 +194,54 @@ Methoden:
 - `json_schema`
 - `llm_judge`
 
-Golden-setconfig wordt bij write én database-read door Pydantic gevalideerd. Regex behoudt afdwingbare timeout. Evaluatoren retourneren `Decimal`-score, boolean `passed`, beperkte reason en veilige metadata.
+Golden-setconfig is validated by Pydantic during write and database read. Regex preserves enforceable timeout. Evaluators return `Decimal` score, boolean `passed`, limited reason, and secure metadata.
 
 ### JSON Schema
 
 `JsonSchemaEvaluator`:
 
-1. verwacht standalone JSON;
-2. verwijdert alleen optionele geldige Markdownfence wanneer geconfigureerd;
-3. valideert Draft 2020-12;
-4. vergelijkt volledige parsed value wanneer `expected_value` geconfigureerd is;
-5. scoort binair 0/1: één overtreding faalt hele case.
+1. expect standalone JSON;
+2. removes only optional valid Markdownfence when configured;
+3. Validates Draft 2020-12;
+4. compares full parsed value when `expected_value` is configured;
+5. scores binary 0/1: one violation fails the entire case.
 
-Recente model-analyse liet vooral geldige JSON met contractmismatch zien, niet evaluatorcrashes. Testsetproblemen omvatten impliciete veldnamen/types, taaltegenstrijdigheden (`positief` in prompt versus `positive` als `const`), string versus array, string versus integer en verboden codefences. Bij onderhoud van JSON-cases:
+Recent model analysis mainly showed valid JSON with contract mismatch, not evaluator crashes. Test set issues include implicit field names/types, language conflicts (`positief` in prompt vs. `positive` as `const`), string vs. array, string vs. integer, and prohibited code fences. When maintaining JSON cases:
 
-- zet exacte veldnamen, types, arrays en constante waarden in prompt;
-- gebruik `const`/`expected_value` alleen als exacte serialisatie requirement is;
-- kies expliciet of codefences onderdeel van test zijn;
-- verander evaluator niet om ambigue golden cases kunstmatig te laten slagen.
+- put exact field names, types, arrays and constant values ​​in prompt;
+- use `const`/`expected_value` only if exact serialization is required;
+- explicitly choose whether code fences are part of test;
+- do not change evaluator to artificially pass ambiguous golden cases.
 
 ### LLM judge
 
-`build_judge_prompt()` bevat expliciet outputcontract, exacte criterion-ID's/volgorde, prompt-injectiongrens en verbod op extra tekst. `parse_judge_output()` is fail-closed:
+`build_judge_prompt()` contains explicit output contract, exact criterion IDs/order, prompt injection boundary, and ban on extra text. `parse_judge_output()` is fail closed:
 
-- exact `score`, `passed`, `reason`, `criteria`;
-- elk criterion exact `id`, `score`, `reason`;
-- exacte criterionset;
-- gewogen score wordt server-side opnieuw berekend;
-- threshold bepaalt werkelijk `passed`.
+- exactly `score`, `passed`, `reason`, `criteria`;
+- each criterion exactly `id`, `score`, `reason`;
+- exact criterion set;
+- weighted score is recalculated server-side;
+- threshold really determines `passed`.
 
-Historische `JudgeParseError`-runs kwamen door ontbrekend outputcontract en worden niet retroactief aangepast. Herstart run voor nieuwe prompt. Judge doet maximaal twee output-/parsepogingen. Beslis expliciet hoe opgeslagen `prompt_template` toegepast wordt; momenteel genegeerd. Voeg vóór implementatie template-injection-, escaping-, versie- en backward-compatibilitytests toe.
+Historical `JudgeParseError` runs were due to a missing output contract and will not be retroactively adjusted. Restart run for new prompt. Judge makes a maximum of two output/parse attempts. Explicitly decide how saved `prompt_template` is applied; currently ignored. Add template injection, escaping, version, and backward compatibility testing before deployment.
 
 ## 6. Provider- en modelcontracten
 
-Modelparameters zijn optioneel; leeg betekent **niet verzenden**. Nieuwe profielen hebben `temperature=None`.
+Model parameters are optional; empty means **do not send**. New profiles have `temperature=None`.
 
 `compose_inference_parameters()`:
 
-- beschermt `model`, `messages`, `stream`, `stream_options` en vaste bindings;
-- ondersteunt configureerbaar `max_tokens_field_path` inclusief nested pad;
-- ondersteunt vlak/nested reasoningpad en optionele verzending van `off`;
-- weigert conflicten met `custom_parameters`;
-- laat geen NaN/infinite JSON toe.
+- protects `model`, `messages`, `stream`, `stream_options` and solid bonds;
+- supports configurable `max_tokens_field_path` including nested path;
+- supports flat/nested reasoning pad and optional dispatch of `off`;
+- refuses conflicts with `custom_parameters`;
+- does not allow NaN/infinite JSON.
 
-Modeltest gebruikt uitsluitend opgeslagen profiel via productie-streamingpad met vaste veilige prompt. Niet-opgeslagen formulierwijzigingen mogen modeltest niet beïnvloeden.
+Model test only uses saved profile over production streaming path with fixed safe prompt. Unsaved form changes should not affect model test.
 
-Targetrequest voegt `stream_options.include_usage=true` toe. Stream geldt als compleet bij `[DONE]` of geldige finish reason volgens streamingcontract. Bewaak harde byte-/antwoordlimieten bij wijzigingen.
+Targetrequest adds `stream_options.include_usage=true`. Stream is considered complete at `[DONE]` or valid finish reason according to streaming contract. Monitor hard byte/response limits on changes.
 
-Endpointheaders kunnen plaintext of secretref zijn. Secretwaarden worden pas server-side opgelost. Discovery, target, judge en tests moeten allemaal centrale limiter gebruiken.
+Endpoint headers can be plaintext or secretref. Secret values ​​are only resolved server-side. Discovery, target, judge and tests all need to use central limiter.
 
 ## 7. Database en migraties
 
@@ -249,47 +249,47 @@ Actueel schema: **v12** (`add_model_parameter_bindings`). Tabellen omvatten sett
 
 Migratieregels:
 
-- Alleen forward migrations; geen down migrations.
-- Voeg nieuwe migration met volgende opeenvolgende versie toe.
-- Gebruik afzonderlijke `connection.execute()`-statements binnen bestaande `EXCLUSIVE` transactie; geen `executescript()`.
-- Nooit bestaande historische migration wijzigen nadat release deze kan hebben toegepast, behalve gerichte reparatiestrategie met compatibiliteitstest.
-- Nieuwe/gewijzigde brede `INSERT` gebruikt expliciete kolomnamen; vermijd positionele koppeling.
-- Test leeg schema, upgrade vanaf historische versie, foutinjectie/rollback, backupintegriteit en future-schema failure.
-- Bestaande upgrade maakt unieke SQLite-onlinebackup; verse database heeft geen pre-upgradebackup.
-- Restore schrijft altijd naar nieuw doelpad.
+- Only forward migrations; no down migrations.
+- Add new migration with next consecutive version.
+- Use separate `connection.execute()` statements within existing `EXCLUSIVE` transaction; no `executescript()`.
+- Never modify existing historical migration after release can have applied it, except targeted repair strategy with compatibility test.
+- New/changed wide `INSERT` uses explicit column names; avoid positional coupling.
+- Test empty schema, upgrade from historical version, fault injection/rollback, backup integrity and future-schema failure.
+- Existing upgrade creates unique SQLite online backup; fresh database has no pre-upgrade backup.
+- Restore always writes to new target path.
 
-SQLite-instellingen (`database.py`) zoals WAL, foreign keys, `synchronous=FULL` en busy timeout zijn correctnessonderdeel, geen vrijblijvende tuning.
+SQLite settings (`database.py`) such as WAL, foreign keys, `synchronous=FULL` and busy timeout are part of correctness, not optional tuning.
 
 ## 8. Golden sets
 
 Golden-setduplicatie kopieert atomair metadata, cases, volgorde, judgeoverride en quality gates. Bulkdelete valideert UUID's en setlidmaatschap vooraf, verwijdert transactioneel en normaliseert `sort_order`. Historische runrefs blijven beschermd.
 
-## 9. Wijzigingswerkwijze voor agents
+## 9. Change Method for Agents
 
-1. Lees deze gids plus relevante requirements/docs/code/tests volledig.
-2. Reproduceer bug met kleinste veilige test of read-only databasequery. Toon geen gevoelige inhoud.
-3. Bepaal invarianten en aangrenzende contracten vóór edit.
-4. Schrijf regressietest die vóór fix faalt waar praktisch.
-5. Maak kleinste coherente wijziging in domeinservice; dupliceer logica niet in GUI/API.
-6. Werk Pydanticmodel, persistence, migration, config exchange, GUI, API/OpenAPI en tests samen bij indien contract verandert.
-7. Draai gerichte formatter/lint/type/testchecks.
-8. Draai volledige quality gate voor afronding.
-9. Scan diff/werkmap op secrets en payloadlekken.
-10. Werk documentatie en deze gids bij wanneer architectuur, status of risico verandert.
+1. Read this guide plus relevant requirements/docs/code/tests in full.
+2. Reproduce bug with smallest safe test or read-only database query. Do not show sensitive content.
+3. Determine invariants and adjacent contracts before editing.
+4. Write regression test that fails before fix where practical.
+5. Make smallest coherent change to domain service; don't duplicate logic in GUI/API.
+6. Update Pydanticmodel, persistence, migration, config exchange, GUI, API/OpenAPI and tests together if contract changes.
+7. Run targeted formatter/ribbon/type/test checks.
+8. Run full quality gate for completion.
+9. Scan diff/workbook for secrets and payload leaks.
+10. Update documentation and this guide when architecture, status, or risk changes.
 
-Geen brede refactor tegelijk met bugfix tenzij noodzakelijk. Behoud transactieboundaries en fencing. Gebruik dependency injection voor klok, sleeper, random, transport en repositories in tests. Concurrencytests liefst event/barrier-gebaseerd, niet sleep-gebaseerd.
+No broad refactor at the same time as bug fix unless necessary. Maintain transaction boundaries and fencing. Use dependency injection for clock, sleeper, random, transport and repositories in tests. Concurrency tests preferably event/barrier-based, not sleep-based.
 
-Bij databaseonderzoek:
+For database research:
 
-- maak eerst backup bij mutaties;
-- gebruik parameterized SQL;
-- doe diagnose read-only waar mogelijk;
-- onderscheid historische data van actuele code;
-- wijzig oude runresultaten nooit om nieuwe logica te simuleren.
+- first make a backup for changes;
+- use parameterized SQL;
+- make diagnosis read-only where possible;
+- distinguish historical data from current code;
+- never modify old run results to simulate new logic.
 
 ## 10. Test- en kwaliteitscommando's
 
-Gebruik voor alle Python-commando's uitsluitend de interpreter uit `venv/`; gebruik geen globale Python. In deze Windows/WSL-werkmap is dat `./venv/Scripts/python.exe`. Op POSIX is dat `./venv/bin/python`.
+Only use the interpreter from `venv/` for all Python commands; don't use global Python. In this Windows/WSL workbook it is `./venv/Scripts/python.exe`. On POSIX this is `./venv/bin/python`.
 
 Windows/WSL-werkmap:
 
@@ -300,7 +300,7 @@ Windows/WSL-werkmap:
 ./venv/Scripts/python.exe -m pytest -q tests/unit tests/integration
 ```
 
-POSIX-venv gebruikt overeenkomstig `./venv/bin/python -m ...`.
+POSIX-venv used according to `./venv/bin/python -m ...`.
 
 Gerichte tests volgen modulestructuur, bijvoorbeeld:
 
@@ -313,9 +313,9 @@ Gerichte tests volgen modulestructuur, bijvoorbeeld:
 ./venv/Scripts/python.exe -m pytest -q tests/integration/test_gui_runs.py
 ```
 
-Na Pythonwijziging minimaal: Ruff check, Ruff format check, strict Mypy en relevante tests. Voor release: volledige suite plus offline Docker E2E uit `docs/release.md`.
+After Python change at least: Ruff check, Ruff format check, strict Mypy and relevant tests. For release: full suite plus offline Docker E2E from `docs/release.md`.
 
-Dockerreleasegate wanneer Docker beschikbaar:
+Docker release gate when Docker available:
 
 ```bash
 docker compose -f compose.yaml -f compose.e2e.yaml config --quiet
@@ -327,28 +327,28 @@ docker compose -f compose.yaml -f compose.e2e.yaml logs --no-color > compose.log
 docker compose -f compose.yaml -f compose.e2e.yaml down -v
 ```
 
-E2E gebruikt lokale `mock_provider`, alle zes evaluatoren, twee modellen, streaming, judge, usage, kosten, gates en exports. Werkelijke Dockerstart is verplicht bewijs; statische tests vervangen dit niet.
+E2E uses local `mock_provider`, all six evaluators, two models, streaming, judge, usage, costs, gates and exports. Actual Dockerstart is required proof; static testing does not replace this.
 
-Leakscan moet minstens uitsluiten:
+Leak scan must exclude at least:
 
 - echte API keys of `.env`-waarden in tracked artefacten;
 - secretwaarden in exports/responses/logs/snapshots;
 - prompts, candidates, expected answers, requestbodies of SSE-content in logs;
 - fixturesecret in E2E-logs.
 
-## 11. Definitie van klaar
+## 11. Definition of done
 
 Wijziging is klaar wanneer:
 
-- gedrag en invarianten expliciet zijn;
-- regressietests bestaan voor bug/contract;
-- GUI/API/config/exportpaden consistent zijn waar relevant;
-- transacties, fencing, Decimal en UTC/monotone tijd correct blijven;
-- security- en loggingbeleid niet verzwakt is;
-- Ruff, format, strict Mypy en relevante tests groen zijn;
-- volledige suite groen is voor brede wijziging/release;
-- Docker E2E groen is voor deployment/releasewijziging;
-- geen secrets of gevoelige payloads lekken;
-- docs, OpenAPI en `agent.md` actuele werkelijkheid beschrijven.
+- behavior and invariants are explicit;
+- regression tests exist for bug/contract;
+- GUI/API/config/export paths are consistent where relevant;
+- transactions, fencing, Decimal and UTC/monotonic time remain correct;
+- security and logging policy has not been weakened;
+- Ruff, format, strict Mypy and relevant tests are green;
+- entire suite is green for broad change/release;
+- Docker E2E is green for deployment/release change;
+- do not leak secrets or sensitive payloads;
+- docs, OpenAPI and `agent.md` describe current reality.
 
-Rapporteer altijd exact welke checks gedraaid zijn en welke niet konden draaien. Claim geen release readiness zolang blockers uit §2 openstaan.
+Always report exactly which checks were run and which could not be run. Do not claim release readiness as long as blockers from §2 are open.

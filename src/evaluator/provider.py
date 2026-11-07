@@ -262,18 +262,14 @@ class OpenAIProviderClient:
         if length is not None:
             try:
                 if int(length) > self._max_response_bytes:
-                    raise InvalidProviderResponseError(
-                        "Providerresponse overschrijdt maximale grootte."
-                    )
+                    raise InvalidProviderResponseError("Provider response exceeds maximum size.")
             except ValueError:
                 pass
         result = bytearray()
         for chunk in response.iter_bytes():
             result.extend(chunk)
             if len(result) > self._max_response_bytes:
-                raise InvalidProviderResponseError(
-                    "Providerresponse overschrijdt maximale grootte."
-                )
+                raise InvalidProviderResponseError("Provider response exceeds maximum size.")
         return bytes(result)
 
     @staticmethod

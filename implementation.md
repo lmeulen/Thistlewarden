@@ -1,30 +1,30 @@
 # Implementatieplan — LLM Evaluator
 
-**Status:** uitvoerbaar plan v1.1  
-**Bron:** `specification.md` v1.0  
-**Werkwijze:** kleine, opeenvolgende stappen; iedere stap eindigt met geautomatiseerde unit- en integratietests en laat hoofdbranch werkend achter.
+**Status:** executable plan v1.1
+**Source:** `specification.md` v1.0
+**Procedure:** small, successive steps; each step ends with automated unit and integration testing and leaves main branch running.
 
 ## 1. Uitvoeringsregels
 
 ### 1.1 Definition of Done per stap
 
-Een stap is pas gereed wanneer:
+A step is only complete when:
 
-1. productiecode en migraties voor die stap compleet zijn; iedere nieuwe migratie heeft een `N → N+1`-fixture met representatieve bestaande data en een rollback-/onderbrekingstest;
-2. genoemde unittests zijn toegevoegd en slagen;
-3. genoemde integratietests zijn toegevoegd en slagen;
-4. bestaande tests blijven slagen;
-5. gewijzigde API-contracten en configuratie zijn gedocumenteerd;
-6. geen echte provider, API-key of internetverbinding nodig is voor tests;
-7. geen secrets, prompts of antwoorden in testlogs verschijnen;
-8. relevante lint-, format- en typechecks slagen.
+1. production code and migrations for that step are complete; each new migration has a `N → N+1` fixture with representative existing data and a rollback/break test;
+2. said unit tests have been added and pass;
+3. said integration tests have been added and pass;
+4. existing tests continue to pass;
+5. changed API contracts and configuration are documented;
+6. No real provider, API key or internet connection is required for testing;
+7. no secrets, prompts or answers appear in test logs;
+8. pass relevant ribbon, format and type checks.
 
 ### 1.2 Testlagen
 
-- **Unit:** pure domeinlogica, Pydantic-validatie, serializers, parsers en services met dependencies gemockt.
-- **Integratie:** Flask testclient, tijdelijke SQLite-database, echte repositories/migraties en lokale mock-HTTP-provider.
-- **GUI-integratie:** server-rendered HTML via Flask testclient, plus browserrooktests voor kritieke flows.
-- **End-to-end:** volledige applicatie met mock-provider en worker, zonder extern netwerk.
+- **Unit:** pure domain logic, Pydantic validation, serializers, parsers and services with dependencies mocked.
+- **Integration:** Flask test client, temporary SQLite database, real repositories/migrations and local mock HTTP provider.
+- **GUI integration:** server-rendered HTML via Flask test client, plus browser smoke tests for critical flows.
+- **End-to-end:** complete application with mock provider and worker, without external network.
 
 ### 1.3 Testconventies
 
@@ -50,26 +50,26 @@ tests/
 
 Tests gebruiken:
 
-- `pytest` en Flask testclient;
-- tijdelijke SQLite-bestanden, niet alleen `:memory:`, voor queue- en restarttests;
-- een lokale OpenAI-compatible mockserver voor streaming, retries en discovery;
-- één `Clock`-port met `monotonic()` voor latency/backoff en `now_utc()` voor persistente leases/retentie;
-- een dual fake clock waarvan monotone tijd en UTC-wandklok onafhankelijk bestuurbaar zijn;
-- deterministic UUID-/tijd-factories waar snapshots worden vergeleken;
-- geen `sleep` in unittests.
+- `pytest` and Flask test client;
+- temporary SQLite files, not just `:memory:`, for queue and restart tests;
+- a local OpenAI-compatible mock server for streaming, retrievals and discovery;
+- one `Clock` port with `monotonic()` for latency/backoff and `now_utc()` for persistent leases/retention;
+- a dual fake clock of which monotone time and UTC wall clock can be controlled independently;
+- deterministic UUID/time factors where snapshots are compared;
+- no `sleep` in unit tests.
 
 ### 1.4 Ondersteunde MVP-runtime
 
-- Eén OS-host en uitsluitend een lokaal filesystemvolume voor SQLite-database, WAL en exports; netwerkfilesystems en gedeelde volumes zijn niet ondersteund.
-- Eén applicatieproces bevat Flask plus een begrensde pool workerthreads. Alle providercalls — target, judge, verbindingstest en discovery — lopen door één thread-safe centrale endpointlimiter in dit proces.
-- Meerdere applicatie- of workerprocessen zijn buiten MVP. Startupvalidatie weigert een geconfigureerde multiproces-topologie. Productieserver gebruikt exact één proces; Flask development reloader staat uit zodra workers actief zijn.
-- Eén startupcoördinator in het applicatieproces voert migraties en recovery uit vóór HTTP-verkeer en workerthreads starten.
-- SQLite gebruikt WAL alleen op het lokale volume. Deploymentdocumentatie vermeldt ondersteunde locking-, backup- en volumevereisten.
-- Workerconcurrency is threadconcurrency en wordt begrensd door operationele settings. Centrale limiter is gedeeld door web- en workerthreads en sluit vóór database-/processhutdown.
+- One OS host and only a local filesystem volume for SQLite database, WAL and exports; network file systems and shared volumes are not supported.
+- One application process contains Flask plus a bounded pool of worker threads. All provider calls — target, judge, connection test and discovery — run through one thread-safe central endpoint limiter in this process.
+- Multiple application or worker processes are outside of MVP. Startup validation rejects a configured multiprocess topology. Production server uses exactly one process; Flask development reloader is disabled as soon as workers are active.
+- One startup coordinator in the application process performs migrations and recovery before HTTP traffic and worker threads start.
+- SQLite uses WAL only on the local volume. Deployment documentation lists supported locking, backup, and volume requirements.
+- Worker concurrency is thread concurrency and is limited by operational settings. Central limiter is shared between web and worker threads and closes before database/process shutdown.
 
 ### 1.5 Doorlopende verificatie
 
-Na iedere stap minimaal:
+After every step, at minimum:
 
 ```bash
 pytest tests/unit tests/integration
@@ -91,7 +91,7 @@ npm run typecheck
 npm run build
 ```
 
-Indien geen npm-bundler nodig blijkt, vervang dit door gekozen TypeScript/JavaScript-checks en leg commando vast in `README.md`.
+If no npm bundler appears to be necessary, replace this with selected TypeScript/JavaScript checks and record command in `README.md`.
 
 ## 2. Implementatiefasen en stappen
 
@@ -99,360 +99,360 @@ Indien geen npm-bundler nodig blijkt, vervang dit door gekozen TypeScript/JavaSc
 
 ### Stap 1 — Projectskelet en reproduceerbare ontwikkelomgeving
 
-**Doel**
+**Goal**
 
-Startbare Flask-app met app factory, Python-package, testconfiguratie en basisdocumentatie.
+Launchable Flask app with app factory, Python package, test configuration and basic documentation.
 
 **Implementatie**
 
-- Maak `.venv`-workflow, `requirements.txt`, `.gitignore`, `.env` en `.env.example`.
-- Voeg Flask app factory en `python-dotenv` met `override=True` toe.
-- Voeg `/health` toe zonder databaseafhankelijkheid.
-- Configureer Python logging; gebruik nergens `print`.
-- Voeg pytest-, lint-, format- en typecheckconfiguratie toe.
-- Voeg minimale Nederlandse basispagina toe.
-- Valideer runtime-topologie: één proces, lokaal SQLite-volume en development reloader uit bij actieve workers.
-- Maak `README.md` met installatie- en testcommando's voor PowerShell en POSIX-shell.
+- Create `.venv` workflow, `requirements.txt`, `.gitignore`, `.env` and `.env.example`.
+- Add Flask app factory and `python-dotenv` with `override=True`.
+- Add `/health` without database dependency.
+- Configure Python logging; Do not use `print` anywhere.
+- Add pytest, ribbon, format and type check configuration.
+- Add minimal Dutch basic page.
+- Validate runtime topology: single process, local SQLite volume and development reloader off on active workers.
+- Create `README.md` with install and test commands for PowerShell and POSIX shell.
 
 **Unittests**
 
-- Appconfig kiest defaults wanneer waarden ontbreken.
-- `.env` overschrijft reeds bestaande proces-environmentwaarden.
-- Ongeldige booleans/getallen leveren startup-validatiefout.
-- Loggingconfig bevat geen body-/promptvelden.
-- Multiprocesconfiguratie en een expliciet netwerkfilesystemvolume worden geweigerd.
+- Appconfig chooses defaults when values ​​are missing.
+- `.env` overwrites already existing process environment values.
+- Invalid booleans/numbers yield startup validation error.
+- Loggingconfig does not contain body/prompt fields.
+- Multiprocess configuration and an explicit network filesystem volume are denied.
 
 **Integratietests**
 
-- App factory start in testmodus.
-- `GET /health` geeft `200` en stabiel JSON-contract.
-- Basisroute rendert Nederlandse pagina.
-- Teststart maakt geen productie-database of exportbestand aan.
+- App factory starts in test mode.
+- `GET /health` gives `200` and stable JSON contract.
+- Basic route renders Dutch page.
+- Teststart does not create a production database or export file.
 
 **Acceptatie**
 
-Schone checkout kan app en tests starten met gedocumenteerde commando's.
+Clean checkout can launch app and tests with documented commands.
 
 ---
 
-### Stap 2 — Gelaagde configuratie en instellingen
+### Step 2 — Layered configuration and settings
 
-**Doel**
+**Goal**
 
-Operationele instellingen ondersteunen prioriteit `.env > GUI/database > default`.
+Operational settings support priority `.env > GUI/database > default`.
 
 **Implementatie**
 
-- Definieer getypeerd settingsregister met default, datatype, bereik, geheim-status en env-naam.
-- Implementeer bronresolutie en bronmetadata.
-- Neem alle limieten, concurrency, retentie, timeouts, host/poort en logging uit specificatie op.
-- Maak repository-interface voor database-instellingen; gebruik tijdelijk een in-memory adapter totdat SQLite in stap 3 beschikbaar is.
-- Zorg dat environmentoverrides read-only zijn voor latere GUI/API.
+- Define typed settings register with default, data type, range, secret status and env name.
+- Implement source resolution and source metadata.
+- Include all limits, concurrency, retention, timeouts, host/port and logging from specification.
+- Create repository interface for database settings; temporarily use an in-memory adapter until SQLite is available in step 3.
+- Ensure environment overrides are read-only for later GUI/API.
 
 **Unittests**
 
-- Elke instelling gebruikt juiste default.
-- Databasewaarde overschrijft default.
-- Environmentwaarde overschrijft databasewaarde.
-- Bron is correct: `default`, `database` of `environment`.
-- Positieve limieten en `DEFAULT_RUN_CONCURRENCY <= MAX_RUN_CONCURRENCY` worden gevalideerd.
-- `RUN_RETENTION_DAYS=0` betekent onbeperkt.
+- Each setting uses correct default.
+- Database value overrides default.
+- Environment value overwrites database value.
+- Source is correct: `default`, `database` or `environment`.
+- Positive limits and `DEFAULT_RUN_CONCURRENCY <= MAX_RUN_CONCURRENCY` are validated.
+- `RUN_RETENTION_DAYS=0` means unlimited.
 
 **Integratietests**
 
-- App start met minimale `.env`.
-- App weigert startup bij ongeldige grenscombinaties.
-- Environmentwaarde blijft leidend na poging tot databasewijziging.
+- App starts with minimum `.env`.
+- App refuses startup with invalid border combinations.
+- Environment value remains leading after attempted database change.
 
 **Acceptatie**
 
-Alle operationele instellingen hebben één getypeerde definitie en voorspelbare bronprioriteit.
+All operational settings have one typed definition and predictable resource priority.
 
 ---
 
 ### Stap 3 — SQLite-infrastructuur en migraties
 
-**Doel**
+**Goal**
 
-Transactionele persistente basis met reproduceerbare schema-initialisatie.
+Transactional persistent basis with reproducible schema initialization.
 
 **Implementatie**
 
-- Voeg SQLite connection factory toe met foreign keys, busy timeout en geschikte WAL-instellingen.
-- Kies en configureer een transactioneel migratiemechanisme met oplopende schemahistorie.
-- Maak tabellen voor settings en schemahistorie.
-- Serialiseer migraties met een SQLite-lock; tweede startup wacht begrensd of faalt veilig.
-- Maak vóór iedere schema-upgrade een consistente lokale SQLite-backup en documenteer restore.
-- Implementeer transaction-/repositoryhelpers.
-- Voeg CLI-commando's voor database-initialisatie/migratie en backup/restore toe.
+- Add SQLite connection factory with foreign keys, busy timeout and appropriate WAL settings.
+- Choose and configure a transactional migration mechanism with incremental schema history.
+- Create tables for settings and schedule history.
+- Serialize migrations with an SQLite lock; second startup waits bounded or fails safely.
+- Create a consistent local SQLite backup and document restore before each schema upgrade.
+- Implement transaction/repository helpers.
+- Add CLI commands for database initialization/migration and backup/restore.
 
 **Unittests**
 
-- Transactie commit bij succes en rollback bij exception.
-- Repository mapt databasewaarden naar domeintypen.
-- UTC timestamphelpers produceren timezone-aware waarden.
+- Transaction commit on success and rollback on exception.
+- Repository maps database values ​​to domain types.
+- UTC timestamp helpers produce timezone-aware values.
 
 **Integratietests**
 
-- Lege database migreert naar laatste versie.
-- Migratie is idempotent.
-- Foreign-key-overtreding faalt.
-- Database-instelling blijft behouden na apprestart.
-- Baseline `0 → 1` maakt verwacht schema; iedere latere `N → N+1`-fixture behoudt representatieve bestaande gegevens en constraints.
-- Een geforceerde fout halverwege een migratie laat schema en data op versie `N` intact.
-- Twee gelijktijdige appstarts worden door een SQLite-migratielock geserialiseerd; slechts één voert iedere migratie uit.
-- Pre-migratiebackup kan naar een nieuw lokaal databasebestand worden hersteld en opnieuw gemigreerd.
-- Twee test-appinstanties kunnen database gecontroleerd benaderen.
+- Empty database migrates to latest version.
+- Migration is idempotent.
+- Foreign-key violation fails.
+- Database setting is retained after restart.
+- Baseline `0 → 1` creates expected schedule; every subsequent `N → N+1` fixture retains representative existing data and constraints.
+- A forced error mid-migration leaves schema and data on version `N` intact.
+- Two simultaneous app starts are serialized by a SQLite migration lock; only one performs each migration.
+- Pre-migration backup can be restored to a new local database file and migrated again.
+- Two test app instances can access the database in a controlled manner.
 
 **Acceptatie**
 
-Applicatie kan vanaf leeg bestand starten, migreren en settings persistent opslaan.
+Application can start from empty file, migrate and save settings persistently.
 
 ---
 
 ### Stap 4 — Uniform API-foutcontract, request-ID en OpenAPI-basis
 
-**Doel**
+**Goal**
 
-Alle API-routes leveren veilige, consistente fouten en zijn gedocumenteerd.
+All API routes provide safe, consistent errors and are documented.
 
 **Implementatie**
 
-- Voeg `/api/v1` blueprint toe.
-- Implementeer fouttypen en mapping naar HTTP-statussen.
-- Genereer request-ID per request en geef het terug in foutresponse/header.
-- Voeg veilige exceptionhandler toe zonder stacktrace in response.
-- Start OpenAPI-document met health- en settingsschema's.
+- Add `/api/v1` blueprint.
+- Implement error types and mapping to HTTP states.
+- Generate request ID per request and return it in error response/header.
+- Add safe exception handler without stack trace in response.
+- Launch OpenAPI document with health and settings schemas.
 
 **Unittests**
 
-- Elk domeinfouttype mapt naar juiste code/status.
-- Validatiefouten bevatten veld-details.
-- Sanitizer verwijdert geregistreerde secrets uit fouttekst.
+- Each domain error type maps to correct code/status.
+- Validation errors contain field details.
+- Sanitizer removes registered secrets from error text.
 
 **Integratietests**
 
-- Onbekende API-route geeft consistent JSON-foutcontract.
-- Geforceerde interne fout lekt geen stacktrace of body.
-- Iedere fout bevat request-ID.
-- OpenAPI-document is syntactisch geldig en bevat geïmplementeerde routes.
+- Unknown API route gives consistent JSON error contract.
+- Forced internal error does not leak stack trace or body.
+- Each error contains request ID.
+- OpenAPI document is syntactically valid and contains implemented routes.
 
 **Acceptatie**
 
-Nieuwe routes kunnen vanaf nu alleen via gedeeld fout- en OpenAPI-contract worden toegevoegd.
+From now on, new routes can only be added via shared error and OpenAPI contract.
 
 ## Fase B — Security en kernconfiguratie
 
 ### Stap 5 — Secretopslag, redactie en veilige logging
 
-**Doel**
+**Goal**
 
 API-keys en geheime headers versleuteld opslaan; gevoelige inhoud nooit loggen.
 
 **Implementatie**
 
-- Voeg encryptieservice op basis van `ENCRYPTION_KEY` toe.
-- Maak een generieke `secret_records`-tabel, migratie en repository; endpoint-/headerreferenties volgen in stap 6.
-- Ondersteun keyversie zodat latere rotatie mogelijk blijft.
-- Voeg secretredactor toe voor logging en providermeldingen.
-- Introduceer structured logcontext met run-, case- en execution/test-ID.
-- Verbied request-/responsebodylogging in HTTP-client en Flask.
+- Add encryption service based on `ENCRYPTION_KEY`.
+- Create a generic `secret_records` table, migration and repository; endpoint/header references follow in step 6.
+- Support key version so that later rotation remains possible.
+- Add secretredactor for logging and provider notifications.
+- Introduce structured log context with run, case and execution/test ID.
+- Ban request/response body logging in HTTP client and Flask.
 
 **Unittests**
 
-- Encrypt/decrypt round-trip.
-- Zelfde plaintext levert door nonce verschillende ciphertext.
-- Verkeerde sleutel en beschadigde ciphertext falen veilig.
-- Redactor verwijdert volledige en geprefixte secretwaarde.
-- Logformatter neemt correlation-ID's op, geen prompts/antwoorden.
+- Encrypt/decrypt round trip.
+- Same plaintext produces different ciphertext due to nonce.
+- Wrong key and corrupted ciphertext fail safely.
+- Editor removes full and prefixed secret value.
+- Logformatter records correlation IDs, not prompts/answers.
 
 **Integratietests**
 
-- Secretrepository round-trip bewaart ciphertext, keyversie en nonce; plaintext staat nooit in SQLite.
-- Gesimuleerde providerexception met secret/body lekt niets naar captured logs.
-- Repositoryupdate met lege secret behoudt bestaande waarde.
+- Secretrepository round-trip stores ciphertext, key version and nonce; plaintext is never in SQLite.
+- Simulated provider exception with secret/body doesn't leak anything to captured logs.
+- Repository update with empty secret keeps existing value.
 
 **Acceptatie**
 
-Geautomatiseerde leaktest doorzoekt alle in deze stap beschikbare databasevelden, responses en logs op fixturesecret en vindt niets.
+Automated leaktest searches all database fields, responses and logs for fixturesecret available in this step and finds nothing.
 
 ---
 
 ### Stap 6 — Endpointdomein, validatie en CRUD-API
 
-**Doel**
+**Goal**
 
 Endpoints, authheader, prefix, extra headers en rate-limitconfiguratie persistent beheren.
 
 **Implementatie**
 
-- Maak endpoint- en headermodellen plus migratie; verwijs geheime waarden naar `secret_records` uit stap 5.
-- Valideer unieke naam, headernamen, timeout, retries, RPM, TPM en concurrency.
-- Implementeer HTTPS-/localhost-/trusted-internal-HTTP-regels.
-- Implementeer CRUD-service en API-routes.
-- Masker secrets bij lezen; hard delete blokkeren bij historische referenties voorbereiden.
+- Create endpoint and header models plus migration; point secret values to `secret_records` from step 5.
+- Validate unique name, header names, timeout, retries, RPM, TPM and concurrency.
+- Implement HTTPS/localhost/trusted-internal-HTTP rules.
+- Implement CRUD service and API routes.
+- Mask secrets when reading; prepare hard delete blocking for historical references.
 
 **Unittests**
 
-- Geldige/ongeldige HTTP-headernamen.
-- HTTPS, localhost HTTP, loopback HTTP en expliciet vertrouwd intern HTTP.
-- Niet-vertrouwd extern HTTP wordt geweigerd.
-- Negatieve/ongeldige rate limits worden geweigerd; leeg betekent onbeperkt.
-- API-keyprefix wordt correct gecombineerd zonder ongewenste trim.
-- Secretvelden serialiseren uitsluitend gemaskeerd.
+- Valid/invalid HTTP header names.
+- HTTPS, localhost HTTP, loopback HTTP and explicitly trusted internal HTTP.
+- Untrusted external HTTP is rejected.
+- Negative/invalid rate limits are rejected; empty means unlimited.
+- API key prefix is ​​correctly combined without unwanted trim.
+- Secret fields serialize only masked.
 
 **Integratietests**
 
-- Endpoint CRUD met gewone en geheime extra headers.
-- Unieke naamconstraint.
-- Patch zonder key behoudt key; patch met key vervangt hem.
-- Database bevat alleen referenties en versleutelde secrets; API-responses bevatten nooit plaintext.
-- Lege secretpatch behoudt bestaande waarde; nieuwe waarde vervangt via secretrepository.
-- Redirectconfiguratie wordt niet toegestaan als impliciete host/protocolwijziging.
-- OpenAPI bevat endpointcontracten.
+- Endpoint CRUD with regular and secret extra headers.
+- Unique name constraint.
+- Patch without key retains key; patch with key replaces it.
+- Database contains only references and encrypted secrets; API responses never contain plaintext.
+- Empty secretpatch retains existing value; new value replaces via secretrepository.
+- Redirect configuration is not allowed as an implicit host/protocol change.
+- OpenAPI contains endpoint contracts.
 
 **Acceptatie**
 
-Endpoint kan volledig via API worden aangemaakt en teruggelezen zonder secretlek.
+Endpoint can be created and read back completely via API without secret leak.
 
 ---
 
 ### Stap 7 — Modeltestprofielen en inferenceparameters
 
-**Doel**
+**Goal**
 
-Meerdere profielen voor hetzelfde model-ID met temperatuur, reasoning en providerparameters beheren.
+Manage multiple profiles for the same model ID with temperature, reasoning and provider parameters.
 
 **Implementatie**
 
-- Maak modelprofiel- en prijsmodellen plus migratie.
-- Implementeer unieke weergavenaam per endpoint.
-- Bouw requestparametercomposer met optionele temperatuur, top-p, max tokens en custom JSON.
-- Ondersteun configureerbaar reasoningveld, inclusief genest pad, standaard/custom waarde en `off`-gedrag.
-- Voeg CRUD-API toe.
+- Create model profile and pricing models plus migration.
+- Implement unique display name per endpoint.
+- Build request parameter composer with optional temperature, top-p, max tokens and custom JSON.
+- Support configurable reasoning field, including nested path, default/custom value and `off` behavior.
+- Add CRUD API.
 
 **Unittests**
 
-- Twee profielen mogen zelfde model-ID hebben.
-- Dubbele weergavenaam binnen endpoint faalt.
-- Genest reasoningpad bouwt correct object.
-- `off` wordt verzonden of weggelaten volgens profiel.
-- Niet-ondersteunde parameters worden niet als `null` verstuurd.
-- Custom parameters kunnen beschermde kernvelden niet onbedoeld overschrijven.
+- Two profiles may have the same model ID.
+- Duplicate display name within endpoint fails.
+- Nested reasoning path builds object correctly.
+- `off` is sent or dropped according to profile.
+- Unsupported parameters are not sent as `null`.
+- Custom parameters cannot unintentionally overwrite protected core fields.
 
 **Integratietests**
 
-- Modelprofiel CRUD onder endpoint.
-- Cascade-/archivegedrag bij endpointdeactivatie.
-- API round-trip behoudt Decimal-prijzen en inferenceparameters.
-- Ongeldige gedeeltelijke hoge-contextprijsconfiguratie wordt geweigerd.
+- Model profile CRUD under endpoint.
+- Cascade/archive behavior upon endpoint deactivation.
+- API round-trip preserves Decimal prices and inference parameters.
+- Invalid partial high context price configuration is rejected.
 
 **Acceptatie**
 
-Zelfde provider-model kan met meerdere unieke testprofielen worden geconfigureerd.
+The same provider model can be configured with multiple unique test profiles.
 
 ---
 
 ### Stap 8 — Kostenengine
 
-**Doel**
+**Goal**
 
-Alle EUR-kosten deterministisch en zonder dubbeltelling berekenen.
+Calculate all EUR costs deterministically and without double counting.
 
 **Implementatie**
 
-- Maak usage- en pricing-value objects met `Decimal`.
-- Implementeer standaard- versus hoog-contexttarief op `X`/`X+1`.
-- Verwerk cached input en reasoning als subsets.
-- Verwerk vaste requestkosten en onbekende usage.
-- Bewaar berekeningsspecificatie/resultaat geschikt voor auditsnapshot.
+- Create usage and pricing value objects with `Decimal`.
+- Implement standard vs. high context rate on `X`/`X+1`.
+- Process cached input and reasoning as subsets.
+- Process fixed request costs and unknown usage.
+- Save calculation specification/result suitable for audit snapshot.
 
 **Unittests**
 
-- Basis input/outputkosten.
-- Exact `X` gebruikt standaardtarief; `X+1` hoog tarief.
-- Cached/reasoningtokens worden niet dubbel geteld.
-- Ontbrekend speciaal tarief valt correct terug.
-- Onbekende subsetusage geeft afgesproken `unknown`-status.
-- Subset groter dan totaal is ongeldig.
-- Vaste kosten bij succesvolle/betaalde call en niet bij onbetaalde fout.
-- Decimalprecisie en opslag op minimaal acht decimalen.
+- Basic input/output costs.
+- Exact `X` uses standard rate; `X+1` high rate.
+- Cached/reasoning tokens are not counted twice.
+- Missing special rate is corrected.
+- Unknown subset usage gives agreed `unknown` status.
+- Subset greater than total is invalid.
+- Fixed costs for successful/paid calls and not for unpaid errors.
+- Decimal precision and storage to at least eight decimal places.
 
 **Integratietests**
 
-- Profiel uit database plus providerusage levert verwacht kostenrecord.
-- Opgeslagen profielprijzen plus expliciet aangeleverde pricing-value objecten blijven tijdens één berekening immutable; historische runsnapshotdekking volgt in stap 19.
-- API serialiseert bedragen als precieze decimale strings/getallen zonder floatartefacten.
+- Profile from database plus provider usage provides expected cost record.
+- Stored profile prices plus explicitly supplied pricing-value objects remain immutable during one calculation; historical run snapshot coverage follows in step 19.
+- API serializes amounts as precise decimal strings/numbers without float artifacts.
 
 **Acceptatie**
 
-Kostenfixtures uit specificatie zijn exact reproduceerbaar.
+Cost fixtures from specifications are exactly reproducible.
 
 ## Fase C — Golden sets en evaluatoren
 
 ### Stap 9 — Golden sets en testcase-CRUD
 
-**Doel**
+**Goal**
 
 Golden sets en testcases inclusief evaluatorconfiguratie persistent beheren.
 
 **Implementatie**
 
-- Maak golden-set- en itemtabellen met UUID, `case_id`, prompts, expected answer, methode, config, categorie, tags, gewicht, enabled en sortering.
-- Definieer Pydantic-discriminated union voor evaluatormethoden.
-- Dwing invoerlimieten en methodeafhankelijke verplichte velden af.
-- Voeg CRUD- en paginatie-API toe.
+- Create golden set and item tables with UUID, `case_id`, prompts, expected answer, method, config, category, tags, weight, enabled and sorting.
+- Define Pydantic-discriminated union for evaluator methods.
+- Enforce input limits and method-dependent required fields.
+- Add CRUD and pagination API.
 
 **Unittests**
 
-- Uniek `case_id` binnen set.
-- Gewicht moet groter dan nul zijn.
-- Prompt-/system-/expected-answerlimieten.
-- `expected_answer` verplicht voor exact match.
-- Eén optionele system prompt en precies één user prompt.
-- Iedere evaluatorconfiguratie kiest juiste schema.
+- Unique `case_id` within set.
+- Weight must be greater than zero.
+- Prompt/system/expected response limits.
+- `expected_answer` required for exact match.
+- One optional system prompt and exactly one user prompt.
+- Each evaluator configuration chooses the correct scheme.
 
 **Integratietests**
 
-- Golden-set- en item-CRUD.
-- Transactionele sorteerwijziging.
-- Paginatie en filtering op categorie/tag/enabled.
-- Verwijderen/archiveren respecteert referenties.
-- Database JSON-config wordt bij lezen opnieuw gevalideerd.
+- Golden set and item CRUD.
+- Transactional sort change.
+- Pagination and filtering by category/tag/enabled.
+- Deleting/archiving respects references.
+- Database JSON-config is revalidated on read.
 
 **Acceptatie**
 
-Volledige testcase uit specificatie kan via API worden opgeslagen en verliesvrij gelezen.
+Complete test case from specification can be saved and read losslessly via API.
 
 ---
 
 ### Stap 10 — Exact-match- en contains-evaluatoren
 
-**Doel**
+**Goal**
 
 Eerste deterministische evaluatoren inzetbaar maken.
 
 **Implementatie**
 
-- Definieer gedeeld evaluatorinterface en resultaatcontract.
-- Implementeer normalisatie in vastgelegde volgorde.
-- Implementeer `exact_match` en `contains` met `all`/`any`.
-- Bewaar genormaliseerde waarden en matchmetadata.
+- Define shared evaluator interface and results contract.
+- Implement normalization in established order.
+- Implement `exact_match` and `contains` with `all`/`any`.
+- Store normalized values ​​and match metadata.
 
 **Unittests**
 
-- CRLF/CR naar LF.
-- Trim, casefold en collapse-whitespace afzonderlijk en gecombineerd.
-- Volgorde van normalisatie.
+- CRLF/CR to LF.
+- Trim, casefold and collapse whitespace separately and combined.
+- Order of normalization.
 - Exact match pass/fail.
-- Contains `all`/`any`, lege fragmenten, overlap en Unicode.
-- Resultaat bevat score `0/1`, passed en veilige reden.
+- Contains `all`/`any`, empty fragments, overlap and Unicode.
+- Result includes score `0/1`, passed and safe reason.
 
 **Integratietests**
 
-- Evaluatorregistry kiest methode vanuit opgeslagen testcase.
-- API-validatie weigert lege contains-fragmenten.
-- Evaluatoroutput serialiseert en deserialiseert verliesvrij via het gedeelde resultaatcontract; databasepersistentie volgt in stap 19/20.
+- Evaluator registry chooses method from saved test case.
+- API validation rejects empty contains fragments.
+- Evaluator output serializes and deserializes losslessly via the shared result contract; database persistence follows in steps 19/20.
 
 **Acceptatie**
 
@@ -462,32 +462,32 @@ Fixturecases leveren exact verwachte scores en redenen.
 
 ### Stap 11 — Regex- en numeric-evaluatoren
 
-**Doel**
+**Goal**
 
 Patroon- en numerieke controles toevoegen.
 
 **Implementatie**
 
-- Implementeer regex search/full match en flags.
-- Gebruik regexengine/uitvoering met afdwingbare timeout.
-- Implementeer Decimal-parser voor punt/komma, optionele duizendtalscheiding en extractiemodus.
-- Implementeer absolute en relatieve tolerantie.
+- Implement regex search/full match and flags.
+- Use regex engine/execution with enforceable timeout.
+- Implement Decimal parser for semicolon, optional thousand separator and extraction mode.
+- Implement absolute and relative tolerance.
 
 **Unittests**
 
-- Regex search/full match en iedere flag.
-- Ongeldig patroon wordt vóór run afgewezen.
-- Catastrophic pattern stopt binnen testbare timeout.
+- Regex search/full match and every flag.
+- Invalid pattern is rejected before run.
+- Catastrophic pattern stops within testable timeout.
 - Numeric entire-answer/first-number.
-- Punt/komma en duizendtalscheiding.
-- Absolute, relatieve en gecombineerde tolerantie op grenswaarden.
-- Geen/ambigue waarde geeft fail, geen systeemfout.
+- Period/comma and thousand separator.
+- Absolute, relative and combined tolerance on limit values.
+- None/ambiguous value indicates fail, no system error.
 
 **Integratietests**
 
-- Opgeslagen regex-/numericconfig valideert bij runvoorbereiding.
-- Regex-/numericoutput round-tript via het gedeelde resultaatcontract; databasepersistentie volgt in stap 19/20.
-- Timeout van één regexcase beïnvloedt andere cases niet.
+- Saved regex/numericconfig validates during run preparation.
+- Regex/numericoutput round-trips via the shared result contract; database persistence follows in steps 19/20.
+- Timeout of one regex case does not affect other cases.
 
 **Acceptatie**
 
@@ -497,32 +497,32 @@ Regex- en numerieke fixturematrix slaagt volledig.
 
 ### Stap 12 — JSON Schema-evaluator
 
-**Doel**
+**Goal**
 
 JSON-antwoorden tegen Draft 2020-12 en optionele expected value beoordelen.
 
 **Implementatie**
 
-- Voeg JSON Schema-validator toe.
-- Valideer schema bij opslaan/import/runvoorbereiding.
-- Pak optionele enkele Markdown-codefence defensief uit.
-- Implementeer optionele diepe JSON-gelijkheid.
-- Geef compacte, begrensde validatiereden.
+- Add JSON Schema validator.
+- Validate schedule on save/import/run preparation.
+- Defensively unpack optional single Markdown code defense.
+- Implement optional deep JSON similarity.
+- Provide compact, bounded validation reason.
 
 **Unittests**
 
-- Geldig/ongeldig schema.
-- Geldige/ongeldige kandidaat-JSON.
-- Codefence aan/uit en omringende tekst.
-- Nested object, arrays, required en types.
-- Diepe gelijkheid onafhankelijk van object-keyvolgorde.
-- Begrenzing van foutdetail.
+- Valid/invalid schedule.
+- Valid/invalid candidate JSON.
+- Codefence on/off and surrounding text.
+- Nested object, arrays, required and types.
+- Deep equality independent of object key order.
+- Boundary of error detail.
 
 **Integratietests**
 
-- Ongeldig schema blokkeert testcase-opslag/import.
-- Geldig schema evalueert vanuit databaseconfig.
-- Modelcontent wordt bij HTML-weergave escaped voorbereid opgeslagen.
+- Invalid schema blocks test case storage/import.
+- Valid schema evaluates from database config.
+- Model content is saved escaped prepared when HTML is displayed.
 
 **Acceptatie**
 
@@ -532,107 +532,107 @@ Draft 2020-12 fixtures en codefencecases leveren verwachte uitkomst.
 
 ### Stap 13 — Golden-set JSON/CSV-import en -export
 
-**Doel**
+**Goal**
 
 Golden sets atomair en verliesvrij uitwisselen.
 
 **Implementatie**
 
-- Implementeer canoniek JSON-formaat.
-- Implementeer CSV-parser/serializer met JSON-velden voor configs/tags.
-- Voeg bestands- en itemlimieten toe.
-- Lever preview/validatiefouten met rij en case-ID.
-- Maak import atomair.
+- Implement canonical JSON format.
+- Implement CSV parser/serializer with JSON fields for configs/tags.
+- Add file and item limits.
+- Provide preview/validation errors with row and case ID.
+- Make imports atomic.
 
 **Unittests**
 
-- JSON- en CSV-escaping, multiline prompts en Unicode.
-- Booleans, Decimal-gewicht, tags en evaluatorconfig.
-- Ongeldige rij rapporteert juiste locatie.
-- Te groot bestand/set wordt geweigerd vóór schrijven.
-- Exportvolgorde is stabiel.
+- JSON and CSV escaping, multiline prompts and Unicode.
+- Booleans, Decimal weight, tags and evaluator config.
+- Invalid row reports correct location.
+- Too large file/set is rejected before writing.
+- Export order is stable.
 
 **Integratietests**
 
-- JSON round-trip behoudt alle velden.
-- CSV round-trip behoudt alle ondersteunde velden.
-- Eén ongeldige rij resulteert in nul imports.
-- Dubbele `case_id` wordt duidelijk gemeld.
-- Downloadheaders en bestandsnamen zijn correct.
+- JSON round-trip preserves all fields.
+- CSV round-trip retains all supported fields.
+- One invalid row results in zero imports.
+- Duplicate `case_id` is clearly reported.
+- Download headers and file names are correct.
 
 **Acceptatie**
 
-Voorbeeldset kan via beide formaten worden geëxporteerd, verwijderd en identiek teruggeplaatst.
+Sample set can be exported, deleted and replaced identically via both formats.
 
 ## Fase D — Providerintegratie
 
-### Stap 14 — OpenAI requestbuilder en niet-streaming client
+### Step 14 — OpenAI request builder and non-streaming client
 
-**Doel**
+**Goal**
 
 Veilige gedeelde HTTP-basis en judge-compatible non-streaming completioncall.
 
 **Implementatie**
 
-- Bouw providerclient met timeouts, geen cross-host/protocol redirects en veilige headers.
-- Composeer messages, model en inferenceparameters.
-- Parse `choices[0].message.content`, usage en request-ID.
-- Dwing responsegroottelimiet af.
-- Classificeer HTTP-, netwerk-, timeout- en parsefouten.
+- Build provider client with timeouts, no cross-host/protocol redirects and secure headers.
+- Compose messages, model and inference parameters.
+- Parse `choices[0].message.content`, usage and request ID.
+- Enforce response size limit.
+- Classify HTTP, network, timeout and parse errors.
 
 **Unittests**
 
-- Requestbody voor system+user en modelprofiel.
-- API-keyprefix en custom headers, inclusief env-secretreferentie.
-- Redirectbeleid.
-- Responseparser voor geldig/ontbrekend/malformed contract.
-- Foutclassificatie 401/403/429/4xx/5xx/timeout/network.
-- Bodylimiet.
+- Requestbody for system+user and model profile.
+- API key prefix and custom headers, including env secret reference.
+- Redirect policy.
+- Response parser for valid/missing/malformed contract.
+- Error classification 401/403/429/4xx/5xx/timeout/network.
+- Body limit.
 
 **Integratietests**
 
-- Lokale mockprovider ontvangt exacte headers/body.
-- Secretheaders verschijnen niet in logs.
-- Redirect naar andere host/protocol wordt niet gevolgd.
-- Providerfouten worden naar API-foutcategorie vertaald.
+- Local mock provider receives exact headers/body.
+- Secret headers do not appear in logs.
+- Redirect to other host/protocol is not followed.
+- Provider errors are translated to API error category.
 
 **Acceptatie**
 
-Non-streaming mockcompletion werkt volledig zonder extern netwerk.
+Non-streaming mock completion works completely without an external network.
 
 ---
 
 ### Stap 15 — SSE-streaming, TTFT en TPS
 
-**Doel**
+**Goal**
 
 Targetantwoorden streamen en prestatiemetrics betrouwbaar meten.
 
 **Implementatie**
 
-- Voeg `stream=true` en `stream_options.include_usage=true` toe.
-- Bouw incrementele SSE-parser met gefragmenteerde regels/events.
-- Assembleer `delta.content`, finale usage en `[DONE]`.
-- Meet total latency, TTFT en generation duration met monotone klok.
-- Bereken TPS alleen bij bekende outputtokens en positieve duur.
-- Bewaar partiële tekst bij verbroken/te grote stream; markeer fout en evalueer niet.
+- Add `stream=true` and `stream_options.include_usage=true`.
+- Build incremental SSE parser with fragmented rules/events.
+- Assemble `delta.content`, final usage and `[DONE]`.
+- Measure total latency, TTFT and generation duration with monotonic clock.
+- Calculate TPS only with known output tokens and positive duration.
+- Save partial text if stream is broken/too large; mark error and don't evaluate.
 
 **Unittests**
 
-- Eén en meerdere chunks; bytes gesplitst midden in UTF-8/event.
-- Lege role-delta telt niet als first token.
-- Finale usage voor/zonder choices.
-- `[DONE]`, provider-eindindicatie en onverwacht EOF.
-- TTFT/latency met fake clock.
-- TPS normaal, onbekende usage en nulduur.
-- Stream-/antwoordgroottelimiet.
+- One and multiple chunks; bytes split in the middle of UTF-8/event.
+- Empty role-delta does not count as a first token.
+- Final usage before/without choices.
+- `[DONE]`, provider end indication and unexpected EOF.
+- TTFT/latency with fake clock.
+- TPS normal, unknown usage and zero duration.
+- Stream/reply size limit.
 
 **Integratietests**
 
-- Mock-SSE-provider levert samengesteld antwoord en metrics.
-- Verbroken stream bewaart partieel antwoord, maar start geen evaluator.
-- Finale cached/reasoning usage bereikt kostenengine.
-- Verbindingstest rapporteert veilige status en TTFT.
+- Mock-SSE provider provides curated response and metrics.
+- Broken stream saves partial answer, but doesn't start evaluator.
+- Final cached/reasoning usage reaches cost engine.
+- Connection test reports secure status and TTFT.
 
 **Acceptatie**
 
@@ -642,70 +642,70 @@ Streamingfixture produceert exact antwoord, tokenusage, latency, TTFT en TPS.
 
 ### Stap 16 — Retrybeleid en centrale endpoint-rate limiter
 
-**Doel**
+**Goal**
 
-Providerverkeer binnen het ondersteunde single-processmodel centraal beheersen op RPM, TPM en concurrency.
+Centrally manage provider traffic within the supported single-process model for RPM, TPM and concurrency.
 
 **Implementatie**
 
-- Implementeer retrybeslisser met exponential backoff en jitter via `Clock.monotonic()`.
-- Respecteer `Retry-After` in seconden en HTTP-datumvorm; zet HTTP-datums via `Clock.now_utc()` om naar monotone wachtduren zonder persistente monotone timestamps.
-- Maak bij appstartup exact één thread-safe `CentralEndpointLimiter` en injecteer dezelfde instantie in target-, judge-, verbindingstest- en discoveryclients.
-- Houd per endpoint gedeelde RPM-, TPM- en concurrencytoestand bij over alle web- en workerthreads.
-- Reserveer RPM/concurrency exact en TPM conservatief; reconcile usage en geef concurrency in `finally` vrij bij succes, fout of annulering.
-- Expose een in-memory observerevent/wachtreden `rate_limited_wait`; persistente jobstatus volgt in stap 19/20.
-- Sluit limiter gecontroleerd zodat wachtende calls annuleren vóór workers en database stoppen.
+- Implement retry decider with exponential backoff and jitter via `Clock.monotonic()`.
+- Respect `Retry-After` in seconds and HTTP date form; converts HTTP dates via `Clock.now_utc()` to monotone wait durations without persistent monotone timestamps.
+- At appstartup, create exactly one thread-safe `CentralEndpointLimiter` and inject the same instance into target, judge, connection test and discovery clients.
+- Track shared RPM, TPM, and concurrency state across all web and worker threads per endpoint.
+- Reserve RPM/concurrency exactly and TPM conservatively; reconcile usage and release concurrency in `finally` on success, error or cancellation.
+- Expose an in-memory observe event/queue reason `rate_limited_wait`; persistent job status follows in step 19/20.
+- Close limiter checked so that waiting calls cancel before workers and database stop.
 
 **Unittests**
 
-- Retry alleen timeout/network/429/5xx; niet overige 4xx.
-- Backoffreeks en jitter met seeded random en monotone fake clock.
-- `Retry-After` parsing met onafhankelijk bestuurde UTC- en monotone fake clock.
-- RPM-window en concurrency acquire/release vanuit meerdere threads.
-- TPM-reservering, reconciliatie met echte usage en onbekende usage.
-- Fout en annulering tijdens wachten/call lekken geen concurrencypermit of TPM-reservering.
-- Shutdown maakt alle wachtende callers wakker met een gecontroleerde annulering.
+- Retry only timeout/network/429/5xx; not other 4xx.
+- Backoff sequence and jitter with seeded random and monotone fake clock.
+- `Retry-After` parsing with independently controlled UTC and monotone fake clock.
+- RPM window and concurrency acquire/release from multiple threads.
+- TPM reservation, reconciliation with real usage and unknown usage.
+- Error and cancellation while waiting/call leaks no concurrency permit or TPM reservation.
+- Shutdown wakes up all waiting callers with a controlled cancellation.
 
 **Integratietests**
 
-- Mockprovider 429→succes levert twee calls en juiste observerevents; persistente attempts volgen in stap 20.
-- Parallelle calls overschrijden endpointconcurrency niet.
-- Target-, non-streaming judge- en verbindingstestcalls delen aantoonbaar dezelfde limiterinstantie; discovery wordt in stap 17 toegevoegd.
-- Gelijktijdige target- en judgecalls delen RPM/TPM-budget en kunnen elkaar niet passeren.
-- Appstartup weigert meer dan één proces; limitergedrag hoeft daarom niet procesoverschrijdend te zijn.
+- Mockprovider 429→success delivers two calls and correct observer events; persistent attempts follow in step 20.
+- Parallel calls do not exceed endpoint concurrency.
+- Target, non-streaming judge and connection test calls demonstrably share the same limiter instance; discovery is added in step 17.
+- Simultaneous target and judge calls share RPM/TPM budget and cannot pass each other.
+- Appstartup rejects more than one process; Limiter behavior therefore does not have to be cross-process.
 
 **Acceptatie**
 
-Deterministische dual-clocktest bewijst dat geen providercall vóór beschikbare centrale capaciteit wordt verzonden en dat alle calltypen binnen één proces dezelfde endpointbudgetten delen.
+Deterministic dual-clock testing proves that no provider call is sent before available central capacity and that all call types within one process share the same endpoint budgets.
 
 ---
 
 ### Stap 17 — Model discovery
 
-**Doel**
+**Goal**
 
-Modellen handmatig of selectief via OpenAI-compatible `/models` beheren.
+Manage models manually or selectively via OpenAI-compatible `/models`.
 
 **Implementatie**
 
-- Implementeer veilige URL-suggestie.
-- Voeg authenticated `GET` naar models-URL toe via dezelfde `CentralEndpointLimiter` als alle overige providercalls.
-- Parse `data[].id` en valideer responsegrootte.
-- Voeg preview en selectieve import toe; overschrijf nooit bestaand profiel.
+- Implement secure URL suggestion.
+- Add authenticated `GET` to models URL via the same `CentralEndpointLimiter` as all other provider calls.
+- Parse `data[].id` and validate response size.
+- Add preview and selective import; never overwrite an existing profile.
 
 **Unittests**
 
-- URL-afleiding voor `/chat/completions`, `/completions` en niet-afleidbare URL.
-- Deduplicatie/validatie van `data[].id`.
-- Naamconflict genereert voorstel zonder bestaand profiel te wijzigen.
-- Discoveryfout bevat geen responsebody/secret.
+- URL derivation for `/chat/completions`, `/completions` and non-derivable URL.
+- Deduplication/validation of `data[].id`.
+- Name conflict generates proposal without changing existing profile.
+- Discovery error does not contain responsebody/secret.
 
 **Integratietests**
 
-- Mock `/models` ontvangt dezelfde auth/custom headers en deelt limiterbudget met een gelijktijdige targetcall.
-- Selectieve import maakt alleen gekozen profielen.
-- Bestaand model-ID kan met unieke profielnaam opnieuw worden geïmporteerd.
-- Foutresponse verandert database niet.
+- Mock `/models` receives the same auth/custom headers and shares limiter budget with a concurrent target call.
+- Selective import creates only selected profiles.
+- Existing model ID can be re-imported with unique profile name.
+- Error response does not change database.
 
 **Acceptatie**
 
@@ -715,35 +715,35 @@ Discoveryflow importeert geselecteerde mockmodellen en behoudt bestaande profiel
 
 ### Stap 18 — Judgeprofielen, rubric en outputparser
 
-**Doel**
+**Goal**
 
-Judgeconfiguratie en deterministische verwerking van criterion-subresultaten.
+Judge configuration and deterministic processing of criterion subresults.
 
 **Implementatie**
 
-- Maak judgeprofiel/template/rubricmodellen en migratie.
-- Implementeer hiërarchie globaal → golden set → runoverride.
-- Bouw prompt met veilig gescheiden prompt, expected answer, rubric, context en kandidaat.
-- Parse JSON, optioneel uit één codefence.
-- Valideer exacte criteriumset, subscores en redenen.
-- Bereken gewogen totaalscore en threshold; bewaar judgewaarde als auditcontrole.
+- Create judge profile/template/rubric models and migration.
+- Implement hierarchy globally → golden set → runoverride.
+- Build prompt with safely separated prompt, expected answer, rubric, context and candidate.
+- Parse JSON, optionally from one code fence.
+- Validate exact criterion set, subscores and reasons.
+- Calculate weighted total score and threshold; save judge value as audit control.
 
 **Unittests**
 
-- Standaard vijf criteria en gelijke gewichten.
-- Rubric aanvullen/vervangen en positieve gewichten.
-- Ontbrekende/dubbele/onbekende criteria worden geweigerd.
-- Gewogen score en inclusieve threshold `0.7`.
-- Judge-scoreafwijking `>0.01` wordt gemarkeerd.
-- Prompt-injectietekst blijft geciteerde data.
-- Codefence en malformed JSON.
+- Standard five criteria and equal weights.
+- Add/replace rubric and positive weights.
+- Missing/duplicate/unknown criteria are rejected.
+- Weighted score and inclusive threshold `0.7`.
+- Judge score deviation `>0.01` is highlighted.
+- Prompt injection text remains quoted data.
+- Code defense and malformed JSON.
 
 **Integratietests**
 
-- CRUD judgeprofiel en override-resolutie.
-- Mockjudgeoutput parseert naar het gedeelde resultaatcontract met berekende score en redenen; resultaatstorage volgt in stap 19/20.
-- Ongeldige output veroorzaakt via de service één retry en daarna `judge_parse_error`.
-- Judgekosten/latency blijven in het contract apart van targetmetrics.
+- CRUD judge profile and override resolution.
+- Mockjudgeoutput parses to the shared result contract with calculated score and reasons; result storage follows in step 19/20.
+- Invalid output causes one retry via the service and then `judge_parse_error`.
+- Judge costs/latency remain separate from target metrics in the contract.
 
 **Acceptatie**
 
@@ -753,121 +753,121 @@ Vaste judgefixture levert reproduceerbare subresultaten, totaalscore en pass/fai
 
 ### Stap 19 — Runsnapshots en duurzame jobqueue
 
-**Doel**
+**Goal**
 
-Een run atomair aanmaken met immutable snapshots en één job per case/model-combinatie.
+Create a run atomically with immutable snapshots and one job per case/model combination.
 
 **Implementatie**
 
-- Maak run-, case-snapshot-, model-snapshot-, job-, result- en attempttabellen met migratie-evolutiefixture.
-- Maak snapshotservice zonder secrets; snapshot prijzen en alle evaluator-/judgecontracten uit stappen 8 en 10–12/18.
-- Valideer actieve cases/profielen, limieten en judgevereisten vóór start.
-- Maak jobs transactioneel aan.
-- Modelleer leasevelden `lease_owner`, strikt oplopende `lease_generation` en timezone-aware UTC `lease_expires_at`; nooit persistente monotone tijd.
-- Implementeer atomische claim die owner zet, generation verhoogt en expiry via `Clock.now_utc()` bepaalt.
-- Implementeer heartbeat als conditionele compare-and-setupdate op job-ID + owner + generation; heartbeat verlengt alleen een nog geldige eigen lease.
-- Vereis hetzelfde fencingtoken voor iedere attempt-, status-, resultaat- en jobafrondingswrite. Stale writes wijzigen nul rijen en leveren een expliciete `LeaseLost`-uitkomst.
-- Handhaaf unieke resultaatconstraint als tweede verdedigingslaag, niet als vervanging voor fencing.
+- Create run, case snapshot, model snapshot, job, result and attempt tables with migration evolution fixture.
+- Create snapshot service without secrets; snapshot prices and all evaluator/judge contracts from steps 8 and 10–12/18.
+- Validate active cases/profiles, limits and judge requirements before start.
+- Create jobs transactionally.
+- Model lease fields `lease_owner`, strictly ascending `lease_generation` and timezone-aware UTC `lease_expires_at`; never persistent monotonic time.
+- Implement atomic claim that sets owner, increases generation and determines expiry via `Clock.now_utc()`.
+- Implement heartbeat as conditional compare-and-set update on job ID + owner + generation; heartbeat only extends a valid lease.
+- Require the same fencing token for every attempt, status, result, and job completion write. Stale writes modify zero rows and return an explicit `LeaseLost` result.
+- Enforce unique outcome constraint as a second layer of defense, not as a replacement for fencing.
 
 **Unittests**
 
-- Jobaantal = enabled cases × geselecteerde profielen.
-- Snapshot bevat alle vereiste config/prijzen maar geen secrets.
-- Statusovergangen zijn geldig; ongeldige overgang faalt.
-- Leaseclaim/-expiry via onafhankelijk bestuurde UTC fake clock; monotone klokwijziging beïnvloedt lease niet.
-- Iedere nieuwe claim verhoogt `lease_generation`, ook bij dezelfde owner.
-- Heartbeat en alle conditionele writes slagen alleen voor actuele owner + generation + niet-verlopen lease.
-- Stale worker krijgt `LeaseLost` en kan attempt, status, resultaat noch afronding schrijven.
-- Runlimieten en lege selectie.
+- Job number = enabled cases × selected profiles.
+- Snapshot contains all required config/prices but no secrets.
+- State transitions are valid; invalid transition fails.
+- Lease claim/expiry via independently controlled UTC fake clock; monotonic clock change does not affect lease.
+- Every new claim increases `lease_generation`, even with the same owner.
+- Heartbeat and all conditional writes only pass current owner + generation + unexpired lease.
+- Stale worker gets `LeaseLost` and cannot write attempt, status, result or completion.
+- Run limits and empty selection.
 
 **Integratietests**
 
-- Runaanmaak schrijft snapshots/jobs in één transactie.
-- Fout tijdens snapshot laat geen halve run achter.
-- Configwijziging na start verandert snapshot niet.
-- Twee workerthreads kunnen dezelfde job niet tegelijk claimen.
-- Lange call met periodieke heartbeat wordt niet door tweede workerthread overgenomen.
-- Na UTC-expiry claimt tweede worker met hogere generation; late heartbeat/commit van eerste worker wordt volledig geweigerd.
-- Unieke resultconstraint voorkomt dubbele lokale resultaten als aanvullende invariant.
-- Migratie van vorige schemaversie behoudt Decimal-prijzen, timezone-aware timestamps, evaluator-/judge-JSON en bestaande ciphertextreferenties.
+- Run creation writes snapshots/jobs in one transaction.
+- Error during snapshot does not leave half run.
+- Configuration change after start does not change snapshot.
+- Two worker threads cannot claim the same job at the same time.
+- Long call with periodic heartbeat is not taken over by the second worker thread.
+- After UTC expiry, second worker with higher generation claims; late heartbeat/commit from first worker is completely rejected.
+- Unique result constraint prevents duplicate local results as an additional invariant.
+- Migration from previous schema version preserves Decimal prices, timezone-aware timestamps, evaluator/judge JSON, and existing ciphertext references.
 
 **Acceptatie**
 
-Run is volledig reproduceerbaar uit snapshots; queueclaims en alle daaropvolgende writes zijn door owner plus generation gefenced.
+Run is fully reproducible from snapshots; queue claims and all subsequent writes are fenced by owner plus generation.
 
 ---
 
 ### Stap 20 — Workerpipeline en runstatus
 
-**Doel**
+**Goal**
 
 Jobs uitvoeren: targetcall → evaluator/judge → kosten → resultaat → aggregatiestatus.
 
 **Implementatie**
 
-- Bouw workerloop met dependency-injectie en begrensde threadpool binnen het enige applicatieproces.
-- Verbind streaming client, centrale limiter, retries, evaluatorregistry en judge.
-- Start na claim een heartbeatloop met interval ruim korter dan leaseduur; stop provider-/pipelinewerk zo snel mogelijk na `LeaseLost`.
-- Sla iedere request attempt en veilige foutmetadata alleen op met actuele owner + generation.
-- Commit evaluator-/judgeresultaat, kosten en jobafronding in één conditionele transactie met hetzelfde fencingtoken.
-- Bereken runstatus en voortgang.
-- Implementeer annulering en rerun-failures als nieuwe run.
+- Build worker loop with dependency injection and bounded thread pool within the single application process.
+- Connect streaming client, central limiter, retries, evaluator registry and judge.
+- After claim, start a heartbeat loop with an interval well shorter than the lease duration; stop provider/pipeline work as soon as possible after `LeaseLost`.
+- Only save every request attempt and secure error metadata with current owner + generation.
+- Commit evaluator/judge result, costs and job completion in one conditional transaction with the same fencing token.
+- Calculate run status and progress.
+- Implement cancellation and rerun failures as a new run.
 
 **Unittests**
 
-- Pipelinevolgorde en evaluatorselectie.
-- Partiële stream wordt niet geëvalueerd.
-- Eén jobfout beïnvloedt volgende job niet.
-- Runstatus completed/completed_with_errors/failed/cancelled.
-- Annulering slaat pending jobs over; actieve call mag afronden.
-- Attempt-/retryregistratie.
-- Heartbeats stoppen bij afronding, annulering, `LeaseLost` en shutdown.
-- Iedere pipelinewrite draagt exact hetzelfde owner/generation-token.
+- Pipeline sequence and evaluator selection.
+- Partial stream is not evaluated.
+- One job error does not affect the next job.
+- Run status completed/completed_with_errors/failed/cancelled.
+- Cancellation skips pending jobs; active call may be completed.
+- Attempt/retry registration.
+- Heartbeats stop on completion, cancellation, `LeaseLost` and shutdown.
+- Every pipeline write carries exactly the same owner/generation token.
 
 **Integratietests**
 
-- Run met meerdere cases, modellen en deterministische evaluatoren voltooit.
-- Run met LLM judge voltooit en splitst target-/judgekosten.
-- Gemengde providerfouten leveren `completed_with_errors`.
-- Cancelroute stopt niet-gestarte jobs.
-- Rerun-failures bevat alleen mislukte combinaties als nieuwe snapshots/jobs.
-- Geforceerde leaseovername tijdens geblokkeerde providercall: oude worker kan daarna geen attempt/resultaat/status committen; nieuwe worker voltooit één lokaal resultaat.
+- Completes run with multiple cases, models and deterministic evaluators.
+- Run with LLM judge completes and splits target/judge costs.
+- Mixed provider errors yield `completed_with_errors`.
+- Cancelroute stops unstarted jobs.
+- Rerun-failures only contains failed combinations as new snapshots/jobs.
+- Forced lease takeover during blocked provider call: old worker cannot commit attempt/result/status afterwards; new worker completes one local result.
 
 **Acceptatie**
 
-Volledige headless run tegen mockprovider eindigt met correcte resultaten en status.
+Full headless run against mock provider ends with correct results and status.
 
 ---
 
 ### Stap 21 — Restart-recovery en leaseherstel
 
-**Doel**
+**Goal**
 
 Actieve runs na procesrestart veilig hervatten.
 
 **Implementatie**
 
-- Voer startup recovery uit vóór workers starten.
-- Maak uitsluitend via UTC verlopen leases opnieuw claimbaar; verhoog generation pas bij nieuwe claim en behoud oude owner/generation voor diagnose.
-- Markeer hervatte jobs `recovered_after_interruption` via het nieuwe geldige fencingtoken.
-- Behoud afgeronde/definitief gefaalde jobs.
-- Voeg waarschuwing voor mogelijke dubbele providerkosten toe.
+- Perform startup recovery before workers start.
+- Only make expired leases eligible again via UTC; increase generation only with new claim and retain old owner/generation for diagnosis.
+- Mark resumed jobs `recovered_after_interruption` via the new valid fencing token.
+- Retain completed/finally failed jobs.
+- Add warning about possible duplicate provider charges.
 
 **Unittests**
 
-- Alleen via `Clock.now_utc()` verlopen lease wordt opnieuw beschikbaar; monotone reset/restart verandert dit niet.
-- Niet-verlopen lease met ontbrekende heartbeat blijft tot expiry afgeschermd.
-- Afgeronde job blijft onaangeraakt.
-- Runstatus wordt correct hersteld.
-- Recoverylogging bevat IDs en aantallen, geen content.
+- Only lease expired via `Clock.now_utc()` will become available again; monotonic reset/restart does not change this.
+- Unexpired lease with missing heartbeat remains shielded until expiry.
+- Completed job remains untouched.
+- Run status is restored correctly.
+- Recovery logging contains IDs and numbers, not content.
 
 **Integratietests**
 
-- Stop worker na claim, verschuif UTC fake clock voorbij expiry, start nieuwe app en voltooi job met hogere generation.
-- Reeds voltooid resultaat wordt niet opnieuw aangeroepen.
-- Oude worker hervat na recovery maar al zijn late writes worden door fencing geweigerd.
-- Resultaat plus jobcommitcrashscenario veroorzaakt geen dubbel lokaal resultaat.
-- Recoverymarker en waarschuwing zijn via API zichtbaar.
+- Stop worker after claim, move UTC fake clock past expiry, start new app and complete job with higher generation.
+- Already completed result will not be called again.
+- Old worker resumes after recovery but all its late writes are rejected by fencing.
+- Result plus job commit crash scenario does not cause duplicate local result.
+- Recovery marker and warning are visible via API.
 
 **Acceptatie**
 
@@ -877,32 +877,32 @@ Gesimuleerde restart hervat uitsluitend onafgeronde combinaties.
 
 ### Stap 22 — Aggregaties en rangschikking
 
-**Doel**
+**Goal**
 
 Per model/run alle kwaliteits-, timing-, token- en kostenmetrics berekenen.
 
 **Implementatie**
 
-- Implementeer gewogen score, pass/error rate en counts.
-- Implementeer gemiddelde, mediaan en p95 voor latency, TTFT en TPS.
-- Sommeer tokenklassen en target-/judgekosten.
-- Bereken kosten per geëvalueerde/passed case.
-- Rangschik score → error rate → kosten.
-- Toon unknown expliciet en sluit die correct uit aggregaties.
+- Implement weighted score, pass/error rate and counts.
+- Implement mean, median and p95 for latency, TTFT and TPS.
+- Sum token classes and target/judge fees.
+- Calculate costs per evaluated/passed case.
+- Rank score → error rate → cost.
+- Show unknown explicitly and correctly exclude it from aggregations.
 
 **Unittests**
 
-- Gewichten, errors en lege populaties.
-- Mediaan/p95 voor kleine en grotere sets met vastgelegde percentilemethode.
-- Unknown TTFT/TPS/kosten.
-- Kosten per passed case bij nul passes.
-- Deterministische tie-breakrangschikking.
+- Weights, errors and empty populations.
+- Median/p95 for small and larger sets with fixed percentile method.
+- Unknown TTFT/TPS/fees.
+- Cost per passed case at zero passes.
+- Deterministic tie-break ranking.
 
 **Integratietests**
 
-- Resultaatfixtures in SQLite leveren verwachte modelaggregaten.
-- API-filters veranderen resultaatslijst, niet opgeslagen totaalcijfers.
-- Snapshotprijzen sturen historische kostenaggregatie.
+- Result fixtures in SQLite provide expected model aggregates.
+- API filters change result list, unsaved total figures.
+- Snapshot prices drive historical cost aggregation.
 
 **Acceptatie**
 
@@ -912,9 +912,9 @@ Golden aggregate fixture produceert exact verwachte tabel en rangorde.
 
 ### Stap 23 — Quality gates
 
-**Doel**
+**Goal**
 
-Golden-setdefaults en runoverrides evalueren naar gate-uitkomst.
+Evaluating golden-set defaults and run overrides by gate outcome.
 
 **Implementatie**
 
@@ -925,12 +925,12 @@ Golden-setdefaults en runoverrides evalueren naar gate-uitkomst.
 
 **Unittests**
 
-- Inclusieve min/maxgrenzen.
-- Iedere ondersteunde gate.
-- Eén falend model faalt run-gate.
-- Unknown vereiste metric geeft `indeterminate`.
-- Geen gates en niet-terminale/geannuleerde run geven `not_evaluated`.
-- Runoverride vervangt defaults volledig volgens contract.
+- Includes min/max limits.
+- Any supported gate.
+- One failing model fails run-gate.
+- Unknown required metric returns `indeterminate`.
+- No gates and non-terminal/canceled run give `not_evaluated`.
+- Runoverride replaces defaults completely according to contract.
 
 **Integratietests**
 
@@ -945,315 +945,315 @@ Gatefixture dekt alle vier uitkomsten.
 
 ---
 
-### Stap 24 — Volledige configuratie-JSON import/export
+### Step 24 — Full configuration JSON import/export
 
-**Doel**
+**Goal**
 
-Functionele configuratie verliesvrij uitwisselen zonder secrets.
+Lossless exchange of functional configuration without secrets.
 
 **Implementatie**
 
-- Definieer versiegebonden Pydantic-schema `1.0`.
-- Exporteer endpoints/headers, profielen/prijzen, judgeprofielen, golden sets en gates.
-- Exporteer secretwaarde altijd `null`, eventueel met env-varreferentie.
-- Implementeer preview, conflictmap, `merge` en `replace`.
-- Archiveer historisch gebruikte records bij replace.
-- Voer import atomair uit.
+- Define versioned Pydantic schema `1.0`.
+- Export endpoints/headers, profiles/prices, judge profiles, golden sets and gates.
+- Always export secret value `null`, possibly with env-var reference.
+- Implement preview, conflict map, `merge` and `replace`.
+- Archive historically used records when replacing.
+- Perform import atomically.
 
 **Unittests**
 
-- Serializer bevat alle functionele velden.
-- Geen ciphertext/plaintextsecret in JSON.
-- Schema-/referentie-/UUID-conflicten.
-- Stabiele UUID behouden versus remappen.
-- Merge- en replace-planner zonder database-effecten.
+- Serializer contains all functional fields.
+- No ciphertext/plaintextsecret in JSON.
+- Schema/reference/UUID conflicts.
+- Keep stable UUID vs remapping.
+- Merge and replace scheduler without database effects.
 
 **Integratietests**
 
-- Volledige export→lege database→import round-trip.
-- Ontbrekende secrets worden gemarkeerd en blokkeren providercall tot ingevuld.
-- Merge overschrijft niets buiten previewplan.
-- Replace archiveert gebruikte records en behoudt historie.
-- Eén validatiefout rolt volledige import terug.
+- Full export→empty database→import round-trip.
+- Missing secrets are marked and block provider calls until filled in.
+- Merge doesn't overwrite anything outside of preview plan.
+- Replace archives used records and preserves history.
+- One validation error rolls back entire import.
 
 **Acceptatie**
 
-Semantische vergelijking vóór export en na import is gelijk, uitgezonderd bewust verwijderde secrets.
+Semantic comparison before export and after import is the same, except for deliberately deleted secrets.
 
 ---
 
 ### Stap 25 — Resultaatexports en retentie
 
-**Doel**
+**Goal**
 
-Runs exporteren als JSON/CSV/offline HTML en oude runs veilig opruimen.
+Export runs as JSON/CSV/offline HTML and safely clean up old runs.
 
 **Implementatie**
 
-- Bouw volledige JSON-export en vlakke CSV-export.
-- Bouw zelfstandig HTML-rapport met inline CSS, print-CSS en strikte CSP.
-- Escape alle providercontent.
-- Voeg gevoelige-inhoudwaarschuwing toe.
-- Implementeer handmatige runverwijdering en periodieke retentiecleanup.
+- Build full JSON export and flat CSV export.
+- Build standalone HTML report with inline CSS, print CSS and strict CSP.
+- Escape all provider content.
+- Add sensitive content warning.
+- Implement manual run deletion and periodic retention cleanup.
 
 **Unittests**
 
-- CSV quoting, Unicode en stabiele kolommen.
-- HTML escaping van script-/markupcontent.
-- CSP en geen externe URL/assets/scripts.
-- Bestandsnaamsanitizing.
-- Retentieselectie gebruikt `Clock.now_utc()` en UTC-eindtijd; actieve runs uitgesloten; `0` onbeperkt; monotone tijd wordt nooit persistent gebruikt.
+- CSV quoting, Unicode and stable columns.
+- HTML escaping of script/markup content.
+- CSP and no external URL/assets/scripts.
+- Filename sanitizing.
+- Retention selection uses `Clock.now_utc()` and UTC end time; active runs excluded; `0` unlimited; monotonic time is never used persistently.
 
 **Integratietests**
 
-- JSON/CSV/HTML bevatten metrics, snapshots en subresultaten, geen secrets.
-- Export negeert actieve UI-filters en bevat volledige run.
-- HTML opent zonder netwerkafhankelijkheden en bevat print-CSS.
-- Handmatige delete en cleanup verwijderen afhankelijke records atomair.
-- Cleanuprollback bij geforceerde fout behoudt hele run.
+- JSON/CSV/HTML contain metrics, snapshots and subresults, not secrets.
+- Export ignores active UI filters and includes full run.
+- HTML opens without network dependencies and contains print CSS.
+- Manual delete and cleanup remove dependent records atomically.
+- Cleanup rollback on forced error preserves entire run.
 
 **Acceptatie**
 
-Drie exports uit één fixture-run zijn bruikbaar, volledig en secretvrij.
+Three exports from one fixture run are usable, complete and secret-free.
 
 ## Fase G — GUI
 
-### Stap 26 — GUI voor instellingen, endpoints en modellen
+### Step 26 — GUI for settings, endpoints and models
 
-**Doel**
+**Goal**
 
-Alle operationele instellingen, endpoints, headers en modelprofielen via Nederlandse GUI beheren.
-
-**Implementatie**
-
-- Maak gedeelde layout, navigatie, centrale Nederlandse UI-teksten en CSRF.
-- Bouw settingsscherm met bronbadge en read-only environmentoverrides.
-- Bouw endpointlijst/formulier met passwordveld, headers, trusted-HTTP-waarschuwing, rate limits, test en discovery.
-- Bouw modelprofielformulier met inferenceparameters, reasoning en volledige prijsconfiguratie.
-- Voeg toegankelijke validatie- en bevestigingsmeldingen toe.
-
-**Unittests**
-
-- Viewmodel maskeert secrets en toont correcte bronbadge.
-- Formmapping behoudt lege secret als “niet wijzigen”.
-- Nederlandse tekstcatalogus bevat gebruikte sleutels.
-- Price-/reasoningform naar domeinmodel en terug.
-
-**Integratietests**
-
-- Flask HTML-routes renderen zonder secrets.
-- CSRF blokkeert ongeldige mutaties.
-- Endpoint plus custom headers via GUI aanmaken/wijzigen.
-- Environmentoverride is zichtbaar maar niet bewerkbaar.
-- Discoveryselectie maakt profiel; verbindingstest toont veilige uitkomst.
-
-**GUI-rooktests**
-
-- Toetsenbordflow door endpoint- en modelformulier.
-- Labels, focus en foutkoppeling aanwezig.
-- Desktoplayout werkt op 1024 px.
-
-**Acceptatie**
-
-Gebruiker configureert zonder API-client een endpoint met headers en twee modelprofielen.
-
----
-
-### Stap 27 — GUI voor golden sets, judge en configuratie-uitwisseling
-
-**Doel**
-
-Testcases, evaluatoren, judge en volledige JSON-configuratie via GUI beheren.
+Manage all operational settings, endpoints, headers and model profiles via Dutch GUI.
 
 **Implementatie**
 
-- Bouw golden-setlijst, itemeditor en dynamische evaluatorvelden.
-- Bouw JSON/CSV-importpreview en exportacties.
-- Bouw judgeprofiel-/rubriceditor met gewichten en template.
-- Bouw configuratie-JSON import/export met merge/replace-preview en missing-secretsstatus.
-- Toon actieve limieten in formulieren.
+- Create shared layout, navigation, central Dutch UI texts and CSRF.
+- Build settings screen with source badge and read-only environment overrides.
+- Build endpoint list/form with password field, headers, trusted-HTTP warning, rate limits, test and discovery.
+- Build model profile form with inference parameters, reasoning and complete pricing configuration.
+- Add accessible validation and confirmation notifications.
 
 **Unittests**
 
-- Form/viewmodel per evaluatortype.
-- Rubricgewicht- en criteriumvalidatie.
-- Importpreviewpresentatie van rij-/veld-errors en conflicten.
-- Secretstatus toont nooit secretwaarde.
+- Viewmodel masks secrets and shows correct source badge.
+- Formmapping keeps empty secret as “do not change”.
+- Dutch text catalog contains used keys.
+- Price/reasoning form to domain model and back.
 
 **Integratietests**
 
-- Iedere evaluatormethode kan via GUI worden opgeslagen.
-- Golden-set JSON/CSV-import werkt via multipart upload.
-- Judgehiërarchie wordt correct getoond.
-- Configuratie-export/download en importpreview/commit werken.
-- Replace vereist expliciete bevestiging.
+- Render Flask HTML routes without secrets.
+- CSRF blocks invalid mutations.
+- Create/change endpoint plus custom headers via GUI.
+- Environmentoverride is visible but not editable.
+- Discovery selection creates profile; connection test shows safe outcome.
 
 **GUI-rooktests**
 
-- Maak golden set met minstens één testcase per evaluator.
-- Importeer configuratie met ontbrekend secret en vul secret daarna via GUI in.
-- Alle formulieren zijn toetsenbordbedienbaar.
+- Keyboard flow through endpoint and model form.
+- Labels, focus and error link present.
+- Desktop layout works at 1024 px.
 
 **Acceptatie**
 
-Volledige functionele configuratie kan zonder handmatige database/API-bewerking worden beheerd.
+User configures an endpoint with headers and two model profiles without an API client.
 
 ---
 
-### Stap 28 — GUI voor runs, voortgang en resultaten
+### Step 27 — GUI for golden sets, judge and configuration exchange
 
-**Doel**
+**Goal**
+
+Manage test cases, evaluators, judge and complete JSON configuration via GUI.
+
+**Implementatie**
+
+- Build golden set list, item editor and dynamic evaluator fields.
+- Build JSON/CSV import preview and export actions.
+- Build judge profile/rubric editor with weights and template.
+- Build configuration-JSON import/export with merge/replace-preview and missing-secretsstatus.
+- Show active limits in forms.
+
+**Unittests**
+
+- Form/view model per evaluator type.
+- Rubric weight and criterion validation.
+- Import preview presentation of row/field errors and conflicts.
+- Secret status never shows secret value.
+
+**Integratietests**
+
+- Each evaluator method can be saved via GUI.
+- Golden-set JSON/CSV import works via multipart upload.
+- Judge hierarchy is displayed correctly.
+- Configuration export/download and import preview/commit work.
+- Replace requires explicit confirmation.
+
+**GUI-rooktests**
+
+- Create golden set with at least one test case per evaluator.
+- Import configuration with missing secret and then fill in secret via GUI.
+- All forms are keyboard operable.
+
+**Acceptatie**
+
+Full functional configuration can be managed without manual database/API operation.
+
+---
+
+### Step 28 — GUI for runs, progress and results
+
+**Goal**
 
 Runs starten, volgen, annuleren, vergelijken en exporteren.
 
 **Implementatie**
 
-- Bouw dashboard, nieuwe-runwizard en runhistorie.
-- Toon omvang, profielen, judgeoverride, concurrency en quality gates vóór start.
-- Poll runstatus maximaal iedere twee seconden.
-- Bouw resultatenvergelijking, sortering, filters en itemdetail.
-- Toon latency, TTFT, TPS, tokens, kosten, judge-subresultaten, errors en gate-uitkomsten.
-- Voeg cancel, rerun-failures, delete en exports met bevestiging/waarschuwing toe.
+- Build dashboard, new run wizard and run history.
+- Show size, profiles, judge override, concurrency and quality gates before start.
+- Poll run status maximum every two seconds.
+- Build results comparison, sorting, filters and item detail.
+- Show latency, TTFT, TPS, tokens, costs, judge sub-results, errors and gate outcomes.
+- Add cancel, rerun failures, delete and exports with confirmation/warning.
 
 **Unittests**
 
-- Viewmodels voor unknown metrics, geldbedragen en lokale tijd.
-- Sorteer-/filterparameterparsing.
-- Voortgangsberekening.
-- Status- en gatebadges.
+- Viewmodels for unknown metrics, monetary amounts and local time.
+- Sort/filter parameter parsing.
+- Progress calculation.
+- Status and gate badges.
 
 **Integratietests**
 
-- Run starten via GUI maakt juiste snapshots/jobs.
-- Pollendpoint toont oplopende voortgang.
-- Resultaatfilters en itemdetail tonen juiste data zonder secrets.
-- Cancel/rerun/delete vereisen CSRF en bevestigingsflow.
-- Exportwaarschuwing en downloads werken.
+- Starting run via GUI creates correct snapshots/jobs.
+- Pollendpoint shows increasing progress.
+- Result filters and item detail show correct data without secrets.
+- Cancel/rerun/delete require CSRF and confirmation flow.
+- Export alert and downloads work.
 
 **GUI-rooktests**
 
-- Start mockrun met twee modellen en meerdere evaluatoren.
-- Volg tot voltooiing, sorteer op score/TTFT/TPS/kosten en open detail.
-- Annuleer tweede run en rerun failures.
+- Start mock run with two models and multiple evaluators.
+- Track to completion, sort by score/TTFT/TPS/cost and open detail.
+- Cancel second run and rerun failures.
 
 **Acceptatie**
 
-Primaire gebruikersflow uit specificatie is volledig via GUI uitvoerbaar.
+Primary user flow from specification is fully executable via GUI.
 
 ## Fase H — Oplevering en hardening
 
 ### Stap 29 — Performance, security en robuustheid ✅
 
-**Doel**
+**Goal**
 
-Niet-functionele grenzen aantoonbaar halen.
+Demonstrably achieving non-functional limits.
 
 **Implementatie**
 
-- Voeg paginatie/indexen en gerichte aggregatequeries toe.
-- Harden CSP, CSRF, securityheaders, upload- en responslimieten.
-- Controleer SSRF, redirect, secretredactie en HTML escaping centraal.
-- Optimaliseer SQLite-writepatronen en busy handling.
-- Voeg gecontroleerde shutdown van workers en leases toe.
+- Add pagination/indexes and targeted aggregate queries.
+- Harden CSP, CSRF, security headers, upload and response limits.
+- Control SSRF, redirect, secret editing and HTML escaping centrally.
+- Optimize SQLite write patterns and busy handling.
+- Add controlled shutdown of workers and leases.
 
 **Unittests**
 
 - Securityheaderconfig.
-- URL/redirect edge cases: IPv4/IPv6 loopback, userinfo, hostnamevarianten.
-- Upload-/streamlimieten op exacte grens en grens+1.
-- Shutdownstatusovergangen.
+- URL/redirect edge cases: IPv4/IPv6 loopback, user info, hostname variants.
+- Upload/stream limits on exact border and border+1.
+- Shutdown status transitions.
 
 **Integratietests**
 
-- 10.000 resultaatfixtures: gepagineerde lijst en aggregaten binnen afgesproken testbudget op referentieprofiel.
-- 20 modelprofielen/run en configureerbare concurrency.
-- SQLite busy/retryscenario zonder dataverlies.
-- XSS-fixtures blijven tekst in GUI en HTML-export.
-- Geautomatiseerde repository-/log-/response-scan vindt fixturesecrets niet.
+- 10,000 result fixtures: paginated list and aggregates within agreed test budget on reference profile.
+- 20 model profiles/run and configurable concurrency.
+- SQLite busy/retry scenario without data loss.
+- XSS fixtures remain text in GUI and HTML export.
+- Automated repository/log/response scan does not find fixturesecrets.
 
 **Acceptatie**
 
 Security- en performancetestverslag documenteert gemeten resultaten en eventuele hardwarecontext.
 
-**Status:** voltooid op 2026-11-06. Bewijs en restrisico's staan in `hardening-report.md`; releasegate: 348 tests, Ruff lint/format en strict Mypy geslaagd.
+**Status:** completed on 2026-11-06. Evidence and residual risks are in `hardening-report.md`; release gate: 348 tests, Ruff lint/format and strict Mypy passed.
 
 ---
 
 ### Stap 30 — Docker, documentatie en volledige end-to-endacceptatie ✅
 
-**Voltooid op 2026-11-06.** Production Waitress-entrypoint, non-root multi-stage image,
-Compose-local volume/healthcheck, volledig gepinde runtimeconstraints, CI-releasegates,
-offline mockprovider, versiegebonden releasefixture en native offline E2E zijn toegevoegd.
-Docker/Compose waren niet geïnstalleerd op de uitvoerhost; echte image build/start/health wordt
-daarom verplicht door `.github/workflows/ci.yml` en kan lokaal pas op een Dockerhost worden
-bevestigd. Statische containercontracttests en volledige native productionpipeline-E2E slagen.
+**Completed on 2026-11-06.** Production Waitress entry point, non-root multi-stage image,
+Compose-local volume/healthcheck, fully pinned runtime constraints, CI release gates,
+offline mock provider, version-bound release fixture and native offline E2E have been added.
+Docker/Compose were not installed on the output host; real image build/start/health
+therefore required by `.github/workflows/ci.yml` and can only be used locally on a Docker host
+confirmed. Static container contract tests and full native production pipeline E2E pass.
 
-**Doel**
+**Goal**
 
 Reproduceerbare oplevering vanaf lege checkout.
 
 **Implementatie**
 
-- Maak productiegeschikte `Dockerfile` en `docker-compose.yml` met exact één applicatieproces en begrensde web-/workerthreads; geen Flask reloader.
-- Voeg één Docker-local persistent volume voor SQLite/WAL/exports, lokale poortbinding en healthcheck toe; documenteer dat bind mounts alleen ondersteund zijn wanneer ze aantoonbaar een lokaal filesystem gebruiken.
-- Laat containerentrypoint als enige startupcoördinator eerst backup/migraties en recovery uitvoeren en pas daarna HTTP-server en workerthreads starten.
-- Rond `.env.example`, lokale `.env`, README en OpenAPI af.
-- Voeg voorbeeld-golden-set en mockprovider toe.
-- Documenteer Windows/POSIX, Docker, configuratiebronnen, JSON-schema, security, backup en beperkingen.
+- Create production-ready `Dockerfile` and `docker-compose.yml` with exactly one application process and bounded web/worker threads; no Flask reloader.
+- Add one Docker-local persistent volume for SQLite/WAL/exports, local port binding and health check; document that bind mounts are only supported when they can be proven to use a local filesystem.
+- Have container entry point, as the sole startup coordinator, first perform backup/migrations and recovery and only then start the HTTP server and worker threads.
+- Finalize `.env.example`, local `.env`, README and OpenAPI.
+- Add sample golden-set and mockprovider.
+- Document Windows/POSIX, Docker, configuration sources, JSON schema, security, backup and limitations.
 
 **Unittests**
 
-- Configschema en JSON-voorbeelden valideren tegen applicatiemodellen.
-- Documentatiecodeblokken/configvoorbeelden worden waar mogelijk machinegetest.
+- Validate config schema and JSON examples against application models.
+- Documentation code blocks/config examples are machine tested where possible.
 
 **Integratietests**
 
-- Dockerimage bouwt.
-- Container start met exact één applicatieproces, healthcheck wordt gezond en lokaal databasevolume overleeft restart.
-- Composeconfig bevat geen netwerkfilesystem/gedeeld volume en publiceert geen tweede app- of workerreplica.
-- OpenAPI bevat alle werkelijke `/api/v1`-routes en valideert.
-- Migratie vanaf lege database en upgrade van vorige releasefixture met bestaande data werken in container; backup kan worden hersteld en opnieuw gemigreerd.
+- Dockerimage builds.
+- Container starts with exactly one application process, health check becomes healthy and local database volume survives restart.
+- Composeconfig does not contain a network filesystem/shared volume and does not publish a second app or worker replica.
+- OpenAPI contains and validates all actual `/api/v1` routes.
+- Migration from empty database and upgrade from previous release fixture with existing data working in container; backup can be restored and migrated again.
 
 **End-to-endacceptatietest**
 
-1. Start applicatie en mockprovider via Docker Compose.
-2. Importeer functionele configuratie-JSON zonder secrets.
-3. Vul secret via GUI in.
-4. Discover twee mockmodellen en maak meerdere temperatuur-/reasoningprofielen.
-5. Importeer golden set met alle zes evaluatiemethoden.
-6. Start run met judge en quality gates.
-7. Controleer live voortgang, streamingmetrics, kosten en rangschikking.
-8. Herstart applicatie tijdens tweede run en controleer queueherstel.
-9. Exporteer JSON, CSV en HTML; scan op secrets.
-10. Controleer retentie-/deleteflow en auditmetadata.
+1. Launch application and mock provider via Docker Compose.
+2. Import functional configuration JSON without secrets.
+3. Enter secret via GUI.
+4. Discover two mock models and create multiple temperature/reasoning profiles.
+5. Import golden set with all six evaluation methods.
+6. Start run with judge and quality gates.
+7. Check live progress, streaming metrics, costs and rankings.
+8. Restart application during second run and check queue recovery.
+9. Export JSON, CSV and HTML; scan for secrets.
+10. Check retention/delete flow and audit metadata.
 
 **Acceptatie**
 
-Volledige testsuite en end-to-endacceptatie slagen vanaf schone checkout zonder extern netwerk.
+Full test suite and end-to-end adoption succeed from clean checkout without external network.
 
 ## 3. Traceabilitymatrix
 
-| Specificatiegebied | Implementatiestappen |
+| Specification area | Implementation steps |
 |---|---|
-| Configuratie en `.env`-prioriteit | 1–3, 24, 26 |
+| Configuration and `.env` priority | 1–3, 24, 26 |
 | Security, secrets, logging, SSRF | 4–6, 14, 24–26, 29 |
-| Endpoints, headers en discovery | 6, 14, 16, 17, 26 |
-| Modelprofielen, reasoning en prijzen | 7, 8, 26 |
-| Golden sets en testcases | 9, 13, 27 |
-| Deterministische evaluatoren | 10–12 |
-| LLM judge en subresultaten | 14, 18, 20 |
-| Streaming, TTFT en TPS | 15, 20, 22 |
-| Rate limiting en retries | 16, 17, 20 |
-| Runtime-topologie, lokale opslag en centrale limiter | 1, 3, 16, 20, 30 |
-| Runs, snapshots, fencing en duurzame queue | 19–21 |
-| Migratie-evolutie en restore | 3, alle schemastappen, 30 |
-| Metrics en rangschikking | 8, 15, 22 |
+| Endpoints, headers and discovery | 6, 14, 16, 17, 26 |
+| Model profiles, reasoning and prices | 7, 8, 26 |
+| Golden sets and test cases | 9, 13, 27 |
+| Deterministic Evaluators | 10–12 |
+| LLM judge and subresults | 14, 18, 20 |
+| Streaming, TTFT and TPS | 15, 20, 22 |
+| Rate limiting and retries | 16, 17, 20 |
+| Runtime topology, local storage and central limiter | 1, 3, 16, 20, 30 |
+| Runs, snapshots, fencing and sustainable queue | 19–21 |
+| Migration evolution and restore | 3, all schema steps, 30 |
+| Metrics and Ranking | 8, 15, 22 |
 | Quality gates | 23, 28 |
-| Configuratie-JSON | 24, 27 |
-| Resultaatexports en retentie | 25, 28 |
-| Volledige GUI | 26–28 |
-| Performance en hardening | 29 |
-| Docker, docs en E2E | 30 |
+| Configuration JSON | 24, 27 |
+| Result exports and retention | 25, 28 |
+| Full GUI | 26–28 |
+| Performance and hardening | 29 |
+| Docker, docs and E2E | 30 |
 
 ## 4. Mijlpalen
 
@@ -1261,10 +1261,10 @@ Volledige testsuite en end-to-endacceptatie slagen vanaf schone checkout zonder 
 
 Na stap 8:
 
-- app, database en settings werken;
-- endpoints/headers en modelprofielen bestaan;
-- secrets zijn veilig;
-- kostenengine is getest.
+- app, database and settings work;
+- endpoints/headers and model profiles exist;
+- secrets are safe;
+- cost engine has been tested.
 
 ### M2 — Headless evaluatiecomponenten
 
@@ -1278,26 +1278,26 @@ Na stap 18:
 
 Na stap 25:
 
-- runs, queue, recovery, metrics, gates, configuratie-uitwisseling en exports werken via API;
-- kern kan volledig geautomatiseerd worden getest vóór GUI-bouw.
+- runs, queue, recovery, metrics, gates, configuration exchange and exports work via API;
+- core can be fully automated tested before GUI building.
 
 ### M4 — Functionele GUI
 
 Na stap 28:
 
-- alle primaire functies zijn via Nederlandse GUI beschikbaar;
-- endpoints en headers zijn volledig via GUI beheerbaar.
+- all primary functions are available via Dutch GUI;
+- endpoints and headers are fully manageable via GUI.
 
 ### M5 — MVP-release
 
 Na stap 30:
 
-- hardening, Docker, documentatie en end-to-endacceptatie afgerond;
-- applicatie voldoet aan `specification.md`.
+- hardening, Docker, documentation and end-to-end acceptance completed;
+- application complies with `specification.md`.
 
 ## 5. Releasegate
 
-MVP mag alleen worden opgeleverd wanneer:
+MVP may only be delivered when:
 
 ```bash
 pytest
@@ -1310,9 +1310,9 @@ mypy src
 
 alle slagen en daarnaast:
 
-- geen test is overgeslagen zonder vastgelegde reden;
-- geen echte API-key in repository, logs, fixtures of artifacts staat;
-- OpenAPI en database migraties actueel zijn;
-- README exact overeenkomt met werkelijke start- en testcommando's;
-- configuratie- en resultaatexports door automatische secret-scan komen;
-- alle traceabilityrijen aantoonbaar gereed zijn.
+- no test has been skipped without a stated reason;
+- no real API key in repository, logs, fixtures or artifacts;
+- OpenAPI and database migrations are up to date;
+- README exactly matches actual start and test commands;
+- configuration and result exports pass automatic secret scan;
+- all traceability rows are demonstrably ready.

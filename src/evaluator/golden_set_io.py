@@ -94,7 +94,7 @@ def parse_import(
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
-        raise ValueError("Bestand moet geldige UTF-8 bevatten.") from exc
+        raise ValueError("File must contain valid UTF-8.") from exc
     return _parse_json(text) if format_ == "json" else _parse_csv(text, csv_set_name)
 
 
@@ -135,7 +135,7 @@ def _parse_csv(text: str, set_name: str | None) -> ParsedGoldenSet:
             config = json.loads(row["evaluator_config"])
             tags = json.loads(row["tags"])
         except json.JSONDecodeError as exc:
-            raise ValueError(f"CSV-rij {row_number} ({case_id}): ongeldig JSON-veld.") from exc
+            raise ValueError(f"CSV-rij {row_number} ({case_id}): invalid JSON field.") from exc
         enabled_text = row["enabled"].strip().lower()
         if enabled_text not in {"true", "false"}:
             raise ValueError(f"CSV-rij {row_number} ({case_id}): enabled moet true of false zijn.")

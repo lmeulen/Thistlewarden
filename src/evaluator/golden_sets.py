@@ -390,7 +390,7 @@ class SQLiteGoldenSetRepository:
                     (str(source_id),),
                 ).fetchone()
                 if source is None:
-                    raise NotFoundError("Golden set is niet gevonden.")
+                    raise NotFoundError("Golden set not found.")
                 connection.execute(
                     """INSERT INTO golden_sets(
                     id,name,description,version,tags_json,active,created_at,updated_at,
@@ -606,7 +606,7 @@ class SQLiteGoldenSetRepository:
                     values,
                 ).fetchall()
                 if len(rows) != len(item_ids):
-                    raise NotFoundError("Een geselecteerde testcase is niet gevonden.")
+                    raise NotFoundError("A selected test case was not found.")
                 connection.execute(
                     f"""DELETE FROM golden_set_items
                     WHERE golden_set_id=? AND id IN ({placeholders})""",
@@ -696,7 +696,7 @@ class GoldenSetService:
     @staticmethod
     def _pagination(page: int, per_page: int) -> None:
         if page < 1 or per_page < 1 or per_page > 100:
-            raise ValidationApiError("Ongeldige paginering; per_page is maximaal 100.")
+            raise ValidationApiError("Invalid pagination; per_page is at most 100.")
 
     def list_sets(self, page: int, per_page: int) -> tuple[list[GoldenSetRecord], int]:
         self._pagination(page, per_page)
@@ -705,7 +705,7 @@ class GoldenSetService:
     def get_set(self, set_id: UUID) -> GoldenSetRecord:
         result = self._repository.get_set(set_id)
         if result is None:
-            raise NotFoundError("Golden set is niet gevonden.")
+            raise NotFoundError("Golden set not found.")
         return result
 
     def create_set(self, payload: Any) -> GoldenSetRecord:
@@ -764,7 +764,7 @@ class GoldenSetService:
         existing = self.get_set(set_id)
         try:
             if not self._repository.delete_set(set_id):
-                raise NotFoundError("Golden set is niet gevonden.")
+                raise NotFoundError("Golden set not found.")
         except sqlite3.IntegrityError:
             archived = existing.model_copy(
                 update={
@@ -793,7 +793,7 @@ class GoldenSetService:
     def get_item(self, item_id: UUID) -> GoldenSetItemRecord:
         result = self._repository.get_item(item_id)
         if result is None:
-            raise NotFoundError("Testcase is niet gevonden.")
+            raise NotFoundError("Test case not found.")
         return result
 
     def export_set(self, set_id: UUID, format_: Literal["json", "csv"]) -> bytes:
@@ -814,13 +814,13 @@ class GoldenSetService:
         from evaluator.golden_set_io import parse_import
 
         if len(content) > self._limits.max_import_file_bytes:
-            raise ValidationApiError("Importbestand overschrijdt maximale grootte.")
+            raise ValidationApiError("Import file exceeds maximum size.")
         try:
             parsed = parse_import(content, format_, csv_set_name)
         except ValueError as exc:
             raise ValidationApiError(str(exc)) from exc
         if len(parsed.item_payloads) > self._limits.max_items:
-            raise ValidationApiError("Import bevat te veel testcases.")
+            raise ValidationApiError("Import contains too many test cases.")
         issues: list[ErrorDetail] = []
         try:
             set_data = cast(GoldenSetInput, self._validate(GoldenSetInput, parsed.set_payload))
@@ -851,7 +851,7 @@ class GoldenSetService:
                 else:
                     issues.append(ErrorDetail(label, exc.message))
         if issues:
-            raise ValidationApiError("Import bevat ongeldige gegevens.", details=issues)
+            raise ValidationApiError("Import contains invalid data.", details=issues)
         assert set_data is not None
         if preview:
             return set_data, item_data, None
@@ -912,9 +912,9 @@ class GoldenSetService:
         self.get_set(set_id)
         unique_ids = list(dict.fromkeys(item_ids))
         if not unique_ids:
-            raise ValidationApiError("Selecteer minimaal één testcase.")
+            raise ValidationApiError("Select at least one test case.")
         if len(unique_ids) > self._limits.max_items:
-            raise ValidationApiError("Te veel testcases geselecteerd.")
+            raise ValidationApiError("Too many test cases selected.")
         try:
             return self._repository.delete_items(set_id, unique_ids)
         except sqlite3.IntegrityError as exc:
@@ -924,28 +924,28 @@ class GoldenSetService:
         self.get_item(item_id)
         try:
             if not self._repository.delete_item(item_id):
-                raise NotFoundError("Testcase is niet gevonden.")
+                raise NotFoundError("Test case not found.")
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Testcase heeft historische referenties.") from exc
 
     def _validate_item(self, payload: Any) -> GoldenSetItemInput:
         data = cast(GoldenSetItemInput, self._validate(GoldenSetItemInput, payload))
         if len(data.prompt) > self._limits.max_prompt_chars:
-            raise ValidationApiError("Prompt overschrijdt maximale lengte.")
+            raise ValidationApiError("Prompt exceeds maximum length.")
         if (
             data.system_prompt is not None
             and len(data.system_prompt) > self._limits.max_system_prompt_chars
         ):
-            raise ValidationApiError("System prompt overschrijdt maximale lengte.")
+            raise ValidationApiError("System prompt exceeds maximum length.")
         if (
             data.expected_answer is not None
             and len(data.expected_answer) > self._limits.max_expected_answer_chars
         ):
-            raise ValidationApiError("Verwacht antwoord overschrijdt maximale lengte.")
+            raise ValidationApiError("Expected answer exceeds maximum length.")
         if data.evaluation_method == "llm_judge":
             size = len(json.dumps(data.evaluator_config, ensure_ascii=False))
             if size > self._limits.max_judge_rubric_context_chars:
-                raise ValidationApiError("Judge-rubric en context overschrijden maximale lengte.")
+                raise ValidationApiError("Judge rubric and context exceed maximum length.")
         return data
 
     @staticmethod

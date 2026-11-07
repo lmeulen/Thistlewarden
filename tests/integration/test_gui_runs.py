@@ -118,10 +118,10 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     text = page.get_data(as_text=True)
     assert (
         page.status_code == 200
-        and "Runoverzicht" in text
-        and "Modelprestaties" in text
-        and "Resultaten per judgetype" in text
-        and "Modelvergelijking" in text
+        and "Run overview" in text
+        and "Model performance" in text
+        and "Results by judge type" in text
+        and "Model comparison" in text
         and 'aria-label="Score 1.00"' in text
         and "Exact match" in text
         and "bullet-chart" in text
@@ -137,28 +137,28 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         and 'name="judge_type"' in text
         and 'value="exact_match" selected' in text
     )
-    assert "<th>Kosten</th><th>Gates</th>" in text
-    run_overview = text[text.index("Runoverzicht") : text.index("Modelvergelijking")]
-    assert (
-        "<span>Totale kosten</span><strong>0.000</strong><small>1/1 bekend</small>" in run_overview
-    )
-    model_table = text[text.index("Modelvergelijking") : text.index("Modelprestaties")]
+    assert "<th>Cost</th><th>Gates</th>" in text
+    run_overview = text[text.index("Run overview") : text.index("Model comparison")]
+    assert "<span>Total cost</span><strong>0.000</strong><small>1/1 known</small>" in run_overview
+    model_table = text[text.index("Model comparison") : text.index("Model performance")]
     assert "<th>Pass rate</th>" not in model_table
     assert "<th>Error rate</th>" not in model_table
     assert "<th>Latency p95</th>" in model_table
     assert "Latency gem./p95" not in model_table
     assert 'class="gate-dot gate-dot-passed"' in model_table
-    assert 'title="Gewogen score: Geslaagd"' in model_table
-    assert "Kosten versus score" in model_table
+    assert 'title="Weighted score: Passed"' in model_table
+    assert "Cost versus score" in model_table
     assert 'class="scatter-chart"' in model_table
     assert 'class="scatter-point"' in model_table
-    assert "Model M: kosten 0.000, score 1.00" in model_table
-    assert "0.000<br><small>1/1 bekend</small>" in text
+    assert "Model M: cost 0.000, score 1.00" in model_table
+    assert "0.000<br><small>1/1 known</small>" in text
     assert (
-        text.index("Runoverzicht") < text.index("Modelvergelijking") < text.index("Modelprestaties")
+        text.index("Run overview")
+        < text.index("Model comparison")
+        < text.index("Model performance")
     )
     excluded = client.get(f"/runs/{run_id}?judge_type=llm_judge").get_data(as_text=True)
-    assert "Geen passende resultaten." in excluded
+    assert "No matching results." in excluded
     connection = app.extensions["database_factory"].connect()
     try:
         result_id = connection.execute(
@@ -167,7 +167,7 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     finally:
         connection.close()
     detail = client.get(f"/runs/{run_id}/resultaten/{result_id}").get_data(as_text=True)
-    assert "secret prompt" in detail and "Kandidaatantwoord" in detail and "yes" in detail
+    assert "secret prompt" in detail and "Candidate answer" in detail and "yes" in detail
     assert "api_key_secret_id" not in detail
 
     overview = client.get("/runs").get_data(as_text=True)
@@ -183,13 +183,13 @@ def test_cancel_delete_and_export_require_csrf_and_confirmation(app) -> None:
     no_confirm = client.post(
         f"/runs/{run_id}/annuleren", data={"csrf_token": token}, follow_redirects=True
     )
-    assert "Bevestig annulering" in no_confirm.get_data(as_text=True)
+    assert "Explicitly confirm cancellation" in no_confirm.get_data(as_text=True)
     client.post(f"/runs/{run_id}/annuleren", data={"csrf_token": token, "confirm": "on"})
     export = client.get(f"/runs/{run_id}/export")
-    assert "gevoelige prompts" in export.get_data(as_text=True)
+    assert "sensitive prompts" in export.get_data(as_text=True)
     token = csrf(client, f"/runs/{run_id}/export")
     denied = client.post(f"/runs/{run_id}/export", data={"csrf_token": token, "format": "json"})
-    assert "bevestig de waarschuwing" in denied.get_data(as_text=True)
+    assert "confirm the warning" in denied.get_data(as_text=True)
     downloaded = client.post(
         f"/runs/{run_id}/export",
         data={"csrf_token": token, "format": "json", "confirm_sensitive": "on"},

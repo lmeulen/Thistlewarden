@@ -275,7 +275,7 @@ class CostService:
     def calculate_for_profile(self, profile_id: UUID, payload: Any) -> CostCalculation:
         profile = self._profiles.get(profile_id)
         if profile is None:
-            raise NotFoundError("Modelprofiel is niet gevonden.")
+            raise NotFoundError("Model profile not found.")
         try:
             request = CostCalculationInput.model_validate(payload)
         except ValidationError as exc:
@@ -300,5 +300,5 @@ class CostService:
     def get(self, calculation_id: UUID) -> CostCalculation:
         result = self._repository.get(calculation_id)
         if result is None:
-            raise NotFoundError("Kostenberekening is niet gevonden.")
+            raise NotFoundError("Cost calculation not found.")
         return result

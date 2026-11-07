@@ -122,7 +122,7 @@ class CentralEndpointLimiter:
             raise ValueError("estimated tokens must be non-negative")
         data = endpoint.data
         if data.tokens_per_minute is not None and estimated_tokens > data.tokens_per_minute:
-            raise RateLimitError("Geschatte tokenvraag overschrijdt endpoint-TPM.")
+            raise RateLimitError("Estimated token demand exceeds endpoint TPM.")
         state = self._state(endpoint.id)
         with state.condition:
             ticket = state.next_ticket

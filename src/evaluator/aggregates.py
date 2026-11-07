@@ -123,7 +123,7 @@ class AggregateService:
             ):
                 from evaluator.api.errors import NotFoundError
 
-                raise NotFoundError("Run is niet gevonden.")
+                raise NotFoundError("Run not found.")
             models = connection.execute(
                 """SELECT rms.id,rms.snapshot_json FROM run_model_snapshots rms
                 WHERE rms.run_id=? AND EXISTS (
