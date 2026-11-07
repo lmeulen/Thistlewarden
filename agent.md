@@ -27,7 +27,6 @@ Hoofddocumenten:
 - `docs/configuration.md`: configuration contracts.
 - `docs/operations.md`: lifecycle, backup and recovery.
 - `docs/release.md`: release gate and offline E2E.
-- `docs/logging-plan.md`: logging policy.
 - `reviews/combined_results.md`: Current consolidated review and release blockers.
 - `hardening-report.md`: hardening evidence and residual risks.
 

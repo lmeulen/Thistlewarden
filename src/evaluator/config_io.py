@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -15,8 +16,11 @@ from evaluator.endpoints import EndpointInput
 from evaluator.gates import QualityGates
 from evaluator.golden_sets import GoldenSetInput, GoldenSetItemInput
 from evaluator.judges import JudgeProfileInput
+from evaluator.logging_config import log_semantic_event
 from evaluator.models import ModelProfileInput
 from evaluator.time import to_utc_iso, utc_now
+
+_LOG = logging.getLogger(__name__)
 
 
 class BundleObject(BaseModel):
@@ -143,7 +147,7 @@ class ConfigurationExchangeService:
                     "SELECT * FROM golden_set_items ORDER BY golden_set_id,sort_order"
                 )
             ]
-            return ConfigurationBundle(
+            bundle = ConfigurationBundle(
                 endpoints=endpoints,
                 model_profiles=models,
                 judge_profiles=judges,
@@ -152,6 +156,21 @@ class ConfigurationExchangeService:
             )
         finally:
             c.close()
+        log_semantic_event(
+            _LOG,
+            "configuration_exported",
+            object_count=sum(
+                len(group)
+                for group in (
+                    bundle.endpoints,
+                    bundle.model_profiles,
+                    bundle.judge_profiles,
+                    bundle.golden_sets,
+                    bundle.golden_set_items,
+                )
+            ),
+        )
+        return bundle
 
     def parse(self, payload: Any) -> ConfigurationBundle:
         try:
@@ -243,6 +262,15 @@ class ConfigurationExchangeService:
         bundle = self.parse(payload)
         plan = self.plan(bundle, mode)
         if preview:
+            log_semantic_event(
+                _LOG,
+                "configuration_import_previewed",
+                mode=mode,
+                object_count=plan.creates,
+                conflicts=len(plan.conflicts),
+                missing_count=len(plan.missing_secrets),
+                preview=True,
+            )
             return plan
         c = self._factory.connect()
         now = to_utc_iso(utc_now())
@@ -273,6 +301,15 @@ class ConfigurationExchangeService:
             raise ConflictError("Configuration import conflicts with existing names.") from exc
         finally:
             c.close()
+        log_semantic_event(
+            _LOG,
+            "configuration_imported",
+            mode=mode,
+            object_count=plan.creates,
+            conflicts=len(plan.conflicts),
+            missing_count=len(plan.missing_secrets),
+            preview=False,
+        )
         return plan
 
     def _write(

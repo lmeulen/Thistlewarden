@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 from datetime import datetime
@@ -23,7 +24,10 @@ from pydantic import (
 
 from evaluator.api.errors import ConflictError, ErrorDetail, NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
+from evaluator.logging_config import log_semantic_event
 from evaluator.time import to_utc_iso, utc_now
+
+_LOG = logging.getLogger(__name__)
 
 
 class ExactMatchConfig(BaseModel):
@@ -713,7 +717,9 @@ class GoldenSetService:
         now = utc_now()
         record = GoldenSetRecord(id=uuid4(), data=data, created_at=now, updated_at=now)
         self._save_set(record)
-        return self.get_set(record.id)
+        result = self.get_set(record.id)
+        log_semantic_event(_LOG, "golden_set_created", object_id=record.id)
+        return result
 
     def duplicate_set(self, set_id: UUID, name: str) -> GoldenSetRecord:
         source = self.get_set(set_id)
@@ -740,7 +746,15 @@ class GoldenSetService:
             self._repository.duplicate_set(set_id, record, items)
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Golden-setnaam bestaat al.") from exc
-        return self.get_set(record.id)
+        result = self.get_set(record.id)
+        log_semantic_event(
+            _LOG,
+            "golden_set_duplicated",
+            object_id=record.id,
+            source=set_id,
+            case_count=len(items),
+        )
+        return result
 
     def update_set(self, set_id: UUID, payload: Any) -> GoldenSetRecord:
         existing = self.get_set(set_id)
@@ -752,7 +766,9 @@ class GoldenSetService:
             id=set_id, data=data, created_at=existing.created_at, updated_at=utc_now()
         )
         self._save_set(record)
-        return self.get_set(set_id)
+        result = self.get_set(set_id)
+        log_semantic_event(_LOG, "golden_set_updated", object_id=set_id)
+        return result
 
     def _save_set(self, record: GoldenSetRecord) -> None:
         try:
@@ -773,6 +789,7 @@ class GoldenSetService:
                 }
             )
             self._repository.save_set(archived)
+        log_semantic_event(_LOG, "golden_set_deleted", object_id=set_id)
 
     def list_items(
         self,
@@ -801,7 +818,15 @@ class GoldenSetService:
 
         record = self.get_set(set_id)
         items = [item.data for item in self._repository.list_all_items(set_id)]
-        return export_json(record.data, items) if format_ == "json" else export_csv(items)
+        result = export_json(record.data, items) if format_ == "json" else export_csv(items)
+        log_semantic_event(
+            _LOG,
+            "golden_set_exported",
+            object_id=set_id,
+            format=format_,
+            case_count=len(items),
+        )
+        return result
 
     def import_set(
         self,
@@ -854,6 +879,13 @@ class GoldenSetService:
             raise ValidationApiError("Import contains invalid data.", details=issues)
         assert set_data is not None
         if preview:
+            log_semantic_event(
+                _LOG,
+                "golden_set_import_previewed",
+                format=format_,
+                case_count=len(item_data),
+                preview=True,
+            )
             return set_data, item_data, None
         now = utc_now()
         record = GoldenSetRecord(id=uuid4(), data=set_data, created_at=now, updated_at=now)
@@ -871,7 +903,16 @@ class GoldenSetService:
             self._repository.import_set(record, records)
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Golden-setnaam of case_id bestaat al.") from exc
-        return set_data, item_data, self.get_set(record.id)
+        result = self.get_set(record.id)
+        log_semantic_event(
+            _LOG,
+            "golden_set_imported",
+            object_id=record.id,
+            format=format_,
+            case_count=len(item_data),
+            preview=False,
+        )
+        return set_data, item_data, result
 
     def create_item(self, set_id: UUID, payload: Any) -> GoldenSetItemRecord:
         self.get_set(set_id)
@@ -884,7 +925,9 @@ class GoldenSetService:
             id=uuid4(), golden_set_id=set_id, data=data, created_at=now, updated_at=now
         )
         self._save_item(record)
-        return self.get_item(record.id)
+        result = self.get_item(record.id)
+        log_semantic_event(_LOG, "golden_item_created", object_id=record.id, source=set_id)
+        return result
 
     def update_item(self, item_id: UUID, payload: Any) -> GoldenSetItemRecord:
         existing = self.get_item(item_id)
@@ -900,7 +943,11 @@ class GoldenSetService:
             updated_at=utc_now(),
         )
         self._save_item(record, existing.data.sort_order)
-        return self.get_item(item_id)
+        result = self.get_item(item_id)
+        log_semantic_event(
+            _LOG, "golden_item_updated", object_id=item_id, source=existing.golden_set_id
+        )
+        return result
 
     def _save_item(self, record: GoldenSetItemRecord, previous_order: int | None = None) -> None:
         try:
@@ -916,17 +963,22 @@ class GoldenSetService:
         if len(unique_ids) > self._limits.max_items:
             raise ValidationApiError("Too many test cases selected.")
         try:
-            return self._repository.delete_items(set_id, unique_ids)
+            deleted = self._repository.delete_items(set_id, unique_ids)
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Een testcase heeft historische referenties.") from exc
+        log_semantic_event(_LOG, "golden_items_deleted", object_id=set_id, count=deleted)
+        return deleted
 
     def delete_item(self, item_id: UUID) -> None:
-        self.get_item(item_id)
+        existing = self.get_item(item_id)
         try:
             if not self._repository.delete_item(item_id):
                 raise NotFoundError("Test case not found.")
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Testcase heeft historische referenties.") from exc
+        log_semantic_event(
+            _LOG, "golden_item_deleted", object_id=item_id, source=existing.golden_set_id
+        )
 
     def _validate_item(self, payload: Any) -> GoldenSetItemInput:
         data = cast(GoldenSetItemInput, self._validate(GoldenSetItemInput, payload))

@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from evaluator.aggregates import AggregateService
 from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
-from evaluator.logging_config import log_context, log_event
+from evaluator.logging_config import log_context, log_event, log_semantic_event
 from evaluator.time import to_utc_iso, utc_now
 
 _LOG = logging.getLogger(__name__)
@@ -90,6 +90,12 @@ class QualityGateService:
                     raise NotFoundError("Golden set not found.")
         finally:
             connection.close()
+        log_semantic_event(
+            _LOG,
+            "quality_gates_updated",
+            object_id=set_id,
+            configured_gates=",".join(sorted(gates.configured())) or "none",
+        )
         return gates
 
     def defaults(self, set_id: UUID) -> QualityGates:

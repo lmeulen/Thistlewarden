@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -15,9 +16,11 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from evaluator.api.errors import ConflictError, NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
+from evaluator.logging_config import log_semantic_event
 from evaluator.secrets import SQLiteSecretRepository
 from evaluator.time import to_utc_iso, utc_now
 
+_LOG = logging.getLogger(__name__)
 _HEADER_NAME = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
 _MASK = "********"
 
@@ -424,7 +427,9 @@ class EndpointService:
             created.extend(header_secrets)
             endpoint_id = uuid4()
             self._repository.insert(endpoint_id, data, api_secret, headers)
-            return self.get(endpoint_id)
+            record = self.get(endpoint_id)
+            log_semantic_event(_LOG, "endpoint_created", endpoint_id=endpoint_id)
+            return record
         except sqlite3.IntegrityError as exc:
             for secret_id in created:
                 self._secrets.delete(secret_id)
@@ -503,7 +508,9 @@ class EndpointService:
             raise
         for secret_id in old_secret_ids:
             self._secrets.delete(secret_id)
-        return self.get(endpoint_id)
+        record = self.get(endpoint_id)
+        log_semantic_event(_LOG, "endpoint_updated", endpoint_id=endpoint_id)
+        return record
 
     def delete(self, endpoint_id: UUID) -> None:
         existing = self.get(endpoint_id)
@@ -519,6 +526,7 @@ class EndpointService:
             self._secrets.delete(existing.api_key_secret_id)
         for secret_id in header_secret_ids:
             self._secrets.delete(secret_id)
+        log_semantic_event(_LOG, "endpoint_deleted", endpoint_id=endpoint_id)
 
 
 def endpoint_to_dict(record: EndpointRecord) -> dict[str, Any]:

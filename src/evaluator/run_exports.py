@@ -6,6 +6,7 @@ import csv
 import html
 import io
 import json
+import logging
 import re
 from datetime import timedelta
 from decimal import Decimal
@@ -14,7 +15,10 @@ from uuid import UUID
 
 from evaluator.api.errors import ConflictError, NotFoundError
 from evaluator.database import SQLiteConnectionFactory, transaction
+from evaluator.logging_config import log_semantic_event
 from evaluator.time import Clock, SystemClock, to_utc_iso
+
+_LOG = logging.getLogger(__name__)
 
 _COLUMNS = (
     "job_id",
@@ -83,9 +87,11 @@ class RunExportService:
             c.close()
 
     def export_json(self, run_id: UUID) -> bytes:
-        return json.dumps(
+        result = json.dumps(
             self.data(run_id), ensure_ascii=False, separators=(",", ":"), sort_keys=True
         ).encode()
+        log_semantic_event(_LOG, "run_exported", object_id=run_id, format="json")
+        return result
 
     def export_csv(self, run_id: UUID) -> bytes:
         data = self.data(run_id)
@@ -95,7 +101,9 @@ class RunExportService:
         )
         writer.writeheader()
         writer.writerows(data["results"])
-        return output.getvalue().encode("utf-8-sig")
+        result = output.getvalue().encode("utf-8-sig")
+        log_semantic_event(_LOG, "run_exported", object_id=run_id, format="csv")
+        return result
 
     def export_html(self, run_id: UUID) -> bytes:
         data = self.data(run_id)
@@ -124,7 +132,9 @@ class RunExportService:
             f"<details><summary>Complete data</summary><pre>{payload}</pre></details>"
             "</body></html>"
         )
-        return document.encode()
+        result = document.encode()
+        log_semantic_event(_LOG, "run_exported", object_id=run_id, format="html")
+        return result
 
     def delete(self, run_id: UUID) -> None:
         c = self._factory.connect()
@@ -138,11 +148,13 @@ class RunExportService:
                 c.execute("DELETE FROM runs WHERE id=?", (str(run_id),))
         finally:
             c.close()
+        log_semantic_event(_LOG, "run_deleted", object_id=run_id)
 
     def cleanup(self, retention_days: int) -> int:
         if retention_days < 0:
             raise ValueError("retention_days must be non-negative")
         if retention_days == 0:
+            log_semantic_event(_LOG, "retention_cleanup_completed", deleted_runs=0)
             return 0
         cutoff = to_utc_iso(self._clock.now_utc() - timedelta(days=retention_days))
         c = self._factory.connect()
@@ -157,9 +169,10 @@ class RunExportService:
                     )
                 ]
                 c.executemany("DELETE FROM runs WHERE id=?", [(x,) for x in ids])
-            return len(ids)
         finally:
             c.close()
+        log_semantic_event(_LOG, "retention_cleanup_completed", deleted_runs=len(ids))
+        return len(ids)
 
 
 def serialize_money(value: Decimal | None) -> str | None:

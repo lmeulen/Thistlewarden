@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 from dataclasses import dataclass
@@ -15,8 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from evaluator.api.errors import ConflictError, NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
+from evaluator.logging_config import log_semantic_event
 from evaluator.time import to_utc_iso, utc_now
 
+_LOG = logging.getLogger(__name__)
 _PATH_PART = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
 _PROTECTED_FIELDS = frozenset(
     {"model", "messages", "stream", "stream_options", "temperature", "top_p", "max_tokens"}
@@ -441,7 +444,14 @@ class ModelProfileService:
             self._repository.save(record)
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Profielnaam bestaat al binnen endpoint.") from exc
-        return self.get(record.id)
+        result = self.get(record.id)
+        log_semantic_event(
+            _LOG,
+            "model_profile_created",
+            object_id=result.id,
+            endpoint_id=result.endpoint_id,
+        )
+        return result
 
     def update(self, profile_id: UUID, payload: Any) -> ModelProfileRecord:
         existing = self.get(profile_id)
@@ -459,15 +469,28 @@ class ModelProfileService:
             self._repository.save(updated)
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Profielnaam bestaat al binnen endpoint.") from exc
-        return self.get(profile_id)
+        result = self.get(profile_id)
+        log_semantic_event(
+            _LOG,
+            "model_profile_updated",
+            object_id=result.id,
+            endpoint_id=result.endpoint_id,
+        )
+        return result
 
     def delete(self, profile_id: UUID) -> None:
-        self.get(profile_id)
+        existing = self.get(profile_id)
         try:
             if not self._repository.delete(profile_id):
                 raise NotFoundError("Model profile not found.")
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Modelprofiel heeft historische referenties.") from exc
+        log_semantic_event(
+            _LOG,
+            "model_profile_deleted",
+            object_id=profile_id,
+            endpoint_id=existing.endpoint_id,
+        )
 
 
 def profile_to_dict(record: ModelProfileRecord) -> dict[str, Any]:

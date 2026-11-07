@@ -13,64 +13,18 @@ from werkzeug.exceptions import HTTPException, InternalServerError
 from evaluator.api.errors import ApiError, HttpApiError, InternalError, error_payload
 from evaluator.logging_config import (
     bind_log_context,
+    bind_operation_actor,
     log_event,
     reset_log_context,
+    reset_operation_actor,
 )
 
 REQUEST_ID_HEADER = "X-Request-ID"
 _LOG = logging.getLogger(__name__)
 _ACTION_EVENTS = {
-    "update_setting": "setting_updated",
-    "create_endpoint": "endpoint_created",
-    "update_endpoint": "endpoint_updated",
-    "delete_endpoint": "endpoint_deleted",
     "discover_models": "model_discovery_completed",
     "discover": "model_discovery_completed",
     "import_discovered_models": "discovered_models_imported",
-    "create_model_profile": "model_profile_created",
-    "model_new": "model_profile_created",
-    "update_model_profile": "model_profile_updated",
-    "model_edit": "model_profile_updated",
-    "delete_model_profile": "model_profile_deleted",
-    "model_delete": "model_profile_deleted",
-    "create_judge_profile": "judge_profile_created",
-    "judge_new": "judge_profile_created",
-    "update_judge_profile": "judge_profile_updated",
-    "judge_edit": "judge_profile_updated",
-    "delete_judge_profile": "judge_profile_deleted",
-    "create_golden_set": "golden_set_created",
-    "golden_set_new": "golden_set_created",
-    "update_golden_set": "golden_set_updated",
-    "golden_set_edit": "golden_set_updated",
-    "delete_golden_set": "golden_set_deleted",
-    "import_golden_set": "golden_set_imported",
-    "golden_set_import": "golden_set_imported",
-    "export_golden_set": "golden_set_exported",
-    "golden_set_download": "golden_set_exported",
-    "create_golden_set_item": "golden_item_created",
-    "golden_item_new": "golden_item_created",
-    "update_golden_set_item": "golden_item_updated",
-    "golden_item_edit": "golden_item_updated",
-    "delete_golden_set_item": "golden_item_deleted",
-    "golden_item_delete": "golden_item_deleted",
-    "golden_set_judge_update": "golden_set_judge_changed",
-    "set_quality_gate_defaults": "quality_gates_updated",
-    "quality_gates_update": "quality_gates_updated",
-    "export_configuration": "configuration_exported",
-    "configuration_download": "configuration_exported",
-    "import_configuration": "configuration_imported",
-    "configuration_import": "configuration_imported",
-    "create_run": "run_created",
-    "run_new": "run_created",
-    "cancel_run": "run_cancel_requested",
-    "run_cancel": "run_cancel_requested",
-    "rerun_failures": "run_failures_rerun",
-    "run_rerun_failures": "run_failures_rerun",
-    "delete_run": "run_deleted",
-    "run_delete": "run_deleted",
-    "export_run": "run_exported",
-    "run_export": "run_exported",
-    "cleanup_runs": "retention_cleanup_completed",
 }
 
 
@@ -91,6 +45,11 @@ def _is_api_request() -> bool:
     return request.path == "/api/v1" or request.path.startswith("/api/v1/")
 
 
+def _safe_route() -> str:
+    """Return static route template without user-controlled path values."""
+    return request.url_rule.rule if request.url_rule is not None else "<unmatched>"
+
+
 def register_api_handlers(app: Flask, *, secrets: Iterable[str] = ()) -> None:
     """Install app-wide request IDs, safe timing logs, and API error contracts."""
 
@@ -104,12 +63,13 @@ def register_api_handlers(app: Flask, *, secrets: Iterable[str] = ()) -> None:
         if request.view_args and "run_id" in request.view_args:
             context["run_id"] = str(request.view_args["run_id"])
         g.log_context_tokens = bind_log_context(**context)
+        g.operation_actor_token = bind_operation_actor("api" if _is_api_request() else "local_gui")
         log_event(
             _LOG,
             logging.DEBUG,
             "request_started",
             method=request.method,
-            path=request.path,
+            route=_safe_route(),
             interface="api" if _is_api_request() else "gui",
             request_bytes=request.content_length,
         )
@@ -120,7 +80,7 @@ def register_api_handlers(app: Flask, *, secrets: Iterable[str] = ()) -> None:
         started = getattr(g, "request_started", None)
         duration = None if started is None else round((time.monotonic() - started) * 1000, 3)
         interface = "api" if _is_api_request() else "gui"
-        route = request.url_rule.rule if request.url_rule is not None else request.path
+        route = _safe_route()
         log_event(
             _LOG,
             logging.DEBUG,
@@ -151,6 +111,10 @@ def register_api_handlers(app: Flask, *, secrets: Iterable[str] = ()) -> None:
         if tokens:
             reset_log_context(tokens)
             g.log_context_tokens = None
+        actor_token = getattr(g, "operation_actor_token", None)
+        if actor_token is not None:
+            reset_operation_actor(actor_token)
+            g.operation_actor_token = None
 
     @app.errorhandler(ApiError)
     def handle_api_error(error: ApiError) -> tuple[Response, int] | InternalServerError:
@@ -163,7 +127,7 @@ def register_api_handlers(app: Flask, *, secrets: Iterable[str] = ()) -> None:
             error_code=error.code,
             status_code=error.status_code,
             method=request.method,
-            path=request.path,
+            route=_safe_route(),
         )
         return jsonify(
             error_payload(error, _request_id(), secrets=secret_values)
@@ -183,7 +147,7 @@ def register_api_handlers(app: Flask, *, secrets: Iterable[str] = ()) -> None:
             error_code=code,
             status_code=api_error.status_code,
             method=request.method,
-            path=request.path,
+            route=_safe_route(),
         )
         return jsonify(error_payload(api_error, _request_id())), api_error.status_code
 
@@ -195,7 +159,7 @@ def register_api_handlers(app: Flask, *, secrets: Iterable[str] = ()) -> None:
             "unhandled_request_exception",
             exception_type=type(error).__name__,
             method=request.method,
-            path=request.path,
+            route=_safe_route(),
         )
         if not _is_api_request():
             return InternalServerError(original_exception=error)
