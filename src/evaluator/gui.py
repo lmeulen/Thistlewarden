@@ -797,25 +797,45 @@ def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
         for item in aggregates
         if item["known_total_cost"] is not None and item["weighted_score"] is not None
     ]
+    plotted_scores = [min(Decimal(1), max(Decimal(0), item["weighted_score"])) for item in eligible]
+    lowest_score = min(plotted_scores, default=Decimal(0))
+    y_min = max(
+        (
+            candidate
+            for candidate in map(Decimal, ("0", "0.5", "0.8", "0.9"))
+            if candidate <= lowest_score
+        ),
+        default=Decimal(0),
+    )
+    y_range = Decimal(1) - y_min
+    y_ticks = [
+        {
+            "value": Decimal(1) - y_range * Decimal(index) / Decimal(4),
+            "y": plot_top + plot_height * Decimal(index) / Decimal(4),
+        }
+        for index in range(5)
+    ]
     max_cost = max((item["known_total_cost"] for item in eligible), default=Decimal(0))
     points = []
-    for item in eligible:
+    for item, score in zip(eligible, plotted_scores, strict=True):
         cost = item["known_total_cost"]
-        score = min(Decimal(1), max(Decimal(0), item["weighted_score"]))
         x_ratio = cost / max_cost if max_cost else Decimal(0)
+        y_ratio = (Decimal(1) - score) / y_range
         points.append(
             {
                 "model": item["model"],
                 "cost": cost,
                 "score": item["weighted_score"],
                 "x": plot_left + x_ratio * plot_width,
-                "y": plot_top + (Decimal(1) - score) * plot_height,
+                "y": plot_top + y_ratio * plot_height,
             }
         )
     return {
         "points": points,
         "max_cost": max_cost,
         "omitted": len(aggregates) - len(points),
+        "y_min": y_min,
+        "y_ticks": y_ticks,
     }
 
 
