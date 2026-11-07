@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -14,7 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.gates import QualityGates
+from evaluator.logging_config import log_semantic_event
 from evaluator.time import Clock, SystemClock, to_utc_iso
+
+_LOG = logging.getLogger(__name__)
 
 
 class LeaseLost(RuntimeError):
@@ -206,6 +210,14 @@ class RunQueue:
                         )
         finally:
             connection.close()
+        log_semantic_event(
+            _LOG,
+            "run_created",
+            object_id=run_id,
+            case_count=len(case_ids),
+            model_count=len(model_ids),
+            total=len(case_ids) * len(model_ids),
+        )
         return run_id
 
     def recover_expired(self) -> dict[str, int]:
@@ -463,8 +475,16 @@ class RunQueue:
                     "AND status='pending'",
                     (now, str(run_id)),
                 )
+                counts = connection.execute(
+                    "SELECT COUNT(*),SUM(CASE WHEN status NOT IN "
+                    "('pending','running') THEN 1 ELSE 0 END) FROM run_jobs WHERE run_id=?",
+                    (str(run_id),),
+                ).fetchone()
         finally:
             connection.close()
+        log_semantic_event(
+            _LOG, "run_cancelled", object_id=run_id, total=counts[0], done=counts[1] or 0
+        )
 
     def refresh_run_status(self, run_id: UUID) -> str:
         connection = self._factory.connect()
@@ -520,7 +540,7 @@ class RunQueue:
             connection.close()
         if run is None or not rows:
             raise ValidationApiError("No failed jobs to retry.")
-        return self.create_run(
+        new_id = self.create_run(
             {
                 "name": name,
                 "golden_set_id": run[0],
@@ -528,6 +548,10 @@ class RunQueue:
                 "judge_profile_id": run[1],
             }
         )
+        log_semantic_event(
+            _LOG, "run_failures_rerun", object_id=new_id, source=run_id, count=len(rows)
+        )
+        return new_id
 
     def model_snapshot_for_source(self, run_id: UUID, source_profile_id: UUID) -> dict[str, Any]:
         connection = self._factory.connect()

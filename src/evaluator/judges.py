@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 from collections.abc import Callable
@@ -17,18 +18,19 @@ from evaluator.api.errors import ConflictError, JudgeParseError, NotFoundError, 
 from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.evaluators.core import EvaluationResult
 from evaluator.golden_sets import LlmJudgeConfig, RubricCriterion
+from evaluator.logging_config import log_semantic_event
 from evaluator.time import from_utc_iso, to_utc_iso, utc_now
 
+_LOG = logging.getLogger(__name__)
+
 DEFAULT_CRITERIA = (
-    RubricCriterion(id="factual_correctness", description="Feitelijke juistheid."),
-    RubricCriterion(id="completeness", description="Volledigheid."),
-    RubricCriterion(id="relevance", description="Relevantie."),
+    RubricCriterion(id="factual_correctness", description="Factual correctness."),
+    RubricCriterion(id="completeness", description="Completeness."),
+    RubricCriterion(id="relevance", description="Relevance."),
     RubricCriterion(
-        id="instruction_compliance", description="Naleving van expliciete instructies."
+        id="instruction_compliance", description="Compliance with explicit instructions."
     ),
-    RubricCriterion(
-        id="consistency", description="Geen tegenstrijdigheden met antwoord of rubric."
-    ),
+    RubricCriterion(id="consistency", description="No contradictions with the answer or rubric."),
 )
 DEFAULT_TEMPLATE = "judge-v1"
 
@@ -351,6 +353,7 @@ class JudgeProfileService:
         now = utc_now()
         record = JudgeProfileRecord(id=uuid4(), data=data, created_at=now, updated_at=now)
         self._save(record)
+        log_semantic_event(_LOG, "judge_profile_created", object_id=record.id)
         return record
 
     def update(self, profile_id: UUID, payload: Any) -> JudgeProfileRecord:
@@ -363,6 +366,7 @@ class JudgeProfileService:
             id=current.id, data=data, created_at=current.created_at, updated_at=utc_now()
         )
         self._save(record)
+        log_semantic_event(_LOG, "judge_profile_updated", object_id=record.id)
         return record
 
     def delete(self, profile_id: UUID) -> None:
@@ -370,13 +374,14 @@ class JudgeProfileService:
             if not self._repo.delete(profile_id):
                 raise NotFoundError("Judge profile not found.")
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Judgeprofiel is nog in gebruik.") from exc
+            raise ConflictError("Judge profile is still in use.") from exc
+        log_semantic_event(_LOG, "judge_profile_deleted", object_id=profile_id)
 
     def resolve(self, set_id: UUID, run_override: UUID | None = None) -> JudgeProfileRecord:
         selected = run_override or self._repo.golden_set_override(set_id)
         result = self._repo.get(selected) if selected else self._repo.global_default()
         if result is None or not result.data.active:
-            raise ValidationApiError("Geen actief judgeprofiel beschikbaar.")
+            raise ValidationApiError("No active judge profile is available.")
         return result
 
     def golden_set_override(self, set_id: UUID) -> UUID | None:
@@ -386,9 +391,15 @@ class JudgeProfileService:
         if profile_id is not None:
             profile = self.get(profile_id)
             if not profile.data.active:
-                raise ValidationApiError("Judgeprofiel is niet actief.")
+                raise ValidationApiError("Judge profile is not active.")
         if not self._repo.set_golden_set_override(set_id, profile_id):
             raise NotFoundError("Golden set not found.")
+        log_semantic_event(
+            _LOG,
+            "golden_set_judge_changed",
+            object_id=set_id,
+            profile_id=profile_id,
+        )
 
     def evaluate_with_retry(
         self, call: Callable[[], str], rubric: list[RubricCriterion], threshold: Decimal
@@ -405,7 +416,7 @@ class JudgeProfileService:
         try:
             self._repo.save(record)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Judgeprofiel conflicteert met bestaande gegevens.") from exc
+            raise ConflictError("Judge profile conflicts with existing data.") from exc
 
     @staticmethod
     def _validate(model: type[JudgeProfileInput] | type[JudgeProfilePatch], payload: Any) -> Any:

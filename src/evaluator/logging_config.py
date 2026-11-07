@@ -9,6 +9,7 @@ from contextvars import ContextVar, Token
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
+from types import TracebackType
 from typing import Final
 from uuid import UUID
 
@@ -21,6 +22,7 @@ _CONTEXT_FIELDS: Final = ("request_id", "run_id", "case_id", "execution_id")
 _CONTEXT: dict[str, ContextVar[str]] = {
     field: ContextVar(f"log_{field}", default="-") for field in _CONTEXT_FIELDS
 }
+_OPERATION_ACTOR: ContextVar[str] = ContextVar("log_operation_actor", default="internal")
 _WIRE_LOGGERS: Final = ("urllib3", "httpx", "httpcore")
 _FORBIDDEN_FIELD_PARTS: Final = (
     "secret",
@@ -39,6 +41,7 @@ _ALLOWED_FIELDS: Final = frozenset(
     {
         "action",
         "actor",
+        "setting",
         "attempt",
         "bytes",
         "case_count",
@@ -69,7 +72,7 @@ _ALLOWED_FIELDS: Final = frozenset(
         "job_id",
         "max_retries",
         "method",
-        "missing_secrets",
+        "missing_count",
         "mode",
         "model_count",
         "model_id",
@@ -80,6 +83,7 @@ _ALLOWED_FIELDS: Final = frozenset(
         "path",
         "port",
         "preview",
+        "profile_id",
         "reason",
         "recovered_jobs",
         "recovered_runs",
@@ -100,8 +104,32 @@ _ALLOWED_FIELDS: Final = frozenset(
         "workers_enabled",
     }
 )
+MAX_LOG_LINE_BYTES: Final = 8192
 _MAX_VALUE_LENGTH: Final = 500
-_MAX_MESSAGE_LENGTH: Final = 8192
+_MAX_MESSAGE_LENGTH: Final = 6000
+
+
+class SafeLogFormatter(logging.Formatter):
+    """Format bounded UTF-8 lines without rendering exception messages."""
+
+    def formatException(
+        self,
+        exc_info: (
+            tuple[type[BaseException], BaseException, TracebackType | None]
+            | tuple[None, None, None]
+        ),
+    ) -> str:
+        exception_type = exc_info[0]
+        if exception_type is None:
+            return "exception_type=unknown"
+        return f"exception_type={exception_type.__name__}"
+
+    def format(self, record: logging.LogRecord) -> str:
+        rendered = super().format(record)
+        encoded = rendered.encode("utf-8")
+        if len(encoded) <= MAX_LOG_LINE_BYTES:
+            return rendered
+        return encoded[:MAX_LOG_LINE_BYTES].decode("utf-8", errors="ignore")
 
 
 class SecretRedactor:
@@ -171,6 +199,29 @@ def log_event(
     logger.log(level, event if not suffix else f"{event} {suffix}")
 
 
+def log_semantic_event(
+    logger: logging.Logger,
+    event: str,
+    /,
+    **fields: object,
+) -> None:
+    """Emit post-commit INFO event with actor from current operation context."""
+
+    log_event(logger, logging.INFO, event, actor=_OPERATION_ACTOR.get(), **fields)
+
+
+def bind_operation_actor(actor: str) -> Token[str]:
+    """Bind trusted operation actor until reset with returned token."""
+
+    if actor not in {"api", "local_gui", "internal"}:
+        raise ValueError(f"Unsupported operation actor: {actor}")
+    return _OPERATION_ACTOR.set(actor)
+
+
+def reset_operation_actor(token: Token[str]) -> None:
+    _OPERATION_ACTOR.reset(token)
+
+
 def bind_log_context(**correlation_ids: str) -> list[tuple[ContextVar[str], Token[str]]]:
     """Bind correlation IDs until tokens are reset by ``reset_log_context``."""
 
@@ -203,7 +254,7 @@ def configure_logging(level: str, *, secrets: Iterable[str] = ()) -> None:
     """Configure content-free structured logging and disable HTTP wire debug logs."""
 
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    handler.setFormatter(SafeLogFormatter(LOG_FORMAT))
     handler.addFilter(SafeContextFilter(secrets))
 
     root = logging.getLogger()

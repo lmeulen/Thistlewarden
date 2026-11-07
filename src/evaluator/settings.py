@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -11,6 +12,9 @@ from typing import Protocol
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from evaluator.errors import ConfigurationError
+from evaluator.logging_config import log_semantic_event
+
+_LOG = logging.getLogger(__name__)
 
 SUPPORTED_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
 
@@ -294,6 +298,7 @@ class SettingsService:
         candidate.set(name, raw_value)
         resolved = SettingsResolver(candidate).resolve(self._environment)
         self._repository.set(name, raw_value)
+        log_semantic_event(_LOG, "setting_updated", setting=name, source="database")
         return resolved
 
     def delete_database_value(self, name: str) -> ResolvedSettings:
@@ -305,4 +310,6 @@ class SettingsService:
                 f"{definition.env_name} is controlled by the environment and is read-only"
             )
         self._repository.delete(name)
-        return SettingsResolver(self._repository).resolve(self._environment)
+        resolved = SettingsResolver(self._repository).resolve(self._environment)
+        log_semantic_event(_LOG, "setting_updated", setting=name, source="default")
+        return resolved

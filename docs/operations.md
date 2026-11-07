@@ -1,7 +1,5 @@
 # Operations, recovery and rollback
 
-Detailed target logging policy, event catalog, and phased implementation are documented in [logging-plan.md](logging-plan.md).
-
 ## Readiness and liveness
 
 - `/health`: process liveness; deliberately independent from SQLite.
