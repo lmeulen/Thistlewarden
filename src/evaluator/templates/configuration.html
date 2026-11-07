@@ -1,42 +1,42 @@
 {% extends "base.html" %}
-{% block title %}Configuratie-uitwisseling · Thistlewarden{% endblock %}
+{% block title %}Configuration exchange · Thistlewarden{% endblock %}
 {% block content %}
 <div class="heading">
   <div>
-    <h1>Configuratie-uitwisseling</h1>
-    <p>Versie 1.0. Export bevat nooit secretwaarden.</p>
+    <h1>Configuration exchange</h1>
+    <p>Version 1.0. Exports never contain secret values.</p>
   </div>
-  <a class="button" href="{{ url_for('gui.configuration_download') }}">Configuratie downloaden</a>
+  <a class="button" href="{{ url_for('gui.configuration_download') }}">Download configuration</a>
 </div>
 <section class="panel">
-  <h2>Importeren</h2>
+  <h2>Import</h2>
   <form method="post" action="{{ url_for('gui.configuration_import') }}" enctype="multipart/form-data" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Bestand<input type="file" name="file" accept=".json" required></label>
-    <label>Modus
+    <label>File<input type="file" name="file" accept=".json" required></label>
+    <label>Mode
       <select name="mode">
-        <option value="merge">Samenvoegen</option>
-        <option value="replace">Vervangen en bestaande records archiveren</option>
+        <option value="merge">Merge</option>
+        <option value="replace">Replace and archive existing records</option>
       </select>
     </label>
     <label class="check wide warning">
-      <input type="checkbox" name="confirm_replace"> Ik bevestig archivering bij replace.
+      <input type="checkbox" name="confirm_replace"> I confirm archiving when using replace mode.
     </label>
     <div class="actions wide"><button name="preview">Preview</button></div>
   </form>
 </section>
 {% if plan %}
 <section class="panel">
-  <h2>Importpreview</h2>
+  <h2>Import preview</h2>
   <dl>
-    <dt>Modus</dt><dd>{{ plan.mode }}</dd>
-    <dt>Nieuwe objecten</dt><dd>{{ plan.creates }}</dd>
-    <dt>Te archiveren</dt><dd>{{ plan.archives }}</dd>
-    <dt>Conflicten/remaps</dt><dd>{{ plan.conflicts|length }}</dd>
-    <dt>Endpoints met ontbrekende secrets</dt><dd>{{ plan.missing_secrets|length }}</dd>
+    <dt>Mode</dt><dd>{{ plan.mode }}</dd>
+    <dt>New objects</dt><dd>{{ plan.creates }}</dd>
+    <dt>To archive</dt><dd>{{ plan.archives }}</dd>
+    <dt>Conflicts/remaps</dt><dd>{{ plan.conflicts|length }}</dd>
+    <dt>Endpoints with missing secrets</dt><dd>{{ plan.missing_secrets|length }}</dd>
   </dl>
   {% if plan.missing_secrets %}
-  <p class="warning">Providercalls blijven geblokkeerd totdat secrets via endpointbeheer zijn ingevuld.</p>
+  <p class="warning">Provider calls remain blocked until secrets are added through endpoint management.</p>
   <ul>{% for value in plan.missing_secrets %}<li><code>{{ value }}</code></li>{% endfor %}</ul>
   {% endif %}
   <form method="post" action="{{ url_for('gui.configuration_import') }}" class="form-grid">
@@ -47,7 +47,7 @@
     <input type="hidden" name="confirm_replace" value="on">
     {% endif %}
     <div class="actions wide">
-      <button name="commit" class="secondary">Preview importeren</button>
+      <button name="commit" class="secondary">Import preview</button>
     </div>
   </form>
 </section>

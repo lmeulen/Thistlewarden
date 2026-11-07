@@ -39,7 +39,7 @@ class ApiError(Exception):
 class ValidationApiError(ApiError):
     code = "VALIDATION_ERROR"
     status_code = 400
-    default_message = "Invoer is ongeldig."
+    default_message = "Input is invalid."
 
     @classmethod
     def from_pydantic(cls, error: ValidationError) -> ValidationApiError:
@@ -56,7 +56,7 @@ class ValidationApiError(ApiError):
 class NotFoundError(ApiError):
     code = "NOT_FOUND"
     status_code = 404
-    default_message = "Object is niet gevonden."
+    default_message = "Object not found."
 
 
 class ConflictError(ApiError):
@@ -80,7 +80,7 @@ class RateLimitError(ApiError):
 class ProviderClientError(ApiError):
     code = "PROVIDER_CLIENT_ERROR"
     status_code = 502
-    default_message = "Provider heeft verzoek geweigerd."
+    default_message = "Provider rejected request."
 
 
 class ProviderServerError(ApiError):
@@ -104,7 +104,7 @@ class NetworkError(ApiError):
 class InvalidProviderResponseError(ApiError):
     code = "INVALID_PROVIDER_RESPONSE"
     status_code = 502
-    default_message = "Provider gaf een ongeldig antwoord."
+    default_message = "Provider returned an invalid response."
 
 
 class JudgeParseError(ApiError):

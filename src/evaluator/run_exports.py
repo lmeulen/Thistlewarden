@@ -50,7 +50,7 @@ class RunExportService:
         try:
             run = c.execute("SELECT * FROM runs WHERE id=?", (str(run_id),)).fetchone()
             if run is None:
-                raise NotFoundError("Run is niet gevonden.")
+                raise NotFoundError("Run not found.")
 
             def rows(table: str, order: str = "id") -> list[dict[str, Any]]:
                 return [
@@ -110,7 +110,7 @@ class RunExportService:
         payload = html.escape(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
         headings = "".join(f"<th>{x}</th>" for x in _COLUMNS[:-1])
         document = (
-            '<!doctype html><html lang="nl"><head><meta charset="utf-8">'
+            '<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta http-equiv="Content-Security-Policy" '
             "content=\"default-src 'none'; style-src 'unsafe-inline'\">"
             f"<title>{html.escape(run['name'])}</title>"
@@ -118,10 +118,10 @@ class RunExportService:
             "th,td{border:1px solid #999;padding:.3rem}.warning{color:#900}"
             "@media print{.warning{border:1px solid #900;padding:.5rem}}</style></head><body>"
             f"<h1>{html.escape(run['name'])}</h1>"
-            '<p class="warning">Waarschuwing: dit rapport kan gevoelige prompts en antwoorden '
-            f"bevatten.</p><p>Status: {html.escape(run['status'])}</p><table><thead><tr>"
+            '<p class="warning">Warning: this report may contain sensitive prompts and answers.'
+            f"</p><p>Status: {html.escape(run['status'])}</p><table><thead><tr>"
             f"{headings}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
-            f"<details><summary>Volledige gegevens</summary><pre>{payload}</pre></details>"
+            f"<details><summary>Complete data</summary><pre>{payload}</pre></details>"
             "</body></html>"
         )
         return document.encode()
@@ -132,9 +132,9 @@ class RunExportService:
             with transaction(c):
                 row = c.execute("SELECT status FROM runs WHERE id=?", (str(run_id),)).fetchone()
                 if row is None:
-                    raise NotFoundError("Run is niet gevonden.")
+                    raise NotFoundError("Run not found.")
                 if row[0] in {"pending", "running"}:
-                    raise ConflictError("Actieve run kan niet worden verwijderd.")
+                    raise ConflictError("Active run cannot be deleted.")
                 c.execute("DELETE FROM runs WHERE id=?", (str(run_id),))
         finally:
             c.close()

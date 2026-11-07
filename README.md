@@ -1,20 +1,20 @@
 # Thistlewarden
 
-Thistlewarden bewaakt de kwaliteit en betrouwbaarheid van taalmodellen.
+Thistlewarden monitors the quality and reliability of language models.
 
-Lokale single-user webapp voor reproduceerbare evaluatie van OpenAI-compatible taalmodellen. Nederlandse GUI; Engelse code, API-velden, logs en technische documentatie.
+Local single-user web app for reproducible evaluation of OpenAI-compatible language models. Dutch GUI; English code, API fields, logs and technical documentation.
 
 ## Status
 
-MVP-implementatie **30/30 stappen voltooid**: golden sets, zes evaluatoren, meerdere modelprofielen, streamingmetrics, exacte kosten, duurzame queue/recovery, LLM-judge, quality gates, configuratie-uitwisseling, exports, retentie, Nederlandse GUI en security-/performancehardening.
+MVP implementation **30/30 steps completed**: golden sets, six evaluators, multiple model profiles, streaming metrics, exact costs, sustainable queue/recovery, LLM judging, quality gates, configuration exchange, exports, retention, Dutch GUI and security/performance hardening.
 
-## Vereisten
+## Requirements
 
-- Python 3.12+ of Docker Compose v2
-- Lokaal filesystem voor SQLite, WAL, exports en backups
-- Exact één applicatieproces; geen netwerkfilesystem of multiprocessdeployment
+- Python 3.12+ or Docker Compose v2
+- Local file system for SQLite, WAL, exports and backups
+- Exactly one application process; no network file system or multiprocess deployment
 
-## Docker Compose — aanbevolen
+## Docker Compose — recommended
 
 ```bash
 cp .env.example .env
@@ -25,9 +25,9 @@ docker compose build
 docker compose up -d --wait
 ```
 
-PowerShell gebruikt `Copy-Item .env.example .env`; overige commando's blijven gelijk.
+PowerShell uses `Copy-Item .env.example .env`; other commands remain the same.
 
-Open <http://127.0.0.1:5000>. Compose publiceert uitsluitend host-loopback, gebruikt één non-root containerproces en bewaart database/WAL/exports in named volume `thistlewarden-data`.
+Open <http://127.0.0.1:5000>. Compose publishes host loopback only, uses one non-root container process, and stores database/WAL/exports in named volume `thistlewarden-data`.
 
 ```bash
 docker compose logs -f evaluator
@@ -35,7 +35,7 @@ docker compose down                 # data blijft bestaan
 docker compose down -v              # VERWIJDERT ALLE DATA; alleen bewust uitvoeren
 ```
 
-Bind mounts worden alleen ondersteund wanneer aantoonbaar lokaal filesystem. SMB/NFS/CIFS/WSL-netwerkpaden zijn niet ondersteund.
+Bind mounts are only supported when demonstrably local filesystem. SMB/NFS/CIFS/WSL network paths are not supported.
 
 ## Native installatie — POSIX
 
@@ -63,45 +63,45 @@ Copy-Item .env.example .env
 python -m evaluator
 ```
 
-Productieserver is Waitress met één proces en vier HTTP-threads. Workerthreads worden begrensd door `RUN_CONCURRENCY`. Flask reloader blijft uit.
+Production server is Waitress with one process and four HTTP threads. Worker threads are bounded by `RUN_CONCURRENCY`. Flask reloader remains off.
 
 ## URLs
 
 - App: <http://127.0.0.1:5000>
-- Instellingen: <http://127.0.0.1:5000/instellingen>
-- Endpoints/modellen: <http://127.0.0.1:5000/endpoints>
+- Settings: <http://127.0.0.1:5000/instellingen>
+- Endpoints/models: <http://127.0.0.1:5000/endpoints>
 - Golden sets: <http://127.0.0.1:5000/golden-sets>
 - Judges: <http://127.0.0.1:5000/judges>
-- Configuratie: <http://127.0.0.1:5000/configuratie>
+- Configuration: <http://127.0.0.1:5000/configuratie>
 - Runs: <http://127.0.0.1:5000/runs>
 - Liveness: <http://127.0.0.1:5000/health>
 - Readiness: <http://127.0.0.1:5000/ready>
 - OpenAPI 3.1: <http://127.0.0.1:5000/api/v1/openapi.json>
 
-## Configuratie
+## Configuration
 
-`.env` gebruikt bewust `python-dotenv override=True`: bestand overschrijft procesenvironment. Prioriteit: `.env > GUI/database > default`. Actieve environmentwaarden zijn read-only in GUI/API.
+`.env` deliberately uses `python-dotenv override=True`: file overwrites process environment. Priority: `.env > GUI/database > default`. Active environment values ​​are read-only in GUI/API.
 
 Belangrijkste velden:
 
-| Variabele | Default | Betekenis |
+| Variable | Default | Meaning |
 |---|---:|---|
-| `HOST` | `127.0.0.1` | Host-native alleen loopback |
-| `PORT` | `5000` | Lokale poort |
-| `DATABASE_PATH` | `./data/evaluator.db` | Lokale SQLite-database |
-| `EXPORT_PATH` | `./exports` | Exportpad |
-| `APP_PROCESS_COUNT` | `1` | Moet exact één zijn |
-| `WORKERS_ENABLED` | `true` | Production workerthreads |
-| `RUN_CONCURRENCY` | `4` | Gelijktijdige jobs |
-| `MAX_RUN_CONCURRENCY` | `10` | Bovengrens |
-| `MAX_MODEL_PROFILES_PER_RUN` | `20` | Modelgrens per run |
-| `RUN_RETENTION_DAYS` | `0` | Nul schakelt cleanup uit |
+| `HOST` | `127.0.0.1` | Host native only loopback |
+| `PORT` | `5000` | Local port |
+| `DATABASE_PATH` | `./data/evaluator.db` | Local SQLite Database |
+| `EXPORT_PATH` | `./exports` | Export path |
+| `APP_PROCESS_COUNT` | `1` | Must be exactly one |
+| `WORKERS_ENABLED` | `true` | Production worker threads |
+| `RUN_CONCURRENCY` | `4` | Simultaneous jobs |
+| `MAX_RUN_CONCURRENCY` | `10` | Upper limit |
+| `MAX_MODEL_PROFILES_PER_RUN` | `20` | Model limit per run |
+| `RUN_RETENTION_DAYS` | `0` | Zero disables cleanup |
 
-Alle limieten staan in `.env.example`. `CONTAINER_MODE=true` is alleen voor containerentrypoint en staat `HOST=0.0.0.0` intern toe; Compose bindt extern alsnog `127.0.0.1`.
+All limits are in `.env.example`. `CONTAINER_MODE=true` is for container entry point only and allows `HOST=0.0.0.0` internally; Compose still binds `127.0.0.1` externally.
 
 ## Secrets en gevoelige inhoud
 
-`ENCRYPTION_KEY` is URL-safe base64 van exact 32 random bytes. Endpointsecrets gebruiken AES-256-GCM. Gewone exports, API-responses en logs bevatten nooit secretwaarden. Prompts en antwoorden blijven volgens MVP plaintext in lokale SQLite en runexports: bescherm database, backups en downloads.
+`ENCRYPTION_KEY` is URL-safe base64 of exactly 32 random bytes. Endpoint secrets use AES-256-GCM. Regular exports, API responses and logs never contain secret values. Prompts and answers remain plaintext in local SQLite and run exports according to MVP: protect database, backups and downloads.
 
 ## Databasebeheer
 
@@ -111,7 +111,7 @@ python -m evaluator.cli backup ./backups/manual.db
 python -m evaluator.cli restore ./backups/manual.db ./data/restored.db
 ```
 
-Restore weigert bestaand doel. Normale startup houdt process-lifetime instance lock, migreert, herstelt verlopen leases, start workers en opent daarna HTTP-server. Bestaande schema-upgrade maakt eerst consistente backup.
+Restore rejects existing target. Normal startup holds process-lifetime instance lock, migrates, restores expired leases, starts workers and then opens HTTP server. Existing schema upgrade creates consistent backup first.
 
 ## Testen en release
 
@@ -122,14 +122,11 @@ python -m mypy src
 python -m pytest -q tests/unit tests/integration
 ```
 
-Offline Docker E2E gebruikt `compose.e2e.yaml`, `evaluator.mock_provider`, `examples/release-configuration.json` en `scripts/e2e_release.py`. Zie `docs/release.md`.
+Offline Docker E2E uses `compose.e2e.yaml`, `evaluator.mock_provider`, `examples/release-configuration.json` and `scripts/e2e_release.py`. See `docs/release.md`.
 
 ## Documentatie
 
-- `specification.md` — requirements
-- `implementation.md` — 30-stappenplan en status
-- `docs/configuration.md` — settings en schema's
-- `docs/operations.md` — startup, backup, restore, storage en recovery
-- `docs/release.md` — releasegate, Docker E2E en rollback
-- `SECURITY.md` — threat model en securitybeleid
-- `hardening-report.md` — stap-29-metingen en restrisico's
+- `docs/configuration.md` — settings and schedules
+- `docs/operations.md` — startup, backup, restore, storage and recovery
+- `docs/release.md` — release gate, Docker E2E and rollback
+- `SECURITY.md` — threat model and security policy

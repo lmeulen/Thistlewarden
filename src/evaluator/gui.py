@@ -1,4 +1,4 @@
-"""Dutch server-rendered management GUI for settings, endpoints, and models."""
+"""English server-rendered management GUI for settings, endpoints, and models."""
 
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ def protect_gui_mutations() -> None:
         expected = session.get("csrf_token")
         supplied = request.form.get("csrf_token", "")
         if not isinstance(expected, str) or not hmac.compare_digest(expected, supplied):
-            abort(400, description="Ongeldig CSRF-token.")
+            abort(400, description="Invalid CSRF token.")
 
 
 def _endpoint_service() -> EndpointService:
@@ -164,9 +164,7 @@ def _headers_from_form() -> list[HeaderInput]:
             continue
         parts = line.split("|", 2)
         if len(parts) != 3 or parts[1].strip().lower() not in {"openbaar", "geheim"}:
-            raise ValueError(
-                f"Headerregel {number}: gebruik Naam|openbaar|Waarde of Naam|geheim|Waarde"
-            )
+            raise ValueError(f"Header line {number}: use Name|public|Value or Name|secret|Value")
         result.append(
             HeaderInput(
                 name=parts[0].strip(), secret=parts[1].strip().lower() == "geheim", value=parts[2]
@@ -237,7 +235,7 @@ def _rubric() -> list[dict[str, Any]]:
             continue
         parts = line.split("|", 2)
         if len(parts) != 3:
-            raise ValueError("Rubricregel vereist id|gewicht|beschrijving")
+            raise ValueError("Rubric line requires id|weight|description")
         result.append(
             {"id": parts[0].strip(), "weight": parts[1].strip(), "description": parts[2].strip()}
         )
@@ -313,7 +311,7 @@ def update_setting(name: str) -> Response:
     try:
         resolved = service.set_database_value(name, request.form.get("value", ""))
         current_app.extensions["settings"] = resolved
-        flash("Instelling opgeslagen.", "success")
+        flash("Setting saved.", "success")
     except (ConfigurationError, KeyError) as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.settings_page"))
@@ -329,7 +327,7 @@ def endpoint_new() -> str | Response:
     if request.method == "POST":
         try:
             record = _endpoint_service().create(_endpoint_payload())
-            flash("Endpoint aangemaakt.", "success")
+            flash("Endpoint created.", "success")
             return redirect(url_for("gui.endpoint_edit", endpoint_id=record.id))
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
@@ -342,7 +340,7 @@ def endpoint_edit(endpoint_id: UUID) -> str | Response:
     if request.method == "POST":
         try:
             service.update(endpoint_id, _endpoint_payload())
-            flash("Endpoint opgeslagen; leeg geheim behoudt bestaande waarde.", "success")
+            flash("Endpoint saved; leaving secret blank preserves its current value.", "success")
             return redirect(url_for("gui.endpoint_edit", endpoint_id=endpoint_id))
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
@@ -353,7 +351,7 @@ def endpoint_edit(endpoint_id: UUID) -> str | Response:
 def endpoint_delete(endpoint_id: UUID) -> Response:
     try:
         _endpoint_service().delete(endpoint_id)
-        flash("Endpoint verwijderd.", "success")
+        flash("Endpoint deleted.", "success")
     except ApiError as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.endpoints_page"))
@@ -366,9 +364,9 @@ def discover(endpoint_id: UUID) -> str | Response:
         if request.method == "POST":
             selected = request.form.getlist("model_id")
             records = _discovery_service().import_selected(endpoint_id, {"model_ids": selected})
-            flash(f"{len(records)} modelprofiel(en) aangemaakt.", "success")
+            flash(f"{len(records)} model profile(s) created.", "success")
             return redirect(url_for("gui.endpoint_edit", endpoint_id=endpoint_id))
-        flash("Verbinding geslaagd; modellen opgehaald.", "success")
+        flash("Connection succeeded; models retrieved.", "success")
         return render_template(
             "discovery.html", endpoint=_endpoint_service().get(endpoint_id), candidates=candidates
         )
@@ -385,7 +383,7 @@ def model_new(endpoint_id: UUID) -> str | Response:
     if request.method == "POST":
         try:
             record = service.create(endpoint_id, _model_payload())
-            flash("Modelprofiel aangemaakt.", "success")
+            flash("Model profile created.", "success")
             return redirect(url_for("gui.model_edit", profile_id=record.id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
@@ -396,7 +394,7 @@ def model_new(endpoint_id: UUID) -> str | Response:
         try:
             source = service.get(UUID(source_id))
             if source.endpoint_id != endpoint_id:
-                raise ValidationApiError("Kopieerbron hoort niet bij dit endpoint.")
+                raise ValidationApiError("Copy source does not belong to this endpoint.")
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
             source = None
@@ -405,7 +403,7 @@ def model_new(endpoint_id: UUID) -> str | Response:
     if request.args.get("discover") == "1":
         try:
             candidates = _discovery_service().discover(endpoint_id)
-            flash(f"{len(candidates)} beschikbare modellen opgehaald.", "success")
+            flash(f"Retrieved {len(candidates)} available model(s).", "success")
         except ApiError as exc:
             flash(_error_message(exc), "error")
 
@@ -415,12 +413,12 @@ def model_new(endpoint_id: UUID) -> str | Response:
         and candidates
         and selected_model_id not in {candidate.model_id for candidate in candidates}
     ):
-        flash("Geselecteerd model staat niet in de opgehaalde modellenlijst.", "error")
+        flash("Selected model is not in the retrieved model list.", "error")
         selected_model_id = ""
     display_name = ""
     if source is not None:
         reserved = {profile.data.display_name.casefold() for profile in profiles}
-        base = f"{source.data.display_name} (kopie)"
+        base = f"{source.data.display_name} (copy)"
         display_name = base
         suffix = 2
         while display_name.casefold() in reserved:
@@ -448,7 +446,7 @@ def model_edit(profile_id: UUID) -> str | Response:
     if request.method == "POST":
         try:
             service.update(profile_id, _model_payload())
-            flash("Modelprofiel opgeslagen.", "success")
+            flash("Model profile saved.", "success")
             return redirect(url_for("gui.model_edit", profile_id=profile_id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
@@ -475,11 +473,11 @@ def model_test(profile_id: UUID) -> str:
     try:
         result = _model_tester().test(model)
         if result.successful:
-            flash("Modelaanroep geslaagd.", "success")
+            flash("Model call succeeded.", "success")
         else:
             test_error = {
                 "code": result.error_code or "MODEL_TEST_FAILED",
-                "message": "Providerstream kon niet succesvol worden verwerkt.",
+                "message": "Provider stream could not be processed successfully.",
                 "request_id": g.request_id,
             }
     except ApiError as exc:
@@ -508,11 +506,11 @@ def model_test(profile_id: UUID) -> str:
         )
         test_error = {
             "code": "INTERNAL_ERROR",
-            "message": "Onverwachte fout tijdens modeltest.",
+            "message": "Unexpected error during model test.",
             "request_id": g.request_id,
         }
     if test_error is not None:
-        flash("Modelaanroep mislukt. Bekijk het testresultaat hieronder.", "error")
+        flash("Model call failed. Review test result below.", "error")
     return render_template(
         "model_form.html",
         model=model,
@@ -537,7 +535,7 @@ def golden_sets_page() -> str:
 def golden_set_duplicate(set_id: UUID) -> Response:
     try:
         record = _golden_service().duplicate_set(set_id, request.form.get("name", ""))
-        flash("Golden set gedupliceerd.", "success")
+        flash("Golden set duplicated.", "success")
         return redirect(url_for("gui.golden_set_edit", set_id=record.id))
     except (ApiError, ValueError) as exc:
         flash(_error_message(exc), "error")
@@ -549,7 +547,7 @@ def golden_set_new() -> str | Response:
     if request.method == "POST":
         try:
             record = _golden_service().create_set(_golden_set_payload())
-            flash("Golden set aangemaakt.", "success")
+            flash("Golden set created.", "success")
             return redirect(url_for("gui.golden_set_edit", set_id=record.id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
@@ -562,7 +560,7 @@ def golden_set_edit(set_id: UUID) -> str | Response:
     if request.method == "POST":
         try:
             service.update_set(set_id, _golden_set_payload())
-            flash("Golden set opgeslagen.", "success")
+            flash("Golden set saved.", "success")
             return redirect(url_for("gui.golden_set_edit", set_id=set_id))
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
@@ -585,7 +583,7 @@ def golden_set_judge_update(set_id: UUID) -> Response:
     raw = request.form.get("judge_profile_id", "")
     try:
         _judge_service().set_golden_set_override(set_id, UUID(raw) if raw else None)
-        flash("Judgeoverride opgeslagen.", "success")
+        flash("Judge override saved.", "success")
     except (ApiError, ValueError) as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.golden_set_edit", set_id=set_id))
@@ -605,7 +603,7 @@ def quality_gates_update(set_id: UUID) -> Response:
     )
     try:
         _gate_service().set_defaults(set_id, {name: _decimal(name) for name in names})
-        flash("Quality gates opgeslagen.", "success")
+        flash("Quality gates saved.", "success")
     except (ApiError, ValueError) as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.golden_set_edit", set_id=set_id))
@@ -616,7 +614,7 @@ def golden_item_new(set_id: UUID) -> str | Response:
     if request.method == "POST":
         try:
             item = _golden_service().create_item(set_id, _item_payload())
-            flash("Testcase aangemaakt.", "success")
+            flash("Test case created.", "success")
             return redirect(url_for("gui.golden_item_edit", item_id=item.id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
@@ -631,7 +629,7 @@ def golden_item_edit(item_id: UUID) -> str | Response:
     if request.method == "POST":
         try:
             _golden_service().update_item(item_id, _item_payload())
-            flash("Testcase opgeslagen.", "success")
+            flash("Test case saved.", "success")
             return redirect(url_for("gui.golden_item_edit", item_id=item_id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
@@ -645,7 +643,7 @@ def golden_items_delete(set_id: UUID) -> Response:
     try:
         item_ids = [UUID(value) for value in request.form.getlist("item_ids")]
         deleted = _golden_service().delete_items(set_id, item_ids)
-        flash(f"{deleted} testcase(s) verwijderd.", "success")
+        flash(f"{deleted} test case(s) deleted.", "success")
     except (ApiError, ValueError) as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.golden_set_edit", set_id=set_id))
@@ -656,7 +654,7 @@ def golden_item_delete(item_id: UUID) -> Response:
     item = _golden_service().get_item(item_id)
     try:
         _golden_service().delete_item(item_id)
-        flash("Testcase verwijderd.", "success")
+        flash("Test case deleted.", "success")
     except ApiError as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.golden_set_edit", set_id=item.golden_set_id))
@@ -669,7 +667,7 @@ def golden_set_import() -> str | Response:
         upload = request.files.get("file")
         format_ = request.form.get("format", "json")
         if upload is None or format_ not in {"json", "csv"}:
-            flash("Kies een geldig JSON- of CSV-bestand.", "error")
+            flash("Choose a valid JSON or CSV file.", "error")
         else:
             try:
                 data, items, record = _golden_service().import_set(
@@ -680,9 +678,9 @@ def golden_set_import() -> str | Response:
                 )
                 if record is None:
                     preview_data = {"name": data.name, "version": data.version, "count": len(items)}
-                    flash("Bestand is geldig. Kies opnieuw om definitief te importeren.", "success")
+                    flash("File is valid. Select it again to complete import.", "success")
                 else:
-                    flash("Golden set geïmporteerd.", "success")
+                    flash("Golden set imported.", "success")
                     return redirect(url_for("gui.golden_set_edit", set_id=record.id))
             except ApiError as exc:
                 flash(_error_message(exc), "error")
@@ -711,7 +709,7 @@ def judge_new() -> str | Response:
     if request.method == "POST":
         try:
             record = _judge_service().create(_judge_payload())
-            flash("Judgeprofiel aangemaakt.", "success")
+            flash("Judge profile created.", "success")
             return redirect(url_for("gui.judge_edit", profile_id=record.id))
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
@@ -725,7 +723,7 @@ def judge_edit(profile_id: UUID) -> str | Response:
     if request.method == "POST":
         try:
             service.update(profile_id, _judge_payload())
-            flash("Judgeprofiel opgeslagen.", "success")
+            flash("Judge profile saved.", "success")
             return redirect(url_for("gui.judge_edit", profile_id=profile_id))
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
@@ -766,7 +764,7 @@ def run_new() -> str | Response:
                     name: value for name in gate_names if (value := _optional(name)) is not None
                 }
             run_id = _run_queue().create_run(payload)
-            flash("Run aangemaakt en in wachtrij geplaatst.", "success")
+            flash("Run created and queued.", "success")
             return redirect(url_for("gui.run_detail", run_id=run_id))
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
@@ -884,11 +882,11 @@ def run_result_detail(run_id: UUID, result_id: UUID) -> str:
 @gui.post("/runs/<uuid:run_id>/annuleren")
 def run_cancel(run_id: UUID) -> Response:
     if "confirm" not in request.form:
-        flash("Bevestig annulering expliciet.", "error")
+        flash("Explicitly confirm cancellation.", "error")
     else:
         try:
             _run_queue().cancel(run_id)
-            flash("Run geannuleerd.", "success")
+            flash("Run cancelled.", "success")
         except ApiError as exc:
             flash(_error_message(exc), "error")
     return redirect(url_for("gui.run_detail", run_id=run_id))
@@ -898,7 +896,7 @@ def run_cancel(run_id: UUID) -> Response:
 def run_rerun_failures(run_id: UUID) -> Response:
     try:
         new_id = _run_queue().rerun_failures(run_id, request.form.get("name", ""))
-        flash("Nieuwe run voor mislukte jobs aangemaakt.", "success")
+        flash("New run created for failed jobs.", "success")
         return redirect(url_for("gui.run_detail", run_id=new_id))
     except ApiError as exc:
         flash(_error_message(exc), "error")
@@ -908,11 +906,11 @@ def run_rerun_failures(run_id: UUID) -> Response:
 @gui.post("/runs/<uuid:run_id>/verwijderen")
 def run_delete(run_id: UUID) -> Response:
     if "confirm" not in request.form:
-        flash("Bevestig definitieve verwijdering expliciet.", "error")
+        flash("Explicitly confirm permanent deletion.", "error")
         return redirect(url_for("gui.run_detail", run_id=run_id))
     try:
         _run_exports().delete(run_id)
-        flash("Run definitief verwijderd.", "success")
+        flash("Run permanently deleted.", "success")
         return redirect(url_for("gui.runs_page"))
     except ApiError as exc:
         flash(_error_message(exc), "error")
@@ -926,7 +924,7 @@ def run_export(run_id: UUID) -> str | Response:
         return render_template("run_export.html", run=run)
     format_ = request.form.get("format", "json")
     if format_ not in {"json", "csv", "html"} or "confirm_sensitive" not in request.form:
-        flash("Kies een formaat en bevestig de waarschuwing.", "error")
+        flash("Choose a format and confirm the warning.", "error")
         return render_template("run_export.html", run=run)
     service = _run_exports()
     exporters = {
@@ -966,19 +964,19 @@ def configuration_import() -> str | Response:
     preview_payload = request.form.get("preview_payload")
     mode = request.form.get("mode", "merge")
     if (upload is None and not preview_payload) or mode not in {"merge", "replace"}:
-        flash("Kies een configuratiebestand en importmodus.", "error")
+        flash("Choose a configuration file and import mode.", "error")
         return render_template("configuration.html", plan=None, preview_payload=None)
     try:
         payload = json.loads(preview_payload) if preview_payload else json.load(cast(Any, upload))
         commit = "commit" in request.form
         if commit and mode == "replace" and "confirm_replace" not in request.form:
-            raise ValueError("Bevestig expliciet dat bestaande configuratie wordt gearchiveerd.")
+            raise ValueError("Explicitly confirm that existing configuration will be archived.")
         plan: ImportPlan = _config_service().import_bundle(
             payload, cast(Literal["merge", "replace"], mode), preview=not commit
         )
         if commit:
             flash(
-                "Configuratie atomisch geïmporteerd. Vul ontbrekende secrets via endpoints in.",
+                "Configuration imported atomically. Add missing secrets through endpoints.",
                 "success",
             )
             return redirect(url_for("gui.configuration_page"))
@@ -996,7 +994,7 @@ def configuration_import() -> str | Response:
 def model_delete(profile_id: UUID) -> Response:
     try:
         _model_service().delete(profile_id)
-        flash("Modelprofiel verwijderd.", "success")
+        flash("Model profile deleted.", "success")
     except ApiError as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.endpoints_page"))

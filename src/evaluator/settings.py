@@ -87,6 +87,7 @@ class ApplicationSettings(BaseModel):
     storage_backend: str = "local"
     workers_enabled: bool = True
     reloader_enabled: bool = False
+    container_mode: bool = False
     default_request_timeout_seconds: int = Field(default=60, gt=0)
     default_max_retries: int = Field(default=2, ge=0)
     run_concurrency: int = Field(default=4, gt=0)
@@ -105,8 +106,11 @@ class ApplicationSettings(BaseModel):
 
     @model_validator(mode="after")
     def validate_combinations(self) -> ApplicationSettings:
-        if self.host not in {"127.0.0.1", "::1", "localhost"}:
-            raise ValueError("host must be a loopback address for the local-only MVP")
+        allowed_hosts = {"127.0.0.1", "::1", "localhost"}
+        if self.container_mode:
+            allowed_hosts.add("0.0.0.0")
+        if self.host not in allowed_hosts:
+            raise ValueError("host must be loopback, or 0.0.0.0 only in container mode")
         if self.log_level.upper() not in SUPPORTED_LOG_LEVELS:
             raise ValueError(f"log_level must be one of {sorted(SUPPORTED_LOG_LEVELS)}")
         if self.storage_backend.lower() != "local":
@@ -166,6 +170,7 @@ SETTINGS_REGISTRY: dict[str, SettingDefinition] = {
         SettingDefinition("storage_backend", "STORAGE_BACKEND", str, "local"),
         SettingDefinition("workers_enabled", "WORKERS_ENABLED", bool, True),
         SettingDefinition("reloader_enabled", "RELOADER_ENABLED", bool, False),
+        SettingDefinition("container_mode", "CONTAINER_MODE", bool, False),
         SettingDefinition(
             "default_request_timeout_seconds", "DEFAULT_REQUEST_TIMEOUT_SECONDS", int, 60, 1
         ),

@@ -422,18 +422,18 @@ class ModelProfileService:
 
     def list_for_endpoint(self, endpoint_id: UUID) -> list[ModelProfileRecord]:
         if self._endpoints.get(endpoint_id) is None:
-            raise NotFoundError("Endpoint is niet gevonden.")
+            raise NotFoundError("Endpoint not found.")
         return self._repository.list_for_endpoint(endpoint_id)
 
     def get(self, profile_id: UUID) -> ModelProfileRecord:
         record = self._repository.get(profile_id)
         if record is None:
-            raise NotFoundError("Modelprofiel is niet gevonden.")
+            raise NotFoundError("Model profile not found.")
         return record
 
     def create(self, endpoint_id: UUID, payload: Any) -> ModelProfileRecord:
         if self._endpoints.get(endpoint_id) is None:
-            raise NotFoundError("Endpoint is niet gevonden.")
+            raise NotFoundError("Endpoint not found.")
         data = self._input(payload)
         now = utc_now()
         record = ModelProfileRecord(uuid4(), endpoint_id, data, now, now)
@@ -465,7 +465,7 @@ class ModelProfileService:
         self.get(profile_id)
         try:
             if not self._repository.delete(profile_id):
-                raise NotFoundError("Modelprofiel is niet gevonden.")
+                raise NotFoundError("Model profile not found.")
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Modelprofiel heeft historische referenties.") from exc
 

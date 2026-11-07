@@ -39,7 +39,7 @@ def validate_destination(
 ) -> None:
     parsed = urlsplit(url)
     if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
-        raise ProviderClientError("Providerbestemming is ongeldig.")
+        raise ProviderClientError("Provider destination is invalid.")
     if parsed.username is not None or parsed.password is not None:
         raise ProviderClientError("Providerbestemming bevat verboden userinfo.")
     try:

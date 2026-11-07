@@ -42,7 +42,7 @@ class QualityGates(BaseModel):
 
 
 _GATE_LABELS = {
-    "min_weighted_score": "Gewogen score",
+    "min_weighted_score": "Weighted score",
     "min_pass_rate": "Pass rate",
     "max_error_rate": "Error rate",
     "max_mean_latency_ms": "Gemiddelde latency",
@@ -78,7 +78,7 @@ class QualityGateService:
         try:
             gates = QualityGates.model_validate(payload)
         except Exception as exc:
-            raise ValidationApiError("Quality gates zijn ongeldig.") from exc
+            raise ValidationApiError("Quality gates are invalid.") from exc
         connection = self._factory.connect()
         try:
             with transaction(connection):
@@ -87,7 +87,7 @@ class QualityGateService:
                     (gates.model_dump_json(exclude_none=True), str(set_id)),
                 )
                 if cursor.rowcount != 1:
-                    raise NotFoundError("Golden set is niet gevonden.")
+                    raise NotFoundError("Golden set not found.")
         finally:
             connection.close()
         return gates
@@ -101,7 +101,7 @@ class QualityGateService:
         finally:
             connection.close()
         if row is None:
-            raise NotFoundError("Golden set is niet gevonden.")
+            raise NotFoundError("Golden set not found.")
         return QualityGates.model_validate_json(row[0]) if row[0] else QualityGates()
 
     def evaluate_run(self, run_id: UUID) -> str:

@@ -394,7 +394,7 @@ class EndpointService:
     def get(self, endpoint_id: UUID) -> EndpointRecord:
         record = self._repository.get(endpoint_id)
         if record is None:
-            raise NotFoundError("Endpoint is niet gevonden.")
+            raise NotFoundError("Endpoint not found.")
         return record
 
     def _secret_headers(
@@ -477,7 +477,7 @@ class EndpointService:
                     if header.secret and header.value == "":
                         if old_id is None:
                             raise ValidationApiError(
-                                f"Geheime header {header.name} vereist een waarde."
+                                f"Secret header {header.name} requires a value."
                             )
                         headers.append((header, old_id))
                         reused.add(old_id)
@@ -510,7 +510,7 @@ class EndpointService:
         header_secret_ids = list(self._repository.header_secret_ids(endpoint_id).values())
         try:
             if not self._repository.delete(endpoint_id):
-                raise NotFoundError("Endpoint is niet gevonden.")
+                raise NotFoundError("Endpoint not found.")
         except sqlite3.IntegrityError as exc:
             raise ConflictError(
                 "Endpoint heeft historische referenties en kan niet worden verwijderd."

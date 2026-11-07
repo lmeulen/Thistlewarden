@@ -184,7 +184,7 @@ class ConfigurationExchangeService:
                 )
             return bundle
         except (ValidationError, ValueError, TypeError) as exc:
-            raise ValidationApiError("Configuratiebestand is ongeldig.") from exc
+            raise ValidationApiError("Configuration file is invalid.") from exc
 
     def plan(self, bundle: ConfigurationBundle, mode: Literal["merge", "replace"]) -> ImportPlan:
         c = self._factory.connect()
@@ -270,7 +270,7 @@ class ConfigurationExchangeService:
                     )
                 self._write(c, bundle, plan.uuid_map, mode, now)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Configuratie-import conflicteert met bestaande namen.") from exc
+            raise ConflictError("Configuration import conflicts with existing names.") from exc
         finally:
             c.close()
         return plan

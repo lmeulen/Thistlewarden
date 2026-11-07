@@ -59,13 +59,13 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
     client = app.test_client()
     for path, text in (
         ("/golden-sets", "Golden sets"),
-        ("/judges", "Judgeprofielen"),
-        ("/configuratie", "Configuratie-uitwisseling"),
+        ("/judges", "Judge profiles"),
+        ("/configuratie", "Configuration exchange"),
     ):
         response = client.get(path)
         assert response.status_code == 200
         assert text in response.get_data(as_text=True)
-    assert "Configuratie" in client.get("/").get_data(as_text=True)
+    assert "Configuration" in client.get("/").get_data(as_text=True)
 
 
 @pytest.mark.parametrize(
@@ -100,7 +100,7 @@ def test_gui_saves_every_evaluator_method(
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert "Testcase aangemaakt" in response.get_data(as_text=True)
+    assert "Test case created" in response.get_data(as_text=True)
 
 
 def test_duplicate_set_and_quick_delete_item(app) -> None:
@@ -119,7 +119,7 @@ def test_duplicate_set_and_quick_delete_item(app) -> None:
     app.extensions["quality_gate_service"].set_defaults(UUID(set_id), {"min_pass_rate": "0.9"})
 
     listing = client.get("/golden-sets").get_data(as_text=True)
-    assert "Dupliceer" in listing and "duplicate-set-form" in listing
+    assert "Duplicate" in listing and "duplicate-set-form" in listing
     token = _csrf(client, "/golden-sets")
     response = client.post(
         f"/golden-sets/{set_id}/dupliceren",
@@ -150,16 +150,14 @@ def test_duplicate_set_and_quick_delete_item(app) -> None:
     page = client.get(f"/golden-sets/{set_id}").get_data(as_text=True)
     assert "inline-delete-form" in page and ">Delete</button>" in page
     assert page.count('name="item_ids"') == 2
-    assert "Selectie verwijderen" in page
+    assert "Delete selection" in page
     token = _csrf(client, f"/golden-sets/{set_id}")
     deleted = client.post(
         f"/golden-sets/{set_id}/items/verwijderen",
         data={"csrf_token": token, "item_ids": [str(original.id), str(second.id)]},
         follow_redirects=True,
     )
-    assert deleted.status_code == 200 and "2 testcase(s) verwijderd" in deleted.get_data(
-        as_text=True
-    )
+    assert deleted.status_code == 200 and "2 test case(s) deleted" in deleted.get_data(as_text=True)
     assert (
         service.list_items(
             UUID(set_id), page=1, per_page=100, category=None, tag=None, enabled=None
@@ -177,9 +175,7 @@ def test_quality_gates_and_golden_json_import_preview(app) -> None:
         data={"csrf_token": token, "min_pass_rate": "0.9", "max_total_cost": "2.5"},
         follow_redirects=True,
     )
-    assert response.status_code == 200 and "Quality gates opgeslagen" in response.get_data(
-        as_text=True
-    )
+    assert response.status_code == 200 and "Quality gates saved" in response.get_data(as_text=True)
 
     exported = client.get(f"/golden-sets/{set_id}/download/json")
     token = _csrf(client, "/golden-sets/import")
@@ -193,7 +189,7 @@ def test_quality_gates_and_golden_json_import_preview(app) -> None:
         content_type="multipart/form-data",
     )
     assert preview.status_code == 200
-    assert "Geldige preview" in preview.get_data(as_text=True)
+    assert "Valid preview" in preview.get_data(as_text=True)
 
 
 def test_judge_form_and_secret_free_configuration_preview(app) -> None:
@@ -227,7 +223,7 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
         },
         follow_redirects=True,
     )
-    assert judge.status_code == 200 and "Judgeprofiel aangemaakt" in judge.get_data(as_text=True)
+    assert judge.status_code == 200 and "Judge profile created" in judge.get_data(as_text=True)
 
     exported = client.get("/configuratie/export")
     assert exported.status_code == 200
@@ -245,10 +241,10 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
         content_type="multipart/form-data",
     )
     text = preview.get_data(as_text=True)
-    assert preview.status_code == 200 and "Importpreview" in text
-    assert "Endpoints met ontbrekende secrets" in text
+    assert preview.status_code == 200 and "Import preview" in text
+    assert "Endpoints with missing secrets" in text
     assert 'name="preview_payload"' in text
-    assert "Preview importeren" in text
+    assert "Import preview" in text
 
     token = _csrf(client, "/configuratie")
     privacy_browser_preview = client.post(
@@ -262,7 +258,7 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
         headers={"Origin": "null"},
     )
     assert privacy_browser_preview.status_code == 200
-    assert "Importpreview" in privacy_browser_preview.get_data(as_text=True)
+    assert "Import preview" in privacy_browser_preview.get_data(as_text=True)
 
 
 def test_configuration_preview_can_be_committed_without_reselecting_file(app) -> None:
@@ -301,4 +297,4 @@ def test_configuration_preview_can_be_committed_without_reselecting_file(app) ->
         follow_redirects=True,
     )
     assert committed.status_code == 200
-    assert "Configuratie atomisch geïmporteerd" in committed.get_data(as_text=True)
+    assert "Configuration imported atomically" in committed.get_data(as_text=True)

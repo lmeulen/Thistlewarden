@@ -58,16 +58,16 @@ def _endpoint_form(token: str, **changes: object) -> dict[str, object]:
     return data
 
 
-def test_gui_renders_dutch_navigation_and_masks_settings_secrets(app) -> None:
+def test_gui_renders_english_navigation_and_masks_settings_secrets(app) -> None:
     client = app.test_client()
     page = client.get("/instellingen")
     text = page.get_data(as_text=True)
     assert page.status_code == 200
-    assert "Endpoints en modellen" in text
-    assert "Omgevingswaarden hebben voorrang" in text
+    assert "Endpoints and models" in text
+    assert "Environment values take precedence" in text
     assert "gui-fixture-secret" not in text
     assert "ENCRYPTION_KEY" in text and "••••••••" in text
-    assert "Alleen-lezen" in text
+    assert "Read-only" in text
 
 
 def test_gui_csrf_blocks_mutation(app) -> None:
@@ -117,10 +117,10 @@ def test_new_model_can_copy_profile_and_select_discovered_model(app, monkeypatch
     text = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Bestaand modelprofiel" in text
-    assert "Beschikbaar model" in text
+    assert "Existing model profile" in text
+    assert "Available model" in text
     assert 'name="model_id" required value="new-model"' in text
-    assert 'name="display_name" required value="Productieprofiel (kopie)"' in text
+    assert 'name="display_name" required value="Productieprofiel (copy)"' in text
     assert 'name="temperature" value="0.4"' in text
     assert 'name="max_tokens" value="321"' in text
     assert '{"seed": 7}' in text
@@ -142,7 +142,7 @@ def test_new_model_rejects_copy_source_from_other_endpoint(app) -> None:
     response = app.test_client().get(f"/endpoints/{second.id}/modellen/nieuw?copy_from={source.id}")
     text = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert "Kopieerbron hoort niet bij dit endpoint" in text
+    assert "Copy source does not belong to this endpoint" in text
     assert 'name="display_name" required value=""' in text
 
 
@@ -179,14 +179,14 @@ def test_saved_model_can_be_tested_with_result_metrics(app, monkeypatch) -> None
     client = app.test_client()
     path = f"/modellen/{profile.id}"
     page = client.get(path).get_data(as_text=True)
-    assert "Model testen" in page and "Sla wijzigingen eerst op" in page
+    assert "Test model" in page and "Save changes first" in page
     assert client.post(f"{path}/testen").status_code == 400
 
     response = client.post(f"{path}/testen", data={"csrf_token": _csrf(client, path)})
     text = response.get_data(as_text=True)
     assert response.status_code == 200
     assert tested == [profile]
-    assert "Modelaanroep geslaagd" in text
+    assert "Model call succeeded" in text
     assert "MODEL_TEST_OK" in text
     assert "125.50 ms" in text and "25.25 ms" in text
     assert "12 / 3" in text and "stop" in text
@@ -219,10 +219,10 @@ def test_failed_model_test_shows_safe_error(app, monkeypatch) -> None:
     response = client.post(f"{path}/testen", data={"csrf_token": _csrf(client, path)})
     text = response.get_data(as_text=True)
     assert response.status_code == 200
-    assert "Modelaanroep mislukt. Bekijk het testresultaat hieronder" in text
-    assert "Testresultaat: mislukt" in text
-    assert "Foutcode" in text and "invalid_stream" in text
-    assert "Request-ID" in text
+    assert "Model call failed. Review test result below" in text
+    assert "Test result: failed" in text
+    assert "Error code" in text and "invalid_stream" in text
+    assert "Application request ID" in text
     assert f'action="{path}"' in text
 
     save_response = client.post(
@@ -240,7 +240,7 @@ def test_failed_model_test_shows_safe_error(app, monkeypatch) -> None:
         follow_redirects=True,
     )
     assert save_response.status_code == 200
-    assert "Modelprofiel opgeslagen" in save_response.get_data(as_text=True)
+    assert "Model profile saved" in save_response.get_data(as_text=True)
     updated = app.extensions["model_profile_service"].get(profile.id)
     assert updated.data.display_name == "Aangepast na mislukte test"
     assert updated.data.max_tokens_field_path == "max_completion_tokens"
@@ -266,7 +266,7 @@ def test_model_test_provider_exception_is_visible(app, monkeypatch) -> None:
     text = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "PROVIDER_CLIENT_ERROR" in text
-    assert "Provider heeft verzoek geweigerd" in text
+    assert "Provider rejected request" in text
     assert response.headers["X-Request-ID"] in text
 
 
@@ -289,7 +289,7 @@ def test_unexpected_model_test_exception_is_visible_without_detail(app, monkeypa
     text = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "INTERNAL_ERROR" in text
-    assert "Onverwachte fout tijdens modeltest" in text
+    assert "Unexpected error during model test" in text
     assert sensitive_detail not in text
 
 
@@ -299,7 +299,7 @@ def test_gui_creates_endpoint_preserves_blank_secrets_and_creates_model(app) -> 
     created = client.post("/endpoints/nieuw", data=_endpoint_form(token), follow_redirects=True)
     text = created.get_data(as_text=True)
     assert created.status_code == 200
-    assert "Endpoint aangemaakt" in text
+    assert "Endpoint created" in text
     assert "gui-fixture-secret" not in text
     assert "header-secret" not in text
 
@@ -359,5 +359,5 @@ def test_gui_creates_endpoint_preserves_blank_secrets_and_creates_model(app) -> 
         follow_redirects=True,
     )
     assert model.status_code == 200
-    assert "Modelprofiel aangemaakt" in model.get_data(as_text=True)
+    assert "Model profile created" in model.get_data(as_text=True)
     assert "Fixture model" in client.get("/endpoints").get_data(as_text=True)

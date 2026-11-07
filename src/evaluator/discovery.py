@@ -118,7 +118,7 @@ class ModelDiscoveryClient:
         for chunk in response.iter_bytes():
             content.extend(chunk)
             if len(content) > self._limit:
-                raise InvalidProviderResponseError("Modelresponse overschrijdt maximale grootte.")
+                raise InvalidProviderResponseError("Model response exceeds maximum size.")
         return bytes(content)
 
 
@@ -193,7 +193,7 @@ class ModelDiscoveryService:
         if endpoint is None:
             from evaluator.api.errors import NotFoundError
 
-            raise NotFoundError("Endpoint is niet gevonden.")
+            raise NotFoundError("Endpoint not found.")
         return endpoint
 
 

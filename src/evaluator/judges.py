@@ -343,7 +343,7 @@ class JudgeProfileService:
     def get(self, profile_id: UUID) -> JudgeProfileRecord:
         value = self._repo.get(profile_id)
         if value is None:
-            raise NotFoundError("Judgeprofiel is niet gevonden.")
+            raise NotFoundError("Judge profile not found.")
         return value
 
     def create(self, payload: Any) -> JudgeProfileRecord:
@@ -368,7 +368,7 @@ class JudgeProfileService:
     def delete(self, profile_id: UUID) -> None:
         try:
             if not self._repo.delete(profile_id):
-                raise NotFoundError("Judgeprofiel is niet gevonden.")
+                raise NotFoundError("Judge profile not found.")
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Judgeprofiel is nog in gebruik.") from exc
 
@@ -388,7 +388,7 @@ class JudgeProfileService:
             if not profile.data.active:
                 raise ValidationApiError("Judgeprofiel is niet actief.")
         if not self._repo.set_golden_set_override(set_id, profile_id):
-            raise NotFoundError("Golden set is niet gevonden.")
+            raise NotFoundError("Golden set not found.")
 
     def evaluate_with_retry(
         self, call: Callable[[], str], rubric: list[RubricCriterion], threshold: Decimal

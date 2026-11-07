@@ -61,9 +61,9 @@ class RunQueue:
         except ValidationError as exc:
             raise ValidationApiError.from_pydantic(exc) from exc
         if len(set(data.model_profile_ids)) != len(data.model_profile_ids):
-            raise ValidationApiError("Modelprofielen moeten uniek zijn.")
+            raise ValidationApiError("Model profiles must be unique.")
         if len(data.model_profile_ids) > self._max_profiles:
-            raise ValidationApiError("Te veel modelprofielen geselecteerd.")
+            raise ValidationApiError("Too many model profiles selected.")
         run_id, now = uuid4(), self._clock.now_utc()
         connection = self._factory.connect()
         try:
@@ -72,14 +72,14 @@ class RunQueue:
                     "SELECT * FROM golden_sets WHERE id=? AND active=1", (str(data.golden_set_id),)
                 ).fetchone()
                 if set_row is None:
-                    raise ValidationApiError("Actieve golden set is niet gevonden.")
+                    raise ValidationApiError("Active golden set not found.")
                 cases = connection.execute(
                     "SELECT * FROM golden_set_items WHERE golden_set_id=? "
                     "AND enabled=1 ORDER BY sort_order",
                     (str(data.golden_set_id),),
                 ).fetchall()
                 if not cases:
-                    raise ValidationApiError("Run vereist minimaal één actieve case.")
+                    raise ValidationApiError("Run requires at least one active case.")
                 models = []
                 for profile_id in data.model_profile_ids:
                     row = connection.execute(
@@ -90,7 +90,7 @@ class RunQueue:
                         (str(profile_id),),
                     ).fetchone()
                     if row is None:
-                        raise ValidationApiError("Actief modelprofiel is niet gevonden.")
+                        raise ValidationApiError("Active model profile not found.")
                     models.append(row)
                 judge_snapshot = self._judge_snapshot(
                     connection, data.judge_profile_id or set_row["judge_profile_id"]
@@ -105,7 +105,7 @@ class RunQueue:
                         (judge_snapshot[1]["model_profile_id"],),
                     ).fetchone()
                     if judge_model is None:
-                        raise ValidationApiError("Actief judge-modelprofiel is niet gevonden.")
+                        raise ValidationApiError("Active judge model profile not found.")
                     models.append(judge_model)
                 gates = (
                     data.quality_gates.model_dump(mode="json", exclude_none=True)
@@ -457,7 +457,7 @@ class RunQueue:
                     (now, str(run_id)),
                 )
                 if cursor.rowcount != 1:
-                    raise ValidationApiError("Run kan niet worden geannuleerd.")
+                    raise ValidationApiError("Run cannot be cancelled.")
                 connection.execute(
                     "UPDATE run_jobs SET status='cancelled',updated_at=? WHERE run_id=? "
                     "AND status='pending'",
@@ -474,7 +474,7 @@ class RunQueue:
                     "SELECT status FROM runs WHERE id=?", (str(run_id),)
                 ).fetchone()
                 if run is None:
-                    raise NotFoundError("Run is niet gevonden.")
+                    raise NotFoundError("Run not found.")
                 statuses = [
                     row[0]
                     for row in connection.execute(
@@ -519,7 +519,7 @@ class RunQueue:
         finally:
             connection.close()
         if run is None or not rows:
-            raise ValidationApiError("Geen mislukte jobs om opnieuw uit te voeren.")
+            raise ValidationApiError("No failed jobs to retry.")
         return self.create_run(
             {
                 "name": name,
@@ -540,7 +540,7 @@ class RunQueue:
         finally:
             connection.close()
         if row is None:
-            raise NotFoundError("Judge-modelsnapshot is niet gevonden.")
+            raise NotFoundError("Judge model snapshot not found.")
         value = json.loads(row[0])
         if not isinstance(value, dict):
             raise ValueError("model snapshot must be a JSON object")
@@ -555,7 +555,7 @@ class RunQueue:
         finally:
             connection.close()
         if row is None:
-            raise NotFoundError("Run is niet gevonden.")
+            raise NotFoundError("Run not found.")
         value = None if row[0] is None else json.loads(row[0])
         if value is not None and not isinstance(value, dict):
             raise ValueError("judge snapshot must be a JSON object")
@@ -571,7 +571,7 @@ class RunQueue:
         finally:
             connection.close()
         if row is None:
-            raise NotFoundError("Snapshot is niet gevonden.")
+            raise NotFoundError("Snapshot not found.")
         value = json.loads(row[0])
         if not isinstance(value, dict):
             raise ValueError("snapshot must be a JSON object")
@@ -607,7 +607,7 @@ class RunQueue:
         try:
             row = connection.execute("SELECT * FROM runs WHERE id=?", (str(run_id),)).fetchone()
             if row is None:
-                raise NotFoundError("Run is niet gevonden.")
+                raise NotFoundError("Run not found.")
             counts = connection.execute(
                 "SELECT status,COUNT(*) count FROM run_jobs WHERE run_id=? GROUP BY status",
                 (str(run_id),),

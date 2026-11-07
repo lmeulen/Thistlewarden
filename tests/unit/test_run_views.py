@@ -46,11 +46,11 @@ def test_result_query_rejects_unknown_values(values: dict[str, str]) -> None:
 
 
 def test_unknown_exact_money_and_badges() -> None:
-    assert display_metric(None) == "Onbekend"
+    assert display_metric(None) == "Unknown"
     assert display_metric(Decimal("1.234"), places=2, suffix=" ms") == "1.23 ms"
     assert display_money("0.1") == "0.10000000"
-    assert display_money(None) == "Onbekend"
+    assert display_money(None) == "Unknown"
     assert chart_percent("0.755") == 76
     assert chart_percent("2") == 100
     assert chart_percent(None) == 0
-    assert status_label("completed_with_errors") == "Voltooid met fouten"
+    assert status_label("completed_with_errors") == "Completed with errors"

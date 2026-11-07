@@ -49,14 +49,14 @@ def install_web_security(app: Flask, settings: BootstrapSettings, max_upload_byt
     @app.before_request
     def enforce_local_browser_boundary() -> None:
         if not is_allowed_host(request.host):
-            abort(400, description="Ongeldige Host-header.")
+            abort(400, description="Invalid Host header.")
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             origin = request.headers.get("Origin")
             # Some privacy tools serialize a same-origin form submission as Origin: null.
             # GUI mutations still require an unguessable session-bound CSRF token below.
             null_origin_gui_form = origin == "null" and request.blueprint == "gui"
             if origin is not None and not null_origin_gui_form and not is_allowed_origin(origin):
-                abort(403, description="Cross-origin mutatie is geweigerd.")
+                abort(403, description="Cross-origin mutation was rejected.")
         g.csp_nonce = secrets.token_urlsafe(18)
 
     @app.after_request

@@ -174,9 +174,7 @@ def register_api_handlers(app: Flask, *, secrets: Iterable[str] = ()) -> None:
         if not _is_api_request():
             return error
         code = "NOT_FOUND" if error.code == 404 else "HTTP_ERROR"
-        message = (
-            "API-route is niet gevonden." if error.code == 404 else "HTTP-verzoek is ongeldig."
-        )
+        message = "API route not found." if error.code == 404 else "HTTP request is invalid."
         api_error = HttpApiError(code, error.code or 500, message)
         log_event(
             _LOG,
