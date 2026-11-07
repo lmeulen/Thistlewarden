@@ -159,6 +159,8 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     assert 'class="scatter-chart"' in model_table
     assert 'class="scatter-point"' in model_table
     assert "Model M: cost 0.000, score 1.00" in model_table
+    assert "weighted score from 0.90 to 1.00 on Y-axis" in model_table
+    assert ">0.90</text>" in model_table
     assert "0.000<br><small>1/1 known</small>" in text
     assert (
         text.index("Run overview")
