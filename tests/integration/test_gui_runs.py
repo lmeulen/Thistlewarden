@@ -139,7 +139,15 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     )
     assert "<th>Cost</th><th>Gates</th>" in text
     run_overview = text[text.index("Run overview") : text.index("Model comparison")]
-    assert "<span>Total cost</span><strong>0.000</strong><small>1/1 known</small>" in run_overview
+    assert run_overview.count('<article class="kpi">') == 5
+    assert "<span>Weighted Score</span><strong>1.00</strong>" in run_overview
+    assert "<span>Avg Latency</span><strong>100 ms</strong>" in run_overview
+    assert "<span>P95 TTFT</span><strong>21 ms</strong>" in run_overview
+    assert "<span>Total Costs</span><strong>0.000</strong><small>1/1 known</small>" in run_overview
+    assert "<span>Results</span><strong>1</strong>" in run_overview
+    assert "<span>Pass rate</span>" not in run_overview
+    assert "<span>Error rate</span>" not in run_overview
+    assert "<span>Mean TPS</span>" not in run_overview
     model_table = text[text.index("Model comparison") : text.index("Model performance")]
     assert "<th>Pass rate</th>" not in model_table
     assert "<th>Error rate</th>" not in model_table
