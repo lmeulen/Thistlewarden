@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.10"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip install -e .
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
+      - run: python -m mypy src
+      - run: python -m pytest -q tests/unit tests/integration
+
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release environment
+        shell: bash
+        run: |
+          cp .env.example .env
+          python - <<'PY'
+          from pathlib import Path
+          import base64, secrets
+          path = Path('.env')
+          text = path.read_text()
+          text = text.replace('replace-with-base64-encoded-32-random-bytes', base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())
+          text = text.replace('replace-with-a-long-random-value', secrets.token_urlsafe(48))
+          path.write_text(text)
+          PY
+      - run: docker compose -f compose.yaml -f compose.e2e.yaml config --quiet
+      - run: docker compose -f compose.yaml -f compose.e2e.yaml build --pull
+      - run: docker compose -f compose.yaml -f compose.e2e.yaml up -d --wait
+      - run: python scripts/e2e_release.py
+      - name: Preserve runtime logs
+        if: always()
+        run: docker compose -f compose.yaml -f compose.e2e.yaml logs --no-color > compose.log
+      - name: Scan logs for fixture secret
+        if: always()
+        run: '! grep -F "release-fixture-secret" compose.log'
+      - name: Shutdown
+        if: always()
+        run: docker compose -f compose.yaml -f compose.e2e.yaml down -v

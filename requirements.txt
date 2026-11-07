@@ -1,0 +1,19 @@
+# Runtime dependencies. Keep synchronized with pyproject.toml.
+cryptography==46.0.3
+Flask==3.1.2
+httpx==0.28.1
+jsonschema==4.25.1
+pydantic==2.12.4
+python-dotenv==1.2.1
+regex==2026.9.29
+simplejson==3.20.2
+waitress==3.0.2
+
+# Development and verification dependencies.
+mypy==1.18.2
+pytest==8.4.2
+ruff==0.14.5
+types-jsonschema==4.25.1.20251009
+types-regex==2026.9.29.20261030
+types-simplejson==3.20.0.20250822
+types-waitress==3.0.1.20260724

@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block content %}
+<h1>Thistlewarden</h1><p>Lokale evaluatie van taalmodellen.</p>
+<div class="cards"><section><h2>Evalueren</h2><p>Start runs en vergelijk scores, snelheid, kosten en quality gates.</p><a class="button" href="{{ url_for('gui.runs_page') }}">Naar runs</a></section><section><h2>Configureren</h2><p>Beheer providerendpoints, headers, modellen, inferenceparameters en prijzen.</p><a class="button" href="{{ url_for('gui.endpoints_page') }}">Naar endpoints</a></section><section><h2>Operationeel</h2><p>Bekijk actieve waarden en herkomst van instellingen.</p><a class="button" href="{{ url_for('gui.settings_page') }}">Naar instellingen</a></section></div>
+{% endblock %}

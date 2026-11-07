@@ -1,0 +1,37 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local configuration and secrets
+.env
+
+# Runtime data
+data/
+exports/
+*.db
+*.db-shm
+*.db-wal
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Project-specific files
+reviews/
+scripts/
+testsets/
+issues.txt
+issues.md
+
+# Optional per-suite local credentials; fixtures and generators remain versionable.
+testsets/**/secrets.env

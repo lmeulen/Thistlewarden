@@ -1,0 +1,31 @@
+services:
+  evaluator:
+    environment:
+      E2E_MOCK_API_KEY: release-fixture-secret
+    depends_on:
+      mock-provider:
+        condition: service_healthy
+  mock-provider:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: thistlewarden:0.1.0
+    entrypoint: ["python", "-m", "evaluator.mock_provider"]
+    environment:
+      MOCK_HOST: "0.0.0.0"
+      MOCK_PORT: "8000"
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=2).status==200"
+      interval: 2s
+      timeout: 2s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

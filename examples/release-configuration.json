@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "endpoints": [
+    {
+      "id": "10000000-0000-4000-8000-000000000001",
+      "data": {
+        "name": "Offline mockprovider",
+        "completions_url": "http://mock-provider:8000/v1/chat/completions",
+        "models_url": "http://mock-provider:8000/v1/models",
+        "api_key": null,
+        "api_key_header": "Authorization",
+        "api_key_prefix": "Bearer ",
+        "extra_headers": [],
+        "timeout_seconds": 10,
+        "max_retries": 1,
+        "requests_per_minute": 600,
+        "tokens_per_minute": 1000000,
+        "max_concurrency": 4,
+        "active": true,
+        "trusted_internal_http": true,
+        "security_warning_confirmed": true,
+        "secret_missing": false
+      }
+    }
+  ],
+  "model_profiles": [
+    {
+      "id": "20000000-0000-4000-8000-000000000001",
+      "data": {
+        "endpoint_id": "10000000-0000-4000-8000-000000000001",
+        "model_id": "mock-fast",
+        "display_name": "Mock snel",
+        "description": "Offline releasefixture",
+        "temperature": "0",
+        "top_p": null,
+        "max_tokens": 256,
+        "reasoning_field_path": null,
+        "reasoning_value": null,
+        "send_reasoning_off": false,
+        "custom_parameters": {},
+        "input_per_million": "1.25",
+        "output_per_million": "5.00",
+        "cached_input_per_million": null,
+        "reasoning_per_million": null,
+        "fixed_per_request": "0",
+        "context_threshold": null,
+        "high_context_input_per_million": null,
+        "high_context_output_per_million": null,
+        "high_context_cached_input_per_million": null,
+        "high_context_reasoning_per_million": null,
+        "active": true
+      }
+    },
+    {
+      "id": "20000000-0000-4000-8000-000000000002",
+      "data": {
+        "endpoint_id": "10000000-0000-4000-8000-000000000001",
+        "model_id": "mock-precise",
+        "display_name": "Mock precies",
+        "description": "Offline releasefixture",
+        "temperature": "0.2",
+        "top_p": "1",
+        "max_tokens": 256,
+        "reasoning_field_path": "reasoning.effort",
+        "reasoning_value": "low",
+        "send_reasoning_off": false,
+        "custom_parameters": {},
+        "input_per_million": "2.00",
+        "output_per_million": "8.00",
+        "cached_input_per_million": null,
+        "reasoning_per_million": null,
+        "fixed_per_request": "0",
+        "context_threshold": null,
+        "high_context_input_per_million": null,
+        "high_context_output_per_million": null,
+        "high_context_cached_input_per_million": null,
+        "high_context_reasoning_per_million": null,
+        "active": true
+      }
+    }
+  ],
+  "judge_profiles": [
+    {
+      "id": "30000000-0000-4000-8000-000000000001",
+      "data": {
+        "name": "Offline judge",
+        "model_profile_id": "20000000-0000-4000-8000-000000000002",
+        "prompt_template": "judge-v1",
+        "template_version": "1.0",
+        "threshold": "0.7",
+        "rubric": [{"id": "correct", "description": "Antwoord is correct.", "weight": "1"}],
+        "temperature": "0",
+        "max_output_tokens": 256,
+        "is_global_default": true,
+        "active": true
+      }
+    }
+  ],
+  "golden_sets": [
+    {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "data": {
+        "name": "Offline release golden set",
+        "description": "Alle zes evaluatiemethoden zonder extern netwerk.",
+        "version": "1.0",
+        "tags": ["release", "offline"],
+        "active": true,
+        "judge_profile_id": "30000000-0000-4000-8000-000000000001",
+        "quality_gates": {"min_pass_rate": "1", "max_error_rate": "0"}
+      }
+    }
+  ],
+  "golden_set_items": [
+    {"id":"50000000-0000-4000-8000-000000000001","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"exact","prompt":"[EXACT] Geef exact antwoord.","system_prompt":null,"expected_answer":"exact antwoord","evaluation_method":"exact_match","evaluator_config":{},"category":"deterministisch","tags":["exact"],"weight":"1","enabled":true,"sort_order":0}},
+    {"id":"50000000-0000-4000-8000-000000000002","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"contains","prompt":"[CONTAINS] Noem alpha en beta.","system_prompt":null,"expected_answer":null,"evaluation_method":"contains","evaluator_config":{"expected_fragments":["alpha","beta"]},"category":"deterministisch","tags":["contains"],"weight":"1","enabled":true,"sort_order":1}},
+    {"id":"50000000-0000-4000-8000-000000000003","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"regex","prompt":"[REGEX] Geef code.","system_prompt":null,"expected_answer":null,"evaluation_method":"regex","evaluator_config":{"pattern":"^[A-Z]{3}-[0-9]{3}$","full_match":true},"category":"deterministisch","tags":["regex"],"weight":"1","enabled":true,"sort_order":2}},
+    {"id":"50000000-0000-4000-8000-000000000004","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"numeric","prompt":"[NUMERIC] Geef 42.","system_prompt":null,"expected_answer":null,"evaluation_method":"numeric","evaluator_config":{"expected_value":"42","absolute_tolerance":"0.01"},"category":"deterministisch","tags":["numeric"],"weight":"1","enabled":true,"sort_order":3}},
+    {"id":"50000000-0000-4000-8000-000000000005","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"json","prompt":"[JSON] Geef JSON.","system_prompt":null,"expected_answer":null,"evaluation_method":"json_schema","evaluator_config":{"schema":{"type":"object","required":["ok","model"],"properties":{"ok":{"const":true},"model":{"type":"string"}},"additionalProperties":false}},"category":"deterministisch","tags":["json"],"weight":"1","enabled":true,"sort_order":4}},
+    {"id":"50000000-0000-4000-8000-000000000006","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"judge","prompt":"[JUDGE] Geef correct antwoord.","system_prompt":null,"expected_answer":"Een correct en volledig antwoord.","evaluation_method":"llm_judge","evaluator_config":{"rubric":[{"id":"correct","description":"Antwoord is correct.","weight":"1"}],"rubric_mode":"replace","threshold":"0.7"},"category":"judge","tags":["judge"],"weight":"1","enabled":true,"sort_order":5}}
+  ]
+}

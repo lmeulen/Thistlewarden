@@ -1,0 +1,45 @@
+name: thistlewarden
+services:
+  evaluator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: thistlewarden:0.1.0
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      CONTAINER_MODE: "true"
+      HOST: "0.0.0.0"
+      PORT: "5000"
+      DATABASE_PATH: /var/lib/thistlewarden/evaluator.db
+      EXPORT_PATH: /var/lib/thistlewarden/exports
+      APP_PROCESS_COUNT: "1"
+      STORAGE_BACKEND: local
+      WORKERS_ENABLED: "true"
+      RELOADER_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${PORT:-5000}:5000"
+    volumes:
+      - evaluator-data:/var/lib/thistlewarden
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:5000/ready',timeout=2); assert r.status==200 and json.load(r)['status']=='ready'"
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s
+
+volumes:
+  evaluator-data:
+    name: thistlewarden-data
