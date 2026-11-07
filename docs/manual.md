@@ -10,6 +10,8 @@
    - [1.3 Typical workflow](#13-typical-workflow)
    - [1.4 Core concepts](#14-core-concepts)
    - [1.5 Local data and sensitive content](#15-local-data-and-sensitive-content)
+   - [1.6 First successful evaluation](#16-first-successful-evaluation)
+   - [1.7 Current limits](#17-current-limits)
 2. [Getting started](#2-getting-started)
    - [2.1 Opening the application](#21-opening-the-application)
    - [2.2 Initial configuration](#22-initial-configuration)
@@ -168,6 +170,16 @@ A complete evaluation usually follows these steps:
 
 ### 1.4 Core concepts
 
+Read this relationship list if diagram does not render or is difficult to use:
+
+1. An **endpoint** connects to a provider.
+2. A **model profile** chooses model and settings from endpoint.
+3. A **golden set** contains **test cases**.
+4. A **run** combines enabled cases with selected model profiles.
+5. Each case/model pair creates one **result**.
+6. An evaluator scores result; LLM judge cases also use judge profile.
+7. Quality gates assess aggregate run results.
+
 ```mermaid
 flowchart TD
     E[Provider endpoint] --> M[Model profile]
@@ -239,7 +251,38 @@ Protect the computer, database, backups, and exported files according to the sen
 
 [Back to top](#manual-top)
 
+### 1.6 First successful evaluation
+
+**Start here if this is your first use.** Use one approved provider credential, one model, and one to three non-sensitive cases. Provider calls and LLM judging may create charges.
+
+1. [Add an endpoint](#41-adding-an-endpoint), then save it.
+2. [Create a model profile](#51-creating-a-model-profile) and select **Test model**.
+3. [Create a golden set](#61-creating-and-managing-golden-sets).
+4. [Add a test case](#71-adding-and-editing-test-cases). Choose **Exact match**, **Contains**, or **JSON Schema**; use the [method chooser](#8-evaluation-methods) if unsure.
+5. Use **Test evaluator** with one output that should pass and one that should fail.
+6. [Create a run](#101-creating-a-run) with that golden set and one model profile.
+7. Wait for terminal status, then open [individual result details](#117-individual-result-details).
+
+**How to read first result:** **Passed** means evaluator checked output and condition was met. **Failed** means evaluator checked output but condition was not met. **Error** means provider, judge, or processing prevented normal evaluation. Fix errors before deciding model quality.
+
+[Back to top](#manual-top)
+
+### 1.7 Current limits
+
+Thistlewarden is local, single-user evaluation application. It does not provide multi-user accounts, roles, remote collaboration, or a supported public/network deployment.
+
+Other current limits that affect workflow:
+
+- **Test evaluator** previews deterministic methods only; it cannot run LLM judge.
+- **Retry failed jobs** creates a new run; it cannot retry one individual test case only.
+- Case order is stored and preserved, but GUI has no manual reorder control.
+- Judge-profile prompt-template text is retained and snapshotted, but current judge request uses built-in contract rather than interpolating template text.
+
+[Back to top](#manual-top)
+
 ## 2. Getting started
+
+**Reading guide:** Complete this chapter, then Chapters 4–8 and 10 for first evaluation. Chapters 9 and 12 are optional advanced evaluation features. Chapters 13–14 and 16–17 contain import, operator, troubleshooting, and security reference; use them when needed.
 
 ### 2.1 Opening the application
 
@@ -411,6 +454,15 @@ An endpoint defines one OpenAI-compatible provider connection. Create an endpoin
 4. Enter the required **Completions URL**. This must be the provider's full HTTP(S) URL for chat completions, not its website or management console.
 5. Enter **Models URL** when the provider exposes a model-list endpoint and you want to use model discovery. Leave it empty if model discovery is unavailable or you will enter model IDs manually.
 6. Enter the API key and authentication settings required by the provider. See [Authentication and headers](#42-authentication-and-headers).
+
+| Field | First-run need | Safe guidance |
+|---|---|---|
+| Name | Required | Use a non-secret label, such as `Development provider`. |
+| Completions URL | Required | Copy the provider's complete chat-completions API URL. |
+| API key | Usually required | Paste only approved provider credential; it is not shown after save. |
+| Models URL | Optional | Add only when provider supports model discovery. |
+| Timeout, retries, rate limits | Optional | Keep defaults until provider documents different limits. |
+| Extra headers / trusted HTTP | Advanced | Configure only when provider documentation requires them. |
 7. Review timeout, retry, and rate-limit values. Defaults are suitable for an initial connection; use provider-specific limits when known.
 8. Leave **Active** selected when the endpoint should be available for new model profiles and runs.
 9. Select **Save**.
@@ -564,7 +616,7 @@ A successful discovery proves that the Models URL responded with a compatible mo
 
 ### 4.5 ChatNS example configuration
 
-The currently configured ChatNS endpoint uses the following non-secret values. Use this as an example only; confirm current URLs, subscription access, and limits with the ChatNS API documentation before creating or changing an endpoint.
+**Advanced provider-specific example.** Skip this section unless you use ChatNS. The currently configured ChatNS endpoint uses the following non-secret values. Use this as an example only; confirm current URLs, subscription access, and limits with the ChatNS API documentation before creating or changing an endpoint.
 
 | Endpoint field | Value |
 |---|---|
@@ -613,6 +665,14 @@ A model profile selects one external model on an endpoint and defines how Thistl
 6. Configure inference settings and prices as needed.
 7. Keep **Active** selected if the profile should be available for new runs.
 8. Save the profile, then use **Test model** to verify it.
+
+| Field | First-run need | Safe guidance |
+|---|---|---|
+| Endpoint | Required | Select active endpoint that passed connection test. |
+| External model ID | Required | Copy exact provider model ID. |
+| Display name | Required | Use recognizable non-secret label. |
+| Inference and price settings | Optional | Keep provider-tested/default values initially; test after changes. |
+| Description | Optional | Record purpose, not credentials or sensitive data. |
 
 If the endpoint has a Models URL, use **Retrieve available models** to select a discovered model ID. You can also select an existing profile as a base to copy its settings before changing the model ID or display name. Discovery is optional; manual model IDs are supported.
 
@@ -714,7 +774,7 @@ Before activating a changed profile, save it and run **Test model**. The dashboa
 
 ### 5.6 ChatNS example model profiles
 
-The current ChatNS configuration contains active baseline profiles for `gpt-4.1-mini` and `gpt-5-mini`. Both use the **ChatNS API** endpoint described in [section 4.5](#45-chatns-example-configuration). Treat these values as current examples, not permanent provider guidance; confirm supported parameters and pricing before changing them.
+**Advanced provider-specific example.** Skip this section unless you use ChatNS. The current ChatNS configuration contains active baseline profiles for `gpt-4.1-mini` and `gpt-5-mini`. Both use the **ChatNS API** endpoint described in [section 4.5](#45-chatns-example-configuration). Treat these values as current examples, not permanent provider guidance; confirm supported parameters and pricing before changing them.
 
 | Setting | GPT-4.1 mini | GPT-5 mini |
 |---|---|---|
@@ -903,6 +963,19 @@ After successful bulk deletion, remaining cases are renumbered internally to pre
 
 ## 8. Evaluation methods
 
+Choose simplest method that measures required behavior. Start with deterministic method; use LLM judge only when rule cannot express requirement.
+
+| If you need to check… | Choose | Avoid when… |
+|---|---|---|
+| Same fixed text, ID, or label | **Exact match** | Valid wording may differ. |
+| One or more required phrases | **Contains** | Exact output structure matters. |
+| A text pattern such as an ID | **Regex** | Simple exact/contains rule is enough. |
+| A number or tolerance | **Numeric** | Candidate has several ambiguous numbers. |
+| JSON fields, types, or shape | **JSON Schema** | Output is ordinary flexible prose. |
+| Relevance, completeness, or style | **LLM judge** | A deterministic rule can measure it. |
+
+For every deterministic method, use **Test evaluator** with one known passing output and one known failing output before saving case.
+
 ### 8.1 Exact match
 
 Use **Exact match** when candidate must equal expected answer after configured text normalization. It requires **Expected answer** and returns score `1` for match or `0` for mismatch.
@@ -1001,9 +1074,28 @@ Use **JSON Schema** for structured JSON output. Candidate must be standalone val
 
 Set `allow_markdown_code_fence` to accept a single complete fenced block labelled `json` or unlabeled. Otherwise markdown fences fail. Add optional `expected_value` to require parsed JSON equal exact configured value as well as schema-valid.
 
+**Structure-only example:** this requires `contains_pii` boolean and `fields` array, but accepts either boolean value and any array contents.
+
+```json
+{
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["contains_pii", "fields"],
+    "properties": {
+      "contains_pii": {"type": "boolean"},
+      "fields": {"type": "array"}
+    }
+  },
+  "allow_markdown_code_fence": false
+}
+```
+
+Use `enum` to allow one of several fixed values; use `const` to allow exactly one fixed value. Do not add either when only field presence and type matter.
+
 Thistlewarden supports JSON Schema Draft 2020-12 only. `schema_draft` is persisted explicit configuration metadata and currently accepts only `"2020-12"`; it is not a runtime draft selector. The application validates both schema syntax and candidate output with Draft 2020-12. You may omit `schema_draft`; its default is `"2020-12"`.
 
-Example with `expected_value`: this accepts only exact parsed value `{\"label\": \"positive\", \"confidence\": 0.9}` after schema validation.
+**Exact-value example:** this accepts only exact parsed value `{\"label\": \"positive\", \"confidence\": 0.9}` after schema validation.
 
 ```json
 {
@@ -1025,7 +1117,7 @@ Example with `expected_value`: this accepts only exact parsed value `{\"label\":
 }
 ```
 
-For this example, `{\"label\": \"positief\", \"confidence\": 0.9}` is schema-valid but fails because `expected_value` requires full exact JSON-value equality. Omit `expected_value` when only structure, required fields, and field types matter.
+**Expected outcome:** `{\"label\": \"positive\", \"confidence\": 0.9}` passes. `{\"label\": \"positief\", \"confidence\": 0.9}` is schema-valid but fails because `expected_value` requires full exact JSON-value equality. Omit `expected_value` when only structure, required fields, and field types matter.
 
 Use schema to enforce keys, types, arrays, enums, and required fields. Add `additionalProperties: false` when unknown keys must fail. Keep schema focused on contract; use expected value only where exact data matters. Validate schema and realistic candidate examples with output tester before run.
 
@@ -1072,6 +1164,8 @@ Choose simplest method that measures requirement. Deterministic evaluators are f
 ## 9. Judge profiles
 
 ### 9.1 Creating an LLM judge profile
+
+**Advanced feature:** finish one deterministic evaluation first. LLM judge makes extra provider call and can add cost, latency, and model variation.
 
 Open **Judge profiles** and select **Add judge**. A judge profile defines model, rubric, score threshold, and call settings used by test cases with **LLM judge** method.
 
@@ -1221,6 +1315,8 @@ Use cancellation for an incorrect selection, unexpected run size, configuration 
 
 Use **Retry failed jobs** on a run detail page when one or more jobs have status **error**. Enter a name for the new run, then select the action.
 
+> **Cost and scope warning:** This does not retry only failed test case. It creates a new run over all enabled cases for every model profile with at least one failed job. Correct invalid provider/model configuration first; otherwise calls can fail again and may incur cost.
+
 Thistlewarden creates a new run using source model profiles associated with failed jobs, the original golden set, and the original run-level judge selection. It does not modify or retry jobs inside the source run.
 
 Retry is useful after resolving transient provider failures, connectivity issues, rate limits, or temporary judge failures. Before retrying, verify affected profiles and endpoints remain active. The new run performs normal creation validation and uses current active configuration to make fresh snapshots; it is not a continuation of the original snapshot. Compare its results with source run while accounting for any configuration changes made in between.
@@ -1237,7 +1333,7 @@ Delete only a terminal run—completed, completed with errors, failed, or cancel
 2. In **Actions**, select **I understand deletion is permanent**.
 3. Select **Delete run**.
 
-Deletion permanently removes run records, job results, and associated snapshots. It cannot be undone. Export needed results first; see [chapter 13](#13-importing-and-exporting) for export guidance. Active runs must be cancelled and reach a terminal state before deletion.
+Deletion permanently removes run records, job results, and associated snapshots. It cannot be undone. Export needed results first; see [chapter 13](#13-import-export-and-backup) for export guidance. Active runs must be cancelled and reach a terminal state before deletion.
 
 Keep runs needed for release evidence, regression baselines, cost review, or audit history. Delete disposable experiments and obsolete retries according to your retention policy.
 
@@ -1258,6 +1354,8 @@ Open a run from **Runs** to see its overview. The **Run overview** panel intenti
 | Results | Total result count, with passed, failed, and error counts. |
 
 A missing metric means insufficient or unavailable measured data, not a score of zero. Do not compare an incomplete run with a finished run as though their KPI coverage were equal.
+
+**Result status:** **Passed** and **failed** both mean evaluator ran; failed did not meet its configured condition. **Error** means no normal evaluation result was produced, for example due to provider, judge, or processing failure. Investigate errors before interpreting score or pass rate.
 
 [Back to top](#manual-top)
 
@@ -1378,7 +1476,9 @@ Set defaults on golden set to apply same release criteria to future runs. At run
 
 ### 12.2 Configuring thresholds
 
-Open saved golden set and find **Quality gates**. Enter only checks you want to enforce, then select **Save gates**. Empty field means that gate is not configured.
+Open saved golden set and find **Quality gates**. Enter only checks you want to enforce, then select **Save gates**. Empty field means that gate is not configured. Start with one quality gate after you have stable baseline results; quality gates are advanced release-policy controls, not required for first run.
+
+**Table summary:** score/pass/error/latency/TTFT/TPS checks apply to each model. Total-cost check applies to entire run.
 
 | Gate | Pass condition | Scope |
 |---|---|---|
@@ -1515,6 +1615,8 @@ Always preview current file against target environment immediately before commit
 [Back to top](#manual-top)
 
 ### 13.7 Backing up application data
+
+**Operator task:** use your organization-approved backup procedure. See also [operations guide](operations.md) and [configuration guide](configuration.md).
 
 Use exports for portable sharing, but use database backup for recoverable application state. A complete backup must preserve application data and secret storage together. Keep backup encrypted and access-controlled because database may contain credentials and sensitive prompts, answers, and run results.
 
@@ -1831,6 +1933,8 @@ These safeguards reduce accidental leakage in application logs, but are not auth
 [Back to top](#manual-top)
 
 ## 18. Glossary
+
+Key terms are first explained in [Core concepts](#14-core-concepts). Use this glossary as reference for abbreviations and detailed meanings.
 
 ### 18.1 Terms and abbreviations
 
