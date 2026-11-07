@@ -1,1 +1,46 @@
-{% extends "base.html" %}{% block title %}Testcase · Thistlewarden{% endblock %}{% block content %}<h1>{{ 'Edit test case' if item else 'Add test case' }}</h1><p>Golden set: <strong>{{ golden_set.data.name }}</strong></p>{% set d=item.data if item else none %}<form method="post" class="form-grid"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Case-ID<input name="case_id" required value="{{ d.case_id if d else '' }}"></label><label>Category<input name="category" value="{{ d.category or '' if d else '' }}"></label><label class="wide">System prompt<textarea name="system_prompt">{{ d.system_prompt or '' if d else '' }}</textarea></label><label class="wide">User prompt<textarea name="prompt" required rows="6">{{ d.prompt if d else '' }}</textarea></label><label class="wide">Expected answer<textarea name="expected_answer" rows="4">{{ d.expected_answer or '' if d else '' }}</textarea></label><label>Evaluation method<select name="evaluation_method">{% for value,label in [('exact_match','Exact match'),('contains','Contains'),('regex','Regex'),('numeric','Numeric'),('json_schema','JSON Schema'),('llm_judge','LLM judge')] %}<option value="{{ value }}" {% if d and d.evaluation_method==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><label>Weight<input type="number" step="any" min="0.000001" name="weight" value="{{ d.weight if d else '1' }}"></label><label class="wide">Evaluator configuration (JSON)<textarea name="evaluator_config" rows="12" aria-describedby="config-help">{{ d.evaluator_config|tojson(indent=2) if d else '{}' }}</textarea></label><p id="config-help" class="help wide">Fields depend on method. Examples: contains <code>{"expected_fragments":["text"]}</code>, regex <code>{"pattern":"..."}</code>, numeric <code>{"expected_value":"42"}</code>, JSON Schema <code>{"schema":{"type":"object"}}</code>, judge <code>{"rubric":[{"id":"correct","description":"Correct","weight":"1"}]}</code>.</p><label class="wide">Tags, comma-separated<input name="tags" value="{{ d.tags|join(', ') if d else '' }}"></label><label class="check"><input type="checkbox" name="enabled" {% if not d or d.enabled %}checked{% endif %}> Enabled</label><div class="actions wide"><button>Save</button><a href="{{ url_for('gui.golden_set_edit', set_id=golden_set.id) }}">Back</a></div></form>{% if item %}<form method="post" action="{{ url_for('gui.golden_item_delete', item_id=item.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger">Delete test case</button></form>{% endif %}{% endblock %}
+{% extends "base.html" %}
+{% block title %}Test case · Thistlewarden{% endblock %}
+{% block content %}
+<h1>{{ 'Edit test case' if item else 'Add test case' }}</h1>
+<p>Golden set: <strong>{{ golden_set.data.name }}</strong></p>
+{% set d = item.data if item else none %}
+<form method="post" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>Case ID<input name="case_id" required value="{{ d.case_id if d else '' }}"></label>
+  <label>Category<input name="category" value="{{ d.category or '' if d else '' }}"></label>
+  <label class="wide">System prompt<textarea name="system_prompt">{{ d.system_prompt or '' if d else '' }}</textarea></label>
+  <label class="wide">User prompt<textarea name="prompt" required rows="6">{{ d.prompt if d else '' }}</textarea></label>
+  <label class="wide">Expected answer<textarea name="expected_answer" rows="4">{{ d.expected_answer or '' if d else '' }}</textarea></label>
+  <label>Evaluation method
+    <select name="evaluation_method" id="evaluation-method">
+      {% for value,label in [('exact_match','Exact match'),('contains','Contains'),('regex','Regex'),('numeric','Numeric'),('json_schema','JSON Schema'),('llm_judge','LLM judge')] %}
+      <option value="{{ value }}" {% if d and d.evaluation_method == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Weight<input type="number" step="any" min="0.000001" name="weight" value="{{ d.weight if d else '1' }}"></label>
+  <label class="wide">Evaluator configuration (JSON)
+    <textarea name="evaluator_config" id="evaluator-config" rows="12" aria-describedby="config-help">{{ d.evaluator_config|tojson(indent=2) if d else evaluator_examples['exact_match']|tojson(indent=2) }}</textarea>
+  </label>
+  <p id="config-help" class="help wide">Changing evaluation method replaces configuration with valid example showing available fields. You can edit example before saving. Exact match requires expected answer. LLM judge requires expected answer or item rubric.</p>
+  <label class="wide">Tags, comma-separated<input name="tags" value="{{ d.tags|join(', ') if d else '' }}"></label>
+  <label class="check"><input type="checkbox" name="enabled" {% if not d or d.enabled %}checked{% endif %}> Enabled</label>
+  <div class="actions wide"><button>Save</button><a href="{{ url_for('gui.golden_set_edit', set_id=golden_set.id) }}">Back</a></div>
+</form>
+{% if item %}
+<form method="post" action="{{ url_for('gui.golden_item_delete', item_id=item.id) }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="danger">Delete test case</button>
+</form>
+{% endif %}
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var method = document.getElementById('evaluation-method');
+  var config = document.getElementById('evaluator-config');
+  var examples = {{ evaluator_examples|tojson }};
+  method.addEventListener('change', function () {
+    config.value = JSON.stringify(examples[method.value], null, 2);
+  });
+}());
+</script>
+{% endblock %}

@@ -33,7 +33,7 @@ from evaluator.discovery import ModelDiscoveryService
 from evaluator.endpoints import EndpointService, HeaderInput
 from evaluator.errors import ConfigurationError
 from evaluator.gates import QualityGateService
-from evaluator.golden_sets import GoldenSetService
+from evaluator.golden_sets import GoldenSetService, evaluator_config_examples
 from evaluator.judges import JudgeProfileService
 from evaluator.logging_config import log_event
 from evaluator.models import ModelProfileService
@@ -616,6 +616,15 @@ def quality_gates_update(set_id: UUID) -> Response:
     return redirect(url_for("gui.golden_set_edit", set_id=set_id))
 
 
+def _render_golden_item_form(*, item: Any, golden_set: Any) -> str:
+    return render_template(
+        "golden_item_form.html",
+        item=item,
+        golden_set=golden_set,
+        evaluator_examples=evaluator_config_examples(),
+    )
+
+
 @gui.route("/golden-sets/<uuid:set_id>/items/nieuw", methods=["GET", "POST"])
 def golden_item_new(set_id: UUID) -> str | Response:
     if request.method == "POST":
@@ -625,9 +634,7 @@ def golden_item_new(set_id: UUID) -> str | Response:
             return redirect(url_for("gui.golden_item_edit", item_id=item.id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
-    return render_template(
-        "golden_item_form.html", item=None, golden_set=_golden_service().get_set(set_id)
-    )
+    return _render_golden_item_form(item=None, golden_set=_golden_service().get_set(set_id))
 
 
 @gui.route("/golden-items/<uuid:item_id>", methods=["GET", "POST"])
@@ -640,8 +647,8 @@ def golden_item_edit(item_id: UUID) -> str | Response:
             return redirect(url_for("gui.golden_item_edit", item_id=item_id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
-    return render_template(
-        "golden_item_form.html", item=item, golden_set=_golden_service().get_set(item.golden_set_id)
+    return _render_golden_item_form(
+        item=item, golden_set=_golden_service().get_set(item.golden_set_id)
     )
 
 

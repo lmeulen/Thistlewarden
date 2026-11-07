@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import html
 import io
 import json
 import os
@@ -68,6 +69,62 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
     assert "Configuration" in client.get("/").get_data(as_text=True)
 
 
+def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    response = client.get(f"/golden-sets/{set_id}/items/nieuw")
+    page = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'id="evaluation-method"' in page
+    assert 'id="evaluator-config"' in page
+    assert "method.addEventListener('change'" in page
+    assert "JSON.stringify(examples[method.value], null, 2)" in page
+    assert re.search(r'<script nonce="[^"]+">', page)
+    assert all(
+        f"&quot;{method}&quot;" in page or f'"{method}"' in page
+        for method in (
+            "exact_match",
+            "contains",
+            "regex",
+            "numeric",
+            "json_schema",
+            "llm_judge",
+        )
+    )
+    config_match = re.search(
+        r'<textarea name="evaluator_config"[^>]*>(.*?)</textarea>', page, re.DOTALL
+    )
+    assert config_match
+    default_config = json.loads(html.unescape(config_match.group(1)))
+    assert default_config["trim"] is True
+    assert default_config["normalize_newlines"] is True
+
+    service = app.extensions["golden_set_service"]
+    saved_config = {
+        "expected_fragments": ["saved custom fragment"],
+        "match_mode": "any",
+        "case_sensitive": False,
+    }
+    item = service.create_item(
+        UUID(set_id),
+        {
+            "case_id": "saved-config",
+            "prompt": "Answer with custom fragment.",
+            "evaluation_method": "contains",
+            "evaluator_config": saved_config,
+        },
+    )
+    edit_page = client.get(f"/golden-items/{item.id}").get_data(as_text=True)
+    edit_match = re.search(
+        r'<textarea name="evaluator_config"[^>]*>(.*?)</textarea>', edit_page, re.DOTALL
+    )
+    assert edit_match
+    rendered_config = json.loads(html.unescape(edit_match.group(1)))
+    assert rendered_config["expected_fragments"] == ["saved custom fragment"]
+    assert rendered_config["match_mode"] == "any"
+    assert rendered_config["case_sensitive"] is False
+
+
 @pytest.mark.parametrize(
     ("method", "expected", "config"),
     [
@@ -76,7 +133,11 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
         ("regex", None, {"pattern": "^ja$"}),
         ("numeric", None, {"expected_value": "42", "absolute_tolerance": "0.1"}),
         ("json_schema", None, {"schema": {"type": "object"}}),
-        ("llm_judge", None, {"rubric": [{"id": "correct", "description": "Juist", "weight": "1"}]}),
+        (
+            "llm_judge",
+            None,
+            {"rubric": [{"id": "correct", "description": "Juist", "weight": "1"}]},
+        ),
     ],
 )
 def test_gui_saves_every_evaluator_method(
