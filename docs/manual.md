@@ -12,109 +12,114 @@
    - [1.5 Local data and sensitive content](#15-local-data-and-sensitive-content)
    - [1.6 First successful evaluation](#16-first-successful-evaluation)
    - [1.7 Current limits](#17-current-limits)
-2. [Getting started](#2-getting-started)
-   - [2.1 Opening the application](#21-opening-the-application)
-   - [2.2 Initial configuration](#22-initial-configuration)
-   - [2.3 Recommended first workflow](#23-recommended-first-workflow)
-3. [Dashboard](#3-dashboard)
-   - [3.1 Available statistics](#31-available-statistics)
-   - [3.2 Interpreting totals and active-item counts](#32-interpreting-totals-and-active-item-counts)
-   - [3.3 Navigation shortcuts](#33-navigation-shortcuts)
-4. [Provider endpoints](#4-provider-endpoints)
-   - [4.1 Adding an endpoint](#41-adding-an-endpoint)
-   - [4.2 Authentication and headers](#42-authentication-and-headers)
-   - [4.3 Enabling, editing, and deleting endpoints](#43-enabling-editing-and-deleting-endpoints)
-   - [4.4 Discovering available models](#44-discovering-available-models)
-   - [4.5 ChatNS example configuration](#45-chatns-example-configuration)
-5. [Model profiles](#5-model-profiles)
-   - [5.1 Creating a model profile](#51-creating-a-model-profile)
-   - [5.2 Generation parameters](#52-generation-parameters)
-   - [5.3 Cost configuration](#53-cost-configuration)
-   - [5.4 Testing a model connection](#54-testing-a-model-connection)
-   - [5.5 Activating and deactivating profiles](#55-activating-and-deactivating-profiles)
-   - [5.6 ChatNS example model profiles](#56-chatns-example-model-profiles)
-6. [Golden sets](#6-golden-sets)
-   - [6.1 Creating and managing golden sets](#61-creating-and-managing-golden-sets)
-   - [6.2 Versioning, tags, and activation](#62-versioning-tags-and-activation)
-   - [6.3 Duplicating golden sets](#63-duplicating-golden-sets)
-   - [6.4 Selecting a judge profile](#64-selecting-a-judge-profile)
-7. [Test cases](#7-test-cases)
-   - [7.1 Adding and editing test cases](#71-adding-and-editing-test-cases)
-   - [7.2 Prompts and expected answers](#72-prompts-and-expected-answers)
-   - [7.3 Categories, tags, weights, and ordering](#73-categories-tags-weights-and-ordering)
-   - [7.4 Enabling and disabling test cases](#74-enabling-and-disabling-test-cases)
-   - [7.5 Testing candidate output before saving](#75-testing-candidate-output-before-saving)
-   - [7.6 Bulk selection and deletion](#76-bulk-selection-and-deletion)
-8. [Evaluation methods](#8-evaluation-methods)
-   - [8.1 Exact match](#81-exact-match)
-   - [8.2 Contains](#82-contains)
-   - [8.3 Regular expression](#83-regular-expression)
-   - [8.4 Numeric comparison](#84-numeric-comparison)
-   - [8.5 JSON Schema](#85-json-schema)
-   - [8.6 LLM judge](#86-llm-judge)
-   - [8.7 Configuration examples and expected behavior](#87-configuration-examples-and-expected-behavior)
-9. [Judge profiles](#9-judge-profiles)
-   - [9.1 Creating an LLM judge profile](#91-creating-an-llm-judge-profile)
-   - [9.2 Selecting a judge model](#92-selecting-a-judge-model)
-   - [9.3 Prompt templates](#93-prompt-templates)
-   - [9.4 Rubrics and scoring thresholds](#94-rubrics-and-scoring-thresholds)
-   - [9.5 Assigning judges to golden sets](#95-assigning-judges-to-golden-sets)
-10. [Running evaluations](#10-running-evaluations)
-    - [10.1 Creating a run](#101-creating-a-run)
-    - [10.2 Selecting a golden set and model profiles](#102-selecting-a-golden-set-and-model-profiles)
-    - [10.3 Starting and monitoring a run](#103-starting-and-monitoring-a-run)
-    - [10.4 Cancelling a run](#104-cancelling-a-run)
-    - [10.5 Rerunning failures](#105-rerunning-failures)
-    - [10.6 Deleting a run](#106-deleting-a-run)
-11. [Understanding results](#11-understanding-results)
-    - [11.1 Run overview KPIs](#111-run-overview-kpis)
-    - [11.2 Weighted score](#112-weighted-score)
-    - [11.3 Latency, TTFT, throughput, and costs](#113-latency-ttft-throughput-and-costs)
-    - [11.4 Model comparison charts](#114-model-comparison-charts)
-    - [11.5 Judge-type results](#115-judge-type-results)
-    - [11.6 Filtering and sorting results](#116-filtering-and-sorting-results)
-    - [11.7 Individual result details](#117-individual-result-details)
-    - [11.8 Dynamic score graph](#118-dynamic-score-graph)
-12. [Quality gates](#12-quality-gates)
-    - [12.1 Purpose of quality gates](#121-purpose-of-quality-gates)
-    - [12.2 Configuring thresholds](#122-configuring-thresholds)
-    - [12.3 Passed, failed, and indeterminate states](#123-passed-failed-and-indeterminate-states)
-    - [12.4 Interpreting gate results](#124-interpreting-gate-results)
-13. [Import, export, and backup](#13-import-export-and-backup)
-    - [13.1 Importing golden sets](#131-importing-golden-sets)
-    - [13.2 Previewing import changes](#132-previewing-import-changes)
-    - [13.3 Exporting golden sets](#133-exporting-golden-sets)
-    - [13.4 Exporting run results](#134-exporting-run-results)
-    - [13.5 Exporting and importing application configuration](#135-exporting-and-importing-application-configuration)
-    - [13.6 Conflict handling](#136-conflict-handling)
-    - [13.7 Backing up application data](#137-backing-up-application-data)
-14. [Application settings](#14-application-settings)
-    - [14.1 Editable settings](#141-editable-settings)
-    - [14.2 Read-only environment settings](#142-read-only-environment-settings)
-    - [14.3 Secret handling](#143-secret-handling)
-    - [14.4 Settings that require a restart](#144-settings-that-require-a-restart)
-15. [Common workflows](#15-common-workflows)
-    - [15.1 First evaluation from start to finish](#151-first-evaluation-from-start-to-finish)
-    - [15.2 Comparing multiple models](#152-comparing-multiple-models)
-    - [15.3 Building regression suites](#153-building-regression-suites)
-    - [15.4 Combining deterministic and LLM-based evaluation](#154-combining-deterministic-and-llm-based-evaluation)
-    - [15.5 Updating tests while preserving historical results](#155-updating-tests-while-preserving-historical-results)
-16. [Troubleshooting](#16-troubleshooting)
-    - [16.1 Provider connection failures](#161-provider-connection-failures)
-    - [16.2 Authentication and rate-limit errors](#162-authentication-and-rate-limit-errors)
-    - [16.3 Invalid evaluator configuration](#163-invalid-evaluator-configuration)
-    - [16.4 Regular expression and JSON Schema problems](#164-regular-expression-and-json-schema-problems)
-    - [16.5 LLM judge setup problems](#165-llm-judge-setup-problems)
-    - [16.6 Interrupted or incomplete runs](#166-interrupted-or-incomplete-runs)
-    - [16.7 Using request IDs when reporting errors](#167-using-request-ids-when-reporting-errors)
-17. [Security and privacy](#17-security-and-privacy)
-    - [17.1 Local-only access model](#171-local-only-access-model)
-    - [17.2 Protecting API keys](#172-protecting-api-keys)
-    - [17.3 Sensitive prompt and answer data](#173-sensitive-prompt-and-answer-data)
-    - [17.4 Import and export precautions](#174-import-and-export-precautions)
-    - [17.5 Operational logging guarantees](#175-operational-logging-guarantees)
-18. [Glossary](#18-glossary)
-    - [18.1 Terms and abbreviations](#181-terms-and-abbreviations)
+2. [Quick start](#2-quick-start)
+   - [2.1 Before you begin](#21-before-you-begin)
+   - [2.2 Create and test model access](#22-create-and-test-model-access)
+   - [2.3 Create one simple test](#23-create-one-simple-test)
+   - [2.4 Run and inspect evaluation](#24-run-and-inspect-evaluation)
+3. [Getting started](#3-getting-started)
+   - [3.1 Opening the application](#31-opening-the-application)
+   - [3.2 Initial configuration](#32-initial-configuration)
+   - [3.3 Recommended first workflow](#33-recommended-first-workflow)
+4. [Dashboard](#4-dashboard)
+   - [4.1 Available statistics](#41-available-statistics)
+   - [4.2 Interpreting totals and active-item counts](#42-interpreting-totals-and-active-item-counts)
+   - [4.3 Navigation shortcuts](#43-navigation-shortcuts)
+5. [Provider endpoints](#5-provider-endpoints)
+   - [5.1 Adding an endpoint](#51-adding-an-endpoint)
+   - [5.2 Authentication and headers](#52-authentication-and-headers)
+   - [5.3 Enabling, editing, and deleting endpoints](#53-enabling-editing-and-deleting-endpoints)
+   - [5.4 Discovering available models](#54-discovering-available-models)
+   - [5.5 ChatNS example configuration](#55-chatns-example-configuration)
+6. [Model profiles](#6-model-profiles)
+   - [6.1 Creating a model profile](#61-creating-a-model-profile)
+   - [6.2 Generation parameters](#62-generation-parameters)
+   - [6.3 Cost configuration](#63-cost-configuration)
+   - [6.4 Testing a model connection](#64-testing-a-model-connection)
+   - [6.5 Activating and deactivating profiles](#65-activating-and-deactivating-profiles)
+   - [6.6 ChatNS example model profiles](#66-chatns-example-model-profiles)
+7. [Golden sets](#7-golden-sets)
+   - [7.1 Creating and managing golden sets](#71-creating-and-managing-golden-sets)
+   - [7.2 Versioning, tags, and activation](#72-versioning-tags-and-activation)
+   - [7.3 Duplicating golden sets](#73-duplicating-golden-sets)
+   - [7.4 Selecting a judge profile](#74-selecting-a-judge-profile)
+8. [Test cases](#8-test-cases)
+   - [8.1 Adding and editing test cases](#81-adding-and-editing-test-cases)
+   - [8.2 Prompts and expected answers](#82-prompts-and-expected-answers)
+   - [8.3 Categories, tags, weights, and ordering](#83-categories-tags-weights-and-ordering)
+   - [8.4 Enabling and disabling test cases](#84-enabling-and-disabling-test-cases)
+   - [8.5 Testing candidate output before saving](#85-testing-candidate-output-before-saving)
+   - [8.6 Bulk selection and deletion](#86-bulk-selection-and-deletion)
+9. [Evaluation methods](#9-evaluation-methods)
+   - [9.1 Exact match](#91-exact-match)
+   - [9.2 Contains](#92-contains)
+   - [9.3 Regular expression](#93-regular-expression)
+   - [9.4 Numeric comparison](#94-numeric-comparison)
+   - [9.5 JSON Schema](#95-json-schema)
+   - [9.6 LLM judge](#96-llm-judge)
+   - [9.7 Configuration examples and expected behavior](#97-configuration-examples-and-expected-behavior)
+10. [Judge profiles](#10-judge-profiles)
+   - [10.1 Creating an LLM judge profile](#101-creating-an-llm-judge-profile)
+   - [10.2 Selecting a judge model](#102-selecting-a-judge-model)
+   - [10.3 Prompt templates](#103-prompt-templates)
+   - [10.4 Rubrics and scoring thresholds](#104-rubrics-and-scoring-thresholds)
+   - [10.5 Assigning judges to golden sets](#105-assigning-judges-to-golden-sets)
+11. [Running evaluations](#11-running-evaluations)
+    - [11.1 Creating a run](#111-creating-a-run)
+    - [11.2 Selecting a golden set and model profiles](#112-selecting-a-golden-set-and-model-profiles)
+    - [11.3 Starting and monitoring a run](#113-starting-and-monitoring-a-run)
+    - [11.4 Cancelling a run](#114-cancelling-a-run)
+    - [11.5 Rerunning failures](#115-rerunning-failures)
+    - [11.6 Deleting a run](#116-deleting-a-run)
+12. [Understanding results](#12-understanding-results)
+    - [12.1 Run overview KPIs](#121-run-overview-kpis)
+    - [12.2 Weighted score](#122-weighted-score)
+    - [12.3 Latency, TTFT, throughput, and costs](#123-latency-ttft-throughput-and-costs)
+    - [12.4 Model comparison charts](#124-model-comparison-charts)
+    - [12.5 Judge-type results](#125-judge-type-results)
+    - [12.6 Filtering and sorting results](#126-filtering-and-sorting-results)
+    - [12.7 Individual result details](#127-individual-result-details)
+    - [12.8 Dynamic score graph](#128-dynamic-score-graph)
+13. [Quality gates](#13-quality-gates)
+    - [13.1 Purpose of quality gates](#131-purpose-of-quality-gates)
+    - [13.2 Configuring thresholds](#132-configuring-thresholds)
+    - [13.3 Passed, failed, and indeterminate states](#133-passed-failed-and-indeterminate-states)
+    - [13.4 Interpreting gate results](#134-interpreting-gate-results)
+14. [Import, export, and backup](#14-import-export-and-backup)
+    - [14.1 Importing golden sets](#141-importing-golden-sets)
+    - [14.2 Previewing import changes](#142-previewing-import-changes)
+    - [14.3 Exporting golden sets](#143-exporting-golden-sets)
+    - [14.4 Exporting run results](#144-exporting-run-results)
+    - [14.5 Exporting and importing application configuration](#145-exporting-and-importing-application-configuration)
+    - [14.6 Conflict handling](#146-conflict-handling)
+    - [14.7 Backing up application data](#147-backing-up-application-data)
+15. [Application settings](#15-application-settings)
+    - [15.1 Editable settings](#151-editable-settings)
+    - [15.2 Read-only environment settings](#152-read-only-environment-settings)
+    - [15.3 Secret handling](#153-secret-handling)
+    - [15.4 Settings that require a restart](#154-settings-that-require-a-restart)
+16. [Common workflows](#16-common-workflows)
+    - [16.1 First evaluation from start to finish](#161-first-evaluation-from-start-to-finish)
+    - [16.2 Comparing multiple models](#162-comparing-multiple-models)
+    - [16.3 Building regression suites](#163-building-regression-suites)
+    - [16.4 Combining deterministic and LLM-based evaluation](#164-combining-deterministic-and-llm-based-evaluation)
+    - [16.5 Updating tests while preserving historical results](#165-updating-tests-while-preserving-historical-results)
+17. [Troubleshooting](#17-troubleshooting)
+    - [17.1 Provider connection failures](#171-provider-connection-failures)
+    - [17.2 Authentication and rate-limit errors](#172-authentication-and-rate-limit-errors)
+    - [17.3 Invalid evaluator configuration](#173-invalid-evaluator-configuration)
+    - [17.4 Regular expression and JSON Schema problems](#174-regular-expression-and-json-schema-problems)
+    - [17.5 LLM judge setup problems](#175-llm-judge-setup-problems)
+    - [17.6 Interrupted or incomplete runs](#176-interrupted-or-incomplete-runs)
+    - [17.7 Using request IDs when reporting errors](#177-using-request-ids-when-reporting-errors)
+18. [Security and privacy](#18-security-and-privacy)
+    - [18.1 Local-only access model](#181-local-only-access-model)
+    - [18.2 Protecting API keys](#182-protecting-api-keys)
+    - [18.3 Sensitive prompt and answer data](#183-sensitive-prompt-and-answer-data)
+    - [18.4 Import and export precautions](#184-import-and-export-precautions)
+    - [18.5 Operational logging guarantees](#185-operational-logging-guarantees)
+19. [Glossary](#19-glossary)
+    - [19.1 Terms and abbreviations](#191-terms-and-abbreviations)
 
 ## 1. Introduction
 
@@ -255,13 +260,13 @@ Protect the computer, database, backups, and exported files according to the sen
 
 **Start here if this is your first use.** Use one approved provider credential, one model, and one to three non-sensitive cases. Provider calls and LLM judging may create charges.
 
-1. [Add an endpoint](#41-adding-an-endpoint), then save it.
-2. [Create a model profile](#51-creating-a-model-profile) and select **Test model**.
-3. [Create a golden set](#61-creating-and-managing-golden-sets).
-4. [Add a test case](#71-adding-and-editing-test-cases). Choose **Exact match**, **Contains**, or **JSON Schema**; use the [method chooser](#8-evaluation-methods) if unsure.
+1. [Add an endpoint](#51-adding-an-endpoint), then save it.
+2. [Create a model profile](#61-creating-a-model-profile) and select **Test model**.
+3. [Create a golden set](#71-creating-and-managing-golden-sets).
+4. [Add a test case](#81-adding-and-editing-test-cases). Choose **Exact match**, **Contains**, or **JSON Schema**; use the [method chooser](#9-evaluation-methods) if unsure.
 5. Use **Test evaluator** with one output that should pass and one that should fail.
-6. [Create a run](#101-creating-a-run) with that golden set and one model profile.
-7. Wait for terminal status, then open [individual result details](#117-individual-result-details).
+6. [Create a run](#111-creating-a-run) with that golden set and one model profile.
+7. Wait for terminal status, then open [individual result details](#127-individual-result-details).
 
 **How to read first result:** **Passed** means evaluator checked output and condition was met. **Failed** means evaluator checked output but condition was not met. **Error** means provider, judge, or processing prevented normal evaluation. Fix errors before deciding model quality.
 
@@ -280,11 +285,69 @@ Other current limits that affect workflow:
 
 [Back to top](#manual-top)
 
-## 2. Getting started
+## 2. Quick start
 
-**Reading guide:** Complete this chapter, then Chapters 4–8 and 10 for first evaluation. Chapters 9 and 12 are optional advanced evaluation features. Chapters 13–14 and 16–17 contain import, operator, troubleshooting, and security reference; use them when needed.
+This chapter gets a first small evaluation working. Use non-sensitive material, one approved provider credential, one model profile, and one to three test cases. Provider calls may create charges. For field-by-field reference, continue with Chapter 3 and later chapters.
 
-### 2.1 Opening the application
+### 2.1 Before you begin
+
+You need:
+
+- a running local Thistlewarden application;
+- an approved API key for an OpenAI-compatible provider;
+- provider's chat-completions URL and one model ID; and
+- permission to send your chosen test prompts to that provider.
+
+Do not use production secrets, customer data, or sensitive personal data in this first run. Open application at address supplied by operator, normally <http://127.0.0.1:5000>.
+
+[Back to top](#manual-top)
+
+### 2.2 Create and test model access
+
+1. Open **Endpoints** and select **Add endpoint**.
+2. Enter non-secret **Name**, provider's full **Completions URL**, and **API key**.
+3. Keep default timeout/retry settings and select **Save**.
+4. Select **Add model** on saved endpoint.
+5. Enter exact provider **External model ID** and recognizable **Display name**.
+6. Keep profile **Active**, save it, then select **Test model**.
+
+Stop here if test fails. Check displayed error code, endpoint URL, key/header, model ID, and provider-supported request settings. Do not start evaluation until model test succeeds. See [provider endpoints](#51-adding-an-endpoint) and [model profiles](#61-creating-a-model-profile) for details.
+
+[Back to top](#manual-top)
+
+### 2.3 Create one simple test
+
+1. Open **Golden sets** and select **Add golden set**.
+2. Enter name such as `First checks`, version `0.1`, keep it active, and save.
+3. Select **Add test case**.
+4. Set **Case ID** to `first-answer` and enter short non-sensitive **User prompt**.
+5. Choose **Contains** as evaluation method. In evaluator configuration, set one phrase expected in good answer.
+6. Use **Test evaluator** with one sample output containing phrase and one without it.
+7. Save case with **Enabled** selected.
+
+This confirms evaluator before provider calls. Choose [JSON Schema](#95-json-schema) instead when first test checks JSON fields/types. See [test cases](#81-adding-and-editing-test-cases) and [evaluation methods](#9-evaluation-methods) for more methods.
+
+[Back to top](#manual-top)
+
+### 2.4 Run and inspect evaluation
+
+1. Open **Runs** and select **New run**.
+2. Enter descriptive name, select `First checks`, and select tested model profile.
+3. Check displayed job count and potential cost; it should be one job for one enabled case and one model.
+4. Select **Start run** and wait for terminal status.
+5. Open result row.
+
+Interpret status first: **Passed** means output met evaluator condition; **Failed** means evaluation ran but condition did not match; **Error** means provider, judge, or processing prevented normal evaluation. Resolve errors before judging model quality. Inspect prompt, candidate output, and evaluation reason before changing test.
+
+Next: add representative cases, then compare models or add quality gates only after baseline works. See [running evaluations](#11-running-evaluations) and [understanding results](#12-understanding-results).
+
+[Back to top](#manual-top)
+
+## 3. Getting started
+
+**Reading guide:** Complete this chapter, then Chapters 5–8 and 10 for first evaluation. Chapters 10 and 12 are optional advanced evaluation features. Chapters 14–14 and 16–17 contain import, operator, troubleshooting, and security reference; use them when needed.
+
+### 3.1 Opening the application
 
 Thistlewarden runs as a local web application. Start it using the installation method selected by your operator, then open the following address in a modern web browser:
 
@@ -315,7 +378,7 @@ Do not continue if the browser shows a certificate warning, an unexpected login 
 
 [Back to top](#manual-top)
 
-### 2.2 Initial configuration
+### 3.2 Initial configuration
 
 Before you can run an evaluation, configure at least one provider endpoint and one active model profile. You also need an active golden set with at least one enabled test case before starting a run.
 
@@ -358,7 +421,7 @@ If model testing fails, resolve the endpoint or profile error before starting a 
 
 [Back to top](#manual-top)
 
-### 2.3 Recommended first workflow
+### 3.3 Recommended first workflow
 
 Start with a small deterministic evaluation. It confirms that provider access, model configuration, test material, and result reporting work before you introduce LLM judging, multiple models, or quality gates.
 
@@ -381,9 +444,9 @@ When the baseline is stable, expand the golden set into a regression suite. Run 
 
 [Back to top](#manual-top)
 
-## 3. Dashboard
+## 4. Dashboard
 
-### 3.1 Available statistics
+### 4.1 Available statistics
 
 The dashboard is the application home page. It provides a read-only summary of evaluation activity, configured model access, and available test material. The summary updates when you refresh the page.
 
@@ -406,7 +469,7 @@ A new installation displays zero for every value. This is normal until you confi
 
 [Back to top](#manual-top)
 
-### 3.2 Interpreting totals and active-item counts
+### 4.2 Interpreting totals and active-item counts
 
 The dashboard distinguishes total records from records currently available for new work.
 
@@ -424,7 +487,7 @@ Use the dashboard as a quick readiness check before creating a run. If active mo
 
 [Back to top](#manual-top)
 
-### 3.3 Navigation shortcuts
+### 4.3 Navigation shortcuts
 
 Each dashboard card has a button that opens the page associated with its summary:
 
@@ -442,9 +505,9 @@ The main navigation bar remains available on every page. Use it to move directly
 
 [Back to top](#manual-top)
 
-## 4. Provider endpoints
+## 5. Provider endpoints
 
-### 4.1 Adding an endpoint
+### 5.1 Adding an endpoint
 
 An endpoint defines one OpenAI-compatible provider connection. Create an endpoint before creating model profiles. It stores connection details shared by every model profile under that provider.
 
@@ -453,7 +516,7 @@ An endpoint defines one OpenAI-compatible provider connection. Create an endpoin
 3. Enter a clear, unique **Name**, such as `Development provider` or `Local inference server`.
 4. Enter the required **Completions URL**. This must be the provider's full HTTP(S) URL for chat completions, not its website or management console.
 5. Enter **Models URL** when the provider exposes a model-list endpoint and you want to use model discovery. Leave it empty if model discovery is unavailable or you will enter model IDs manually.
-6. Enter the API key and authentication settings required by the provider. See [Authentication and headers](#42-authentication-and-headers).
+6. Enter the API key and authentication settings required by the provider. See [Authentication and headers](#52-authentication-and-headers).
 
 | Field | First-run need | Safe guidance |
 |---|---|---|
@@ -490,7 +553,7 @@ Saving an endpoint validates its format but does not prove that the URL, credent
 
 [Back to top](#manual-top)
 
-### 4.2 Authentication and headers
+### 5.2 Authentication and headers
 
 Configure authentication on the endpoint, not in model profiles or test material. Thistlewarden applies the endpoint credentials and headers to provider requests for every model profile under that endpoint.
 
@@ -548,7 +611,7 @@ If a key may have been exposed, revoke or rotate it through the provider, update
 
 [Back to top](#manual-top)
 
-### 4.3 Enabling, editing, and deleting endpoints
+### 5.3 Enabling, editing, and deleting endpoints
 
 Open **Endpoints**, then select an endpoint name to edit it. Update its URL, credentials, headers, connection settings, rate limits, or active state, and select **Save**. Saving validates the submitted configuration but does not test the provider connection; run model discovery after material connection changes.
 
@@ -581,7 +644,7 @@ An endpoint with historical references may not be deletable. In that case, disab
 
 [Back to top](#manual-top)
 
-### 4.4 Discovering available models
+### 5.4 Discovering available models
 
 Model discovery asks an endpoint's configured **Models URL** for its available model IDs. It is both a connection check and a convenience for creating model profiles.
 
@@ -614,7 +677,7 @@ A successful discovery proves that the Models URL responded with a compatible mo
 
 [Back to top](#manual-top)
 
-### 4.5 ChatNS example configuration
+### 5.5 ChatNS example configuration
 
 **Advanced provider-specific example.** Skip this section unless you use ChatNS. The currently configured ChatNS endpoint uses the following non-secret values. Use this as an example only; confirm current URLs, subscription access, and limits with the ChatNS API documentation before creating or changing an endpoint.
 
@@ -651,9 +714,9 @@ The configured concurrency limit of `2` intentionally restricts simultaneous Cha
 
 [Back to top](#manual-top)
 
-## 5. Model profiles
+## 6. Model profiles
 
-### 5.1 Creating a model profile
+### 6.1 Creating a model profile
 
 A model profile selects one external model on an endpoint and defines how Thistlewarden sends inference settings and calculates cost. Create separate profiles when you need to compare model IDs, generation settings, or price schedules.
 
@@ -680,7 +743,7 @@ Use names that identify meaningful differences, for example `gpt-4o balanced`, `
 
 [Back to top](#manual-top)
 
-### 5.2 Generation parameters
+### 6.2 Generation parameters
 
 The **Inference** section controls optional request fields sent to the provider. Empty values are omitted. Configure only fields supported by the selected provider and model.
 
@@ -713,7 +776,7 @@ Custom parameters must be a JSON object. They cannot override built-in request f
 
 [Back to top](#manual-top)
 
-### 5.3 Cost configuration
+### 6.3 Cost configuration
 
 The **Prices per million tokens** section lets Thistlewarden estimate and report model cost. Enter provider prices in your chosen billing currency; Thistlewarden records the numeric total but does not convert currencies.
 
@@ -736,7 +799,7 @@ Use prices from the provider's current billing documentation and update profiles
 
 [Back to top](#manual-top)
 
-### 5.4 Testing a model connection
+### 6.4 Testing a model connection
 
 Save a profile before testing it. On the profile edit page, select **Test model**. Thistlewarden sends a fixed streaming test prompt using the saved endpoint, model ID, inference settings, and credentials.
 
@@ -757,7 +820,7 @@ Test again after changing an endpoint, model ID, authentication header, inferenc
 
 [Back to top](#manual-top)
 
-### 5.5 Activating and deactivating profiles
+### 6.5 Activating and deactivating profiles
 
 The **Active** checkbox controls whether a model profile is available for new runs.
 
@@ -772,9 +835,9 @@ Before activating a changed profile, save it and run **Test model**. The dashboa
 
 [Back to top](#manual-top)
 
-### 5.6 ChatNS example model profiles
+### 6.6 ChatNS example model profiles
 
-**Advanced provider-specific example.** Skip this section unless you use ChatNS. The current ChatNS configuration contains active baseline profiles for `gpt-4.1-mini` and `gpt-5-mini`. Both use the **ChatNS API** endpoint described in [section 4.5](#45-chatns-example-configuration). Treat these values as current examples, not permanent provider guidance; confirm supported parameters and pricing before changing them.
+**Advanced provider-specific example.** Skip this section unless you use ChatNS. The current ChatNS configuration contains active baseline profiles for `gpt-4.1-mini` and `gpt-5-mini`. Both use the **ChatNS API** endpoint described in [section 5.5](#55-chatns-example-configuration). Treat these values as current examples, not permanent provider guidance; confirm supported parameters and pricing before changing them.
 
 | Setting | GPT-4.1 mini | GPT-5 mini |
 |---|---|---|
@@ -806,9 +869,9 @@ Use **Test model** after copying or modifying either profile. In particular, do 
 
 [Back to top](#manual-top)
 
-## 6. Golden sets
+## 7. Golden sets
 
-### 6.1 Creating and managing golden sets
+### 7.1 Creating and managing golden sets
 
 A golden set is a reusable test suite. It groups related test cases and provides the test material selected when creating a run.
 
@@ -823,13 +886,13 @@ To create one:
 7. Select **Save**.
 8. On the set page, select **Add test case** to add test material.
 
-After saving, the golden-set page lists its test cases and provides controls to add, edit, select, delete, export, configure a judge override, and configure quality gates. See [chapter 7](#7-test-cases) for case authoring and [chapter 12](#12-quality-gates) for gate configuration.
+After saving, the golden-set page lists its test cases and provides controls to add, edit, select, delete, export, configure a judge override, and configure quality gates. See [chapter 8](#8-test-cases) for case authoring and [chapter 13](#13-quality-gates) for gate configuration.
 
 Use one golden set for a coherent evaluation purpose, such as customer-support answers, retrieval quality, structured output, or safety regressions. Avoid mixing unrelated tasks in one set: separate sets make results easier to interpret and allow each set to have its own judge and quality standards.
 
 [Back to top](#manual-top)
 
-### 6.2 Versioning, tags, and activation
+### 7.2 Versioning, tags, and activation
 
 **Version** is a user-managed label for the test-suite revision. Thistlewarden does not automatically increment it. Update it when a change is meaningful to your team, for example after adding coverage, changing expected behavior, or preparing a release baseline. Use a consistent convention such as `1.0`, `1.1`, or `2026.11`.
 
@@ -846,7 +909,7 @@ Deactivate a set to retire a suite, pause maintenance, or prevent accidental run
 
 [Back to top](#manual-top)
 
-### 6.3 Duplicating golden sets
+### 7.3 Duplicating golden sets
 
 Duplicate a golden set to create a new editable baseline without changing the source set.
 
@@ -861,7 +924,7 @@ Use duplication when branching a regression suite for a new release, provider, p
 
 [Back to top](#manual-top)
 
-### 6.4 Selecting a judge profile
+### 7.4 Selecting a judge profile
 
 A golden set can use a specific judge profile for its LLM judge test cases. Configure the override after saving the golden set:
 
@@ -874,13 +937,13 @@ The override affects only test cases using the **LLM judge** evaluation method. 
 
 Choose a set-specific override when that suite needs a different judge model, prompt template, rubric behavior, or cost profile than other suites. Use the global default when one approved judge profile should apply across sets.
 
-Before assigning a profile, confirm that it is configured with an active model profile and that its model can be called successfully. A judge failure can cause LLM-judge results to fail even when target-model calls succeed. See [chapter 9](#9-judge-profiles) for creating and managing judge profiles.
+Before assigning a profile, confirm that it is configured with an active model profile and that its model can be called successfully. A judge failure can cause LLM-judge results to fail even when target-model calls succeed. See [chapter 10](#10-judge-profiles) for creating and managing judge profiles.
 
 [Back to top](#manual-top)
 
-## 7. Test cases
+## 8. Test cases
 
-### 7.1 Adding and editing test cases
+### 8.1 Adding and editing test cases
 
 Open golden set and select **Add test case**. A test case defines one prompt, expected behavior, and evaluation method for every selected model in a run.
 
@@ -892,7 +955,7 @@ Evaluator configuration is JSON. Form starts with valid method-specific example.
 
 [Back to top](#manual-top)
 
-### 7.2 Prompts and expected answers
+### 8.2 Prompts and expected answers
 
 **User prompt** is required text sent to target model. Write it as representative request from intended workload. **System prompt** is optional instruction sent before user prompt; use it when target behavior depends on system-level context.
 
@@ -906,11 +969,11 @@ Write prompts and expectations to make pass condition clear:
 - Use deterministic evaluator for exact structured or numeric requirements when possible.
 - Do not include credentials, personal data, or production secrets in any prompt or answer field.
 
-Candidate answers produced during runs, and their input prompt material, become part of result detail and exports. See [chapter 17](#17-security-and-privacy) for handling sensitive content.
+Candidate answers produced during runs, and their input prompt material, become part of result detail and exports. See [chapter 18](#18-security-and-privacy) for handling sensitive content.
 
 [Back to top](#manual-top)
 
-### 7.3 Categories, tags, weights, and ordering
+### 8.3 Categories, tags, weights, and ordering
 
 Use **Category** for one primary grouping, such as `support`, `retrieval`, `safety`, or `structured-output`. Use comma-separated **Tags** for multiple cross-cutting labels, such as `release`, `billing`, `nl`, or `regression`. Tags must be non-blank and unique within case.
 
@@ -922,7 +985,7 @@ Keep category/tag vocabulary controlled. Inconsistent forms such as `Billing`, `
 
 [Back to top](#manual-top)
 
-### 7.4 Enabling and disabling test cases
+### 8.4 Enabling and disabling test cases
 
 **Enabled** controls whether case participates in new runs. It is selected by default.
 
@@ -935,7 +998,7 @@ Disable case to quarantine flaky scenario, pause work in progress, exclude obsol
 
 [Back to top](#manual-top)
 
-### 7.5 Testing candidate output before saving
+### 8.5 Testing candidate output before saving
 
 Use **Test evaluator** in test-case form to check current unsaved evaluation settings against sample candidate output.
 
@@ -951,7 +1014,7 @@ LLM judge preview is unavailable in this form because it needs run/model snapsho
 
 [Back to top](#manual-top)
 
-### 7.6 Bulk selection and deletion
+### 8.6 Bulk selection and deletion
 
 On golden-set page, select checkboxes beside one or more test cases, then select **Delete selection**. Browser asks for confirmation and requires at least one selected item. Use individual **Delete** controls for a single case.
 
@@ -961,7 +1024,7 @@ After successful bulk deletion, remaining cases are renumbered internally to pre
 
 [Back to top](#manual-top)
 
-## 8. Evaluation methods
+## 9. Evaluation methods
 
 Choose simplest method that measures required behavior. Start with deterministic method; use LLM judge only when rule cannot express requirement.
 
@@ -976,7 +1039,7 @@ Choose simplest method that measures required behavior. Start with deterministic
 
 For every deterministic method, use **Test evaluator** with one known passing output and one known failing output before saving case.
 
-### 8.1 Exact match
+### 9.1 Exact match
 
 Use **Exact match** when candidate must equal expected answer after configured text normalization. It requires **Expected answer** and returns score `1` for match or `0` for mismatch.
 
@@ -995,7 +1058,7 @@ Use for exact labels, short fixed answers, IDs, or machine output where wording 
 
 [Back to top](#manual-top)
 
-### 8.2 Contains
+### 9.2 Contains
 
 Use **Contains** when candidate must contain one or more required fragments. It returns score `1` when configured fragment condition matches, otherwise `0`. It does not use **Expected answer**.
 
@@ -1015,7 +1078,7 @@ Use for required terms, disclaimers, citations, or facts within flexible prose. 
 
 [Back to top](#manual-top)
 
-### 8.3 Regular expression
+### 9.3 Regular expression
 
 Use **Regex** for a pattern requirement. It returns score `1` when pattern matches candidate, otherwise `0`.
 
@@ -1035,7 +1098,7 @@ Regex evaluation has short timeout to limit pathological patterns. A timeout pro
 
 [Back to top](#manual-top)
 
-### 8.4 Numeric comparison
+### 9.4 Numeric comparison
 
 Use **Numeric** when candidate contains numeric value close to configured expected value. It returns score `1` inside tolerance and `0` outside tolerance or when unambiguous number cannot be extracted.
 
@@ -1056,7 +1119,7 @@ Set `extraction` to `entire_answer` when output must be only number, or `first_n
 
 [Back to top](#manual-top)
 
-### 8.5 JSON Schema
+### 9.5 JSON Schema
 
 Use **JSON Schema** for structured JSON output. Candidate must be standalone valid JSON and satisfy configured Draft 2020-12 schema. It returns score `1` on success and `0` for parsing, schema, or optional expected-value mismatch.
 
@@ -1123,7 +1186,7 @@ Use schema to enforce keys, types, arrays, enums, and required fields. Add `addi
 
 [Back to top](#manual-top)
 
-### 8.6 LLM judge
+### 9.6 LLM judge
 
 Use **LLM judge** when deterministic rules cannot capture quality, relevance, completeness, or style. Judge profile calls separate configured model to assess candidate output. Judge returns score from `0` to `1`; pass/fail uses configured threshold.
 
@@ -1144,7 +1207,7 @@ LLM judge makes an additional provider call, can add cost and latency, and sends
 
 [Back to top](#manual-top)
 
-### 8.7 Configuration examples and expected behavior
+### 9.7 Configuration examples and expected behavior
 
 Selecting evaluation method fills **Evaluator configuration (JSON)** with valid editable example. These examples show available fields, not generic defaults for every task. Save validates configuration strictly: unknown fields, wrong value types, missing required fields, invalid JSON, invalid regex, or invalid JSON Schema are rejected.
 
@@ -1161,9 +1224,9 @@ Choose simplest method that measures requirement. Deterministic evaluators are f
 
 [Back to top](#manual-top)
 
-## 9. Judge profiles
+## 10. Judge profiles
 
-### 9.1 Creating an LLM judge profile
+### 10.1 Creating an LLM judge profile
 
 **Advanced feature:** finish one deterministic evaluation first. LLM judge makes extra provider call and can add cost, latency, and model variation.
 
@@ -1193,7 +1256,7 @@ Create separate profiles when suites require different model, rubric, threshold,
 
 [Back to top](#manual-top)
 
-### 9.2 Selecting a judge model
+### 10.2 Selecting a judge model
 
 Judge model is selected from existing model profiles. It is a second model role: target profiles generate candidate outputs, while judge profile assesses them. Judge model can be same provider/model as target, but independent capable model is often better for reducing self-assessment bias.
 
@@ -1205,7 +1268,7 @@ Avoid changing a commonly used judge profile without a tracked change decision. 
 
 [Back to top](#manual-top)
 
-### 9.3 Prompt templates
+### 10.3 Prompt templates
 
 Judge form includes **Prompt template** and **Template version**. Store a meaningful version label whenever you change judge-related instructions or operating convention, for example `1.0`, `1.1-safety`, or `2026-11`. Runs snapshot these fields for traceability.
 
@@ -1215,7 +1278,7 @@ Do not assume arbitrary template text changes current judge behavior. Use rubric
 
 [Back to top](#manual-top)
 
-### 9.4 Rubrics and scoring thresholds
+### 10.4 Rubrics and scoring thresholds
 
 A rubric is ordered list of observable quality criteria. Each line has `id|weight|description`. Judge returns criterion score from `0` to `1` and reason for every configured criterion. Thistlewarden calculates overall score as weighted mean of criterion scores, then compares calculated score with threshold. Judge-provided overall score and pass flag are retained for diagnostics but do not override calculated result.
 
@@ -1223,11 +1286,11 @@ Write criteria so reviewer can distinguish them. Good: `citation|1|Response iden
 
 Threshold is inclusive: score equal to threshold passes. Use `0.7` as starting point only, not universal policy. Calibrate using known good, borderline, and unacceptable candidate answers. Raise threshold for strict release standards only after checking false failures; lower threshold only with documented rationale.
 
-Case-level LLM judge configuration can extend/replace profile rubric and override threshold. With `augment`, matching item IDs replace same-named profile criteria and new IDs are added. With `replace`, only item rubric is used. See [section 8.6](#86-llm-judge) for item configuration.
+Case-level LLM judge configuration can extend/replace profile rubric and override threshold. With `augment`, matching item IDs replace same-named profile criteria and new IDs are added. With `replace`, only item rubric is used. See [section 9.6](#96-llm-judge) for item configuration.
 
 [Back to top](#manual-top)
 
-### 9.5 Assigning judges to golden sets
+### 10.5 Assigning judges to golden sets
 
 A golden set selects judge with its **Judge profile** override. Open saved golden set, choose profile in **Override**, then select **Save judge override**. Select **Use global default** to remove set-specific choice.
 
@@ -1243,9 +1306,9 @@ Confirm selected judge is active and backed by available active model profile be
 
 [Back to top](#manual-top)
 
-## 10. Running evaluations
+## 11. Running evaluations
 
-### 10.1 Creating a run
+### 11.1 Creating a run
 
 A run evaluates every enabled test case in one active golden set against one or more active model profiles. Open **Runs** and select **New run** to create one.
 
@@ -1260,7 +1323,7 @@ Provider calls may incur costs. Starting a run creates immutable snapshots of se
 
 [Back to top](#manual-top)
 
-### 10.2 Selecting a golden set and model profiles
+### 11.2 Selecting a golden set and model profiles
 
 Only active golden sets appear in the run form. A selected set must contain at least one enabled test case. Only active model profiles whose parent endpoints are also active can be selected.
 
@@ -1280,7 +1343,7 @@ The optional note is stored with the run. Use it for context needed by reviewers
 
 [Back to top](#manual-top)
 
-### 10.3 Starting and monitoring a run
+### 11.3 Starting and monitoring a run
 
 Select **Start run** only after reviewing the preflight size and potential cost. The run is created in a pending state, then workers claim and process its jobs. Open its detail page from **Runs** to monitor it.
 
@@ -1297,7 +1360,7 @@ While work is in progress, results and aggregates can be incomplete. Wait for a 
 
 [Back to top](#manual-top)
 
-### 10.4 Cancelling a run
+### 11.4 Cancelling a run
 
 You can cancel only a pending or running run.
 
@@ -1311,7 +1374,7 @@ Use cancellation for an incorrect selection, unexpected run size, configuration 
 
 [Back to top](#manual-top)
 
-### 10.5 Rerunning failures
+### 11.5 Rerunning failures
 
 Use **Retry failed jobs** on a run detail page when one or more jobs have status **error**. Enter a name for the new run, then select the action.
 
@@ -1325,7 +1388,7 @@ If no jobs failed, retry is unavailable and no new run is created.
 
 [Back to top](#manual-top)
 
-### 10.6 Deleting a run
+### 11.6 Deleting a run
 
 Delete only a terminal run—completed, completed with errors, failed, or cancelled—when its stored results are no longer needed.
 
@@ -1333,15 +1396,15 @@ Delete only a terminal run—completed, completed with errors, failed, or cancel
 2. In **Actions**, select **I understand deletion is permanent**.
 3. Select **Delete run**.
 
-Deletion permanently removes run records, job results, and associated snapshots. It cannot be undone. Export needed results first; see [chapter 13](#13-import-export-and-backup) for export guidance. Active runs must be cancelled and reach a terminal state before deletion.
+Deletion permanently removes run records, job results, and associated snapshots. It cannot be undone. Export needed results first; see [chapter 14](#14-import-export-and-backup) for export guidance. Active runs must be cancelled and reach a terminal state before deletion.
 
 Keep runs needed for release evidence, regression baselines, cost review, or audit history. Delete disposable experiments and obsolete retries according to your retention policy.
 
 [Back to top](#manual-top)
 
-## 11. Understanding results
+## 12. Understanding results
 
-### 11.1 Run overview KPIs
+### 12.1 Run overview KPIs
 
 Open a run from **Runs** to see its overview. The **Run overview** panel intentionally contains five high-level KPIs:
 
@@ -1359,7 +1422,7 @@ A missing metric means insufficient or unavailable measured data, not a score of
 
 [Back to top](#manual-top)
 
-### 11.2 Weighted score
+### 12.2 Weighted score
 
 Each evaluated result has a score, normally from `0` to `1`. A passing deterministic or judge evaluation commonly scores `1`; a failing evaluation commonly scores `0`, though an evaluator may provide an intermediate score.
 
@@ -1375,7 +1438,7 @@ Use weighted score to compare models against same run material. Do not compare s
 
 [Back to top](#manual-top)
 
-### 11.3 Latency, TTFT, throughput, and costs
+### 12.3 Latency, TTFT, throughput, and costs
 
 Thistlewarden reports target-model performance measurements when provider data permits:
 
@@ -1391,7 +1454,7 @@ P95 is a tail metric: roughly 95% of recorded measurements are at or below it. I
 
 [Back to top](#manual-top)
 
-### 11.4 Model comparison charts
+### 12.4 Model comparison charts
 
 The **Model comparison** table ranks model snapshots within the run. It shows weighted score, P95 latency, P95 TTFT, mean TPS, input/output tokens, known cost, and quality-gate indicators. Ranking favors higher score, then lower error rate, then lower known total cost when values are available.
 
@@ -1408,7 +1471,7 @@ The **Cost versus score** scatter plot places models by total known cost on X-ax
 
 [Back to top](#manual-top)
 
-### 11.5 Judge-type results
+### 12.5 Judge-type results
 
 **Results by judge type** groups results by evaluation method: Exact match, Contains, Regex, Numeric, JSON Schema, or LLM judge. Each row shows result count, weighted score, passed percentage, and a stacked bar for passed, failed, and error results.
 
@@ -1418,7 +1481,7 @@ If one judge type has many errors, open filtered individual results to determine
 
 [Back to top](#manual-top)
 
-### 11.6 Filtering and sorting results
+### 12.6 Filtering and sorting results
 
 Use **Results** filters on run detail to narrow investigation:
 
@@ -1435,7 +1498,7 @@ Useful workflows: filter **error** first to resolve operational problems; filter
 
 [Back to top](#manual-top)
 
-### 11.7 Individual result details
+### 12.7 Individual result details
 
 Select a case ID in results table to open its individual result. Page shows:
 
@@ -1450,7 +1513,7 @@ Result pages can contain sensitive prompts, expected answers, and model output. 
 
 [Back to top](#manual-top)
 
-### 11.8 Dynamic score graph
+### 12.8 Dynamic score graph
 
 The cost-versus-score graph scales Y-axis to make high-score differences readable while keeping every valid score visible. Its upper bound is always `1.00`. Lower bound is selected from `0.00`, `0.50`, `0.80`, or `0.90`, choosing highest bound that does not exclude any plotted score. Graph then draws five evenly spaced Y-axis ticks.
 
@@ -1460,9 +1523,9 @@ Dynamic scale improves comparison among strong models, but it can visually magni
 
 [Back to top](#manual-top)
 
-## 12. Quality gates
+## 13. Quality gates
 
-### 12.1 Purpose of quality gates
+### 13.1 Purpose of quality gates
 
 Quality gates convert run metrics into explicit acceptance checks. They assess aggregate results after run completes, helping teams decide whether model/version is acceptable for release, regression baseline, or cost/performance target.
 
@@ -1474,7 +1537,7 @@ Set defaults on golden set to apply same release criteria to future runs. At run
 
 [Back to top](#manual-top)
 
-### 12.2 Configuring thresholds
+### 13.2 Configuring thresholds
 
 Open saved golden set and find **Quality gates**. Enter only checks you want to enforce, then select **Save gates**. Empty field means that gate is not configured. Start with one quality gate after you have stable baseline results; quality gates are advanced release-policy controls, not required for first run.
 
@@ -1499,7 +1562,7 @@ Begin with few meaningful gates. For example, require weighted score at least `0
 
 [Back to top](#manual-top)
 
-### 12.3 Passed, failed, and indeterminate states
+### 13.3 Passed, failed, and indeterminate states
 
 Gate evaluation occurs after run reaches `completed` or `completed with errors`. Runs still pending, running, cancelled, or otherwise non-terminal have `not evaluated` status. A completed run with no configured gates also has `not evaluated` status.
 
@@ -1515,7 +1578,7 @@ Missing latency, TTFT, TPS, score, pass-rate, error-rate, or cost data can make 
 
 [Back to top](#manual-top)
 
-### 12.4 Interpreting gate results
+### 13.4 Interpreting gate results
 
 Run detail page shows overall gate status near run status, per-model gate dots in comparison table, and **Quality gates** table. Table lists gate name, model or **Entire run**, measured value, threshold, visualization, and outcome.
 
@@ -1534,9 +1597,9 @@ Exports include stored gate results with run data. Preserve them with release ev
 
 [Back to top](#manual-top)
 
-## 13. Import, export, and backup
+## 14. Import, export, and backup
 
-### 13.1 Importing golden sets
+### 14.1 Importing golden sets
 
 Import reusable test material from **Golden sets** by selecting **Import JSON/CSV**. Choose **JSON** or **CSV**, choose file, and select **Validate and preview** before committing.
 
@@ -1546,7 +1609,7 @@ After successful validation, select file again and choose **Complete import**. I
 
 [Back to top](#manual-top)
 
-### 13.2 Previewing import changes
+### 14.2 Previewing import changes
 
 Golden-set preview validates file without writing data. It reports name, version, and number of test cases. Use it to catch malformed JSON or CSV, missing required values, invalid evaluator configurations, duplicate case IDs, and size-limit issues before import.
 
@@ -1556,7 +1619,7 @@ For full application configuration, **Configuration exchange** preview additiona
 
 [Back to top](#manual-top)
 
-### 13.3 Exporting golden sets
+### 14.3 Exporting golden sets
 
 Open a saved golden set. In **Testcases**, select **JSON** or **CSV** to download it.
 
@@ -1567,7 +1630,7 @@ Exports contain test material, including prompts, expected answers, evaluator co
 
 [Back to top](#manual-top)
 
-### 13.4 Exporting run results
+### 14.4 Exporting run results
 
 Open run detail and select **Export**. Select one format, acknowledge sensitive-content warning, then select **Download**.
 
@@ -1583,7 +1646,7 @@ Export before permanently deleting a run. An export is a point-in-time copy and 
 
 [Back to top](#manual-top)
 
-### 13.5 Exporting and importing application configuration
+### 14.5 Exporting and importing application configuration
 
 Open **Configuration exchange** to download or import a version `1.0` JSON configuration bundle.
 
@@ -1602,7 +1665,7 @@ Import commits atomically: valid configuration changes are applied together, or 
 
 [Back to top](#manual-top)
 
-### 13.6 Conflict handling
+### 14.6 Conflict handling
 
 Golden-set import creates a new set, so destination golden-set name must be unique. If name conflicts, rename source set or use another CSV destination name, validate again, and retry. Import validation also rejects duplicate case IDs within imported file without regard to letter case.
 
@@ -1614,7 +1677,7 @@ Always preview current file against target environment immediately before commit
 
 [Back to top](#manual-top)
 
-### 13.7 Backing up application data
+### 14.7 Backing up application data
 
 **Operator task:** use your organization-approved backup procedure. See also [operations guide](operations.md) and [configuration guide](configuration.md).
 
@@ -1632,9 +1695,9 @@ Do not rely on configuration export alone: it intentionally omits secret values 
 
 [Back to top](#manual-top)
 
-## 14. Application settings
+## 15. Application settings
 
-### 14.1 Editable settings
+### 15.1 Editable settings
 
 Open **Settings** to view operational settings, resolved value, and source. A setting is editable in browser only when it is non-secret and not controlled by environment. Enter replacement value and select **Save**. Application validates value and all setting combinations before saving; invalid change is rejected without partial write.
 
@@ -1653,7 +1716,7 @@ Keep `DEFAULT_RUN_CONCURRENCY` and `RUN_CONCURRENCY` no greater than `MAX_RUN_CO
 
 [Back to top](#manual-top)
 
-### 14.2 Read-only environment settings
+### 15.2 Read-only environment settings
 
 Resolution precedence is **environment**, then saved database value, then built-in default. Settings page labels each source. Any setting supplied as environment variable is read-only in browser because environment value wins over database value.
 
@@ -1665,19 +1728,19 @@ Avoid setting `HOST` to network-accessible address outside documented container 
 
 [Back to top](#manual-top)
 
-### 14.3 Secret handling
+### 15.3 Secret handling
 
 `SECRET_KEY` and `ENCRYPTION_KEY` are secrets. Settings page never displays them and never provides browser editing. API settings output also hides secret values. Configure them through secure environment/deployment secret mechanism, not copied into screenshots, tickets, exports, or source control.
 
 `SECRET_KEY` protects browser-session and CSRF security. `ENCRYPTION_KEY` protects locally stored endpoint secret records. Use strong, unique values and retain protected recovery copy. Changing or losing encryption key can prevent reading existing encrypted endpoint credentials; plan key rotation and credential re-entry with operator procedure.
 
-Provider API keys and secret additional headers are managed with endpoint configuration and encrypted local secret storage; they are separate from application settings. Configuration exports intentionally omit secret values. See [chapter 17](#17-security-and-privacy) and [section 13.5](#135-exporting-and-importing-application-configuration).
+Provider API keys and secret additional headers are managed with endpoint configuration and encrypted local secret storage; they are separate from application settings. Configuration exports intentionally omit secret values. See [chapter 18](#18-security-and-privacy) and [section 14.5](#145-exporting-and-importing-application-configuration).
 
 Never put secrets in non-secret setting fields, golden sets, prompts, evaluator configuration, run notes, judge templates, or exported filenames. Operational logs are designed to avoid sensitive payloads, but prevention at data entry remains required.
 
 [Back to top](#manual-top)
 
-### 14.4 Settings that require a restart
+### 15.4 Settings that require a restart
 
 Saving non-secret database setting updates stored resolution and Settings page immediately. Running application components are initialized from settings at startup, so restart application after any operational setting change to ensure it takes effect consistently.
 
@@ -1700,9 +1763,9 @@ An interrupted provider call may be retried after recovery and can cause duplica
 
 [Back to top](#manual-top)
 
-## 15. Common workflows
+## 16. Common workflows
 
-### 15.1 First evaluation from start to finish
+### 16.1 First evaluation from start to finish
 
 Use this small, low-risk workflow to establish working baseline:
 
@@ -1721,7 +1784,7 @@ Fix configuration or test intent before scaling to many models/cases. A passing 
 
 [Back to top](#manual-top)
 
-### 15.2 Comparing multiple models
+### 16.2 Comparing multiple models
 
 Select two or more active target model profiles in one new run. Thistlewarden runs every enabled case against every selected model, producing comparable result matrix under same run snapshots. Run preview shows `active cases × selected models` job count.
 
@@ -1733,7 +1796,7 @@ More models multiply provider calls and potential cost. Start with small suite, 
 
 [Back to top](#manual-top)
 
-### 15.3 Building regression suites
+### 16.3 Building regression suites
 
 A regression suite is stable golden set representing behaviors that must not degrade. Build it incrementally from real defects, critical customer tasks, safety requirements, structured-output contracts, and known edge cases.
 
@@ -1753,7 +1816,7 @@ Add a case when it protects meaningful behavior; remove or disable only with doc
 
 [Back to top](#manual-top)
 
-### 15.4 Combining deterministic and LLM-based evaluation
+### 16.4 Combining deterministic and LLM-based evaluation
 
 Use deterministic methods and LLM judge in same golden set, selecting each based on requirement. Deterministic checks are repeatable, fast, local, and do not make extra provider call. LLM judge handles relevance, completeness, reasoning quality, and other nuanced criteria, but adds cost, latency, provider dependency, and variation.
 
@@ -1770,7 +1833,7 @@ Review results by **Judge type** in run detail. Investigate disagreement between
 
 [Back to top](#manual-top)
 
-### 15.5 Updating tests while preserving historical results
+### 16.5 Updating tests while preserving historical results
 
 Runs store immutable snapshots of selected case content, model configuration, judge profile, and quality gates at run creation. Editing a live golden set or model profile changes future runs only; it does not rewrite completed result data.
 
@@ -1782,9 +1845,9 @@ Do not modify historical exports to simulate new baseline. Keep prior run and ex
 
 [Back to top](#manual-top)
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
-### 16.1 Provider connection failures
+### 17.1 Provider connection failures
 
 Symptoms include failed model connection test, `NETWORK_ERROR`, `TIMEOUT_ERROR`, provider-client/server errors, or run results with error status. Work from lowest-risk checks upward:
 
@@ -1800,7 +1863,7 @@ Do not paste full endpoint headers, prompts, responses, or credentials into tick
 
 [Back to top](#manual-top)
 
-### 16.2 Authentication and rate-limit errors
+### 17.2 Authentication and rate-limit errors
 
 Authentication failures usually mean missing, expired, revoked, malformed, or incorrectly placed API key/secret header. Open endpoint, verify authentication method and header name required by provider, then enter replacement secret only when needed. Leaving secret field blank on edit preserves existing value. Confirm endpoint/model are active and test connection. Never expose credential while diagnosing.
 
@@ -1810,7 +1873,7 @@ Mitigate rate limits by reducing selected models/cases, lowering run concurrency
 
 [Back to top](#manual-top)
 
-### 16.3 Invalid evaluator configuration
+### 17.3 Invalid evaluator configuration
 
 Case save rejects invalid evaluator configuration JSON, unknown fields, wrong types, missing required method fields, invalid regular expressions, invalid JSON Schema, duplicate rubric IDs, and invalid numeric/range values. Error message identifies field where available.
 
@@ -1828,7 +1891,7 @@ Changing method replaces form JSON with its new example, so copy deliberate cust
 
 [Back to top](#manual-top)
 
-### 16.4 Regular expression and JSON Schema problems
+### 17.4 Regular expression and JSON Schema problems
 
 For **Regex**, first decide whether requirement is search anywhere or full candidate match. Set `full_match` for whole answer; otherwise use anchors such as `^` and `$` deliberately. Check escaping: JSON requires backslashes to be escaped, for example `"\\d+"` for digit pattern. Test case sensitivity, multiline, and dot-all behavior with both passing and failing samples. Simplify nested or ambiguous repetition; regex evaluation has short timeout and timed-out pattern fails.
 
@@ -1838,7 +1901,7 @@ Use result reason and metadata in individual run result to identify parse vs sch
 
 [Back to top](#manual-top)
 
-### 16.5 LLM judge setup problems
+### 17.5 LLM judge setup problems
 
 LLM judge needs active judge profile resolved by run override, golden-set override, or active global default. It also needs active judge model profile and active parent endpoint. Check each link before run. Ensure test case has expected answer or item rubric, and rubric IDs are valid and unique.
 
@@ -1848,7 +1911,7 @@ Do not expect **Test evaluator** to invoke judge: output preview rejects LLM jud
 
 [Back to top](#manual-top)
 
-### 16.6 Interrupted or incomplete runs
+### 17.6 Interrupted or incomplete runs
 
 A run may be pending/running while workers process jobs, `completed with errors` when some jobs fail, `failed` when all jobs fail, or `cancelled` after confirmed cancellation. Open run detail and inspect progress, result status, and error rows. Do not delete run before recording/exporting evidence needed for diagnosis.
 
@@ -1858,7 +1921,7 @@ Wait for recovery to settle, then refresh run detail. For terminal run with fail
 
 [Back to top](#manual-top)
 
-### 16.7 Using request IDs when reporting errors
+### 17.7 Using request IDs when reporting errors
 
 Application generates request ID for HTTP request correlation and returns it in `X-Request-ID` response header. API error payloads also contain `error.request_id`. Record this ID immediately when page/API action fails.
 
@@ -1868,9 +1931,9 @@ Do not include API keys, cookies, CSRF values, secret headers, prompts, expected
 
 [Back to top](#manual-top)
 
-## 17. Security and privacy
+## 18. Security and privacy
 
-### 17.1 Local-only access model
+### 18.1 Local-only access model
 
 Thistlewarden is designed for use from browser on same computer. Default host is loopback, and browser requests accept only `localhost`, `127.0.0.1`, or `::1` Host and Origin values. This prevents normal browser access through arbitrary network hostnames.
 
@@ -1882,7 +1945,7 @@ Browser protections include strict local Host/Origin validation for mutations, s
 
 [Back to top](#manual-top)
 
-### 17.2 Protecting API keys
+### 18.2 Protecting API keys
 
 Store provider credentials only in endpoint **API key** field or additional header marked `secret`. Secret values are encrypted at rest using authenticated AES-256-GCM encryption and are not displayed after save. Configuration export deliberately omits secret values.
 
@@ -1894,7 +1957,7 @@ Use HTTPS for external providers. Plain HTTP is automatically allowed for loopba
 
 [Back to top](#manual-top)
 
-### 17.3 Sensitive prompt and answer data
+### 18.3 Sensitive prompt and answer data
 
 Treat prompts, system prompts, expected answers, candidate answers, judge prompts, rubrics, evaluator configuration, and run notes as potentially confidential. Test and run content is stored locally and can be visible on result-detail pages or in exports. Model providers and LLM judges receive content needed for their configured calls.
 
@@ -1910,7 +1973,7 @@ Review model and judge endpoint choice before running LLM-judge cases. A judge c
 
 [Back to top](#manual-top)
 
-### 17.4 Import and export precautions
+### 18.4 Import and export precautions
 
 Imports are untrusted input. Obtain golden-set and configuration files only from trusted sources, preview before commit, and review provider URLs, active state, model configuration, evaluator settings, pricing, and judge prompts. Do not import files containing credentials; configuration imports do not restore secret values anyway.
 
@@ -1922,7 +1985,7 @@ Backup copies need same or stronger protection as live data. Preserve encryption
 
 [Back to top](#manual-top)
 
-### 17.5 Operational logging guarantees
+### 18.5 Operational logging guarantees
 
 Operational logs are designed to record safe diagnostics and lifecycle events without recording sensitive evaluation content. Logging redacts configured secrets and avoids prompts, answers, expected answers, rubrics, provider response bodies, API keys, secret-header values, cookies, CSRF tokens, query strings, complete import/export content, exception messages, and tracebacks.
 
@@ -1932,11 +1995,11 @@ These safeguards reduce accidental leakage in application logs, but are not auth
 
 [Back to top](#manual-top)
 
-## 18. Glossary
+## 19. Glossary
 
 Key terms are first explained in [Core concepts](#14-core-concepts). Use this glossary as reference for abbreviations and detailed meanings.
 
-### 18.1 Terms and abbreviations
+### 19.1 Terms and abbreviations
 
 | Term | Meaning |
 | --- | --- |
