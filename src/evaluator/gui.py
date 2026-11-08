@@ -220,11 +220,15 @@ def _golden_set_payload() -> dict[str, Any]:
 def _item_payload() -> dict[str, Any]:
     method = request.form.get("evaluation_method", "exact_match")
     config = _json_field("evaluator_config")
+    expected_answer = request.form.get("expected_answer") or None
+    if method in {"exact_match", "llm_judge"}:
+        # Legacy API/import compatibility only; both methods now keep values in config.
+        expected_answer = None
     return {
         "case_id": request.form.get("case_id", ""),
         "prompt": request.form.get("prompt", ""),
         "system_prompt": _optional("system_prompt"),
-        "expected_answer": request.form.get("expected_answer") or None,
+        "expected_answer": expected_answer,
         "evaluation_method": method,
         "evaluator_config": config,
         "category": _optional("category"),

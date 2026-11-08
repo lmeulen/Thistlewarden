@@ -34,6 +34,8 @@ _LOG = logging.getLogger(__name__)
 class ExactMatchConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     evaluation_method: Literal["exact_match"] = "exact_match"
+    # Optional only to support legacy records whose value remains in expected_answer.
+    expected_value: str | None = None
     trim: bool = True
     case_sensitive: bool = True
     normalize_newlines: bool = True
@@ -115,6 +117,7 @@ class RubricCriterion(BaseModel):
 class LlmJudgeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     evaluation_method: Literal["llm_judge"] = "llm_judge"
+    expected_value: str | None = None
     rubric: list[RubricCriterion] | None = None
     rubric_mode: Literal["augment", "replace"] = "augment"
     threshold: Decimal | None = Field(default=None, ge=0, le=1)
@@ -142,6 +145,7 @@ EvaluatorConfig = Annotated[
 _CONFIG_ADAPTER: TypeAdapter[EvaluatorConfig] = TypeAdapter(EvaluatorConfig)
 _EVALUATOR_CONFIG_EXAMPLES: dict[str, dict[str, Any]] = {
     "exact_match": {
+        "expected_value": "expected text",
         "trim": True,
         "case_sensitive": True,
         "normalize_newlines": True,
@@ -175,6 +179,7 @@ _EVALUATOR_CONFIG_EXAMPLES: dict[str, dict[str, Any]] = {
         "schema_draft": "2020-12",
     },
     "llm_judge": {
+        "expected_value": "expected answer or reference text",
         "rubric": [
             {
                 "id": "correct",
@@ -280,14 +285,36 @@ class GoldenSetItemInput(BaseModel):
             and "expected_value" not in self.evaluator_config
         ):
             normalized_config.pop("expected_value", None)
+        if self.evaluation_method == "llm_judge" and "expected_value" not in self.evaluator_config:
+            normalized_config.pop("expected_value", None)
+        if self.evaluation_method == "exact_match":
+            exact = config
+            assert isinstance(exact, ExactMatchConfig)
+            expected_value = exact.expected_value
+            if expected_value is None:
+                # Legacy records and snapshots stored exact-match values separately.
+                expected_value = self.expected_answer
+            if expected_value is None or not expected_value.strip():
+                raise ValueError("expected_value is required for exact_match")
+            normalized_config["expected_value"] = expected_value
+            # Keep expected references in method configuration, not legacy shared column.
+            self.expected_answer = None
         self.evaluator_config = normalized_config
-        if self.evaluation_method == "exact_match" and self.expected_answer is None:
-            raise ValueError("expected_answer is required for exact_match")
-        if self.evaluation_method == "llm_judge" and self.expected_answer is None:
+        if self.evaluation_method == "llm_judge":
             judge = config
             assert isinstance(judge, LlmJudgeConfig)
-            if not judge.rubric:
-                raise ValueError("llm_judge without expected_answer requires an item rubric")
+            expected_value = judge.expected_value
+            if expected_value is None:
+                # Legacy records and snapshots stored judge reference text separately.
+                expected_value = self.expected_answer
+            if expected_value is not None:
+                if not expected_value.strip():
+                    raise ValueError("expected_value must not be blank")
+                normalized_config["expected_value"] = expected_value
+            elif not judge.rubric:
+                raise ValueError("llm_judge requires expected_value or an item rubric")
+            self.expected_answer = None
+            self.evaluator_config = normalized_config
         return self
 
 
@@ -1043,9 +1070,14 @@ class GoldenSetService:
             and len(data.system_prompt) > self._limits.max_system_prompt_chars
         ):
             raise ValidationApiError("System prompt exceeds maximum length.")
+        expected_value = (
+            data.evaluator_config.get("expected_value")
+            if data.evaluation_method in {"exact_match", "llm_judge"}
+            else data.expected_answer
+        )
         if (
-            data.expected_answer is not None
-            and len(data.expected_answer) > self._limits.max_expected_answer_chars
+            expected_value is not None
+            and len(expected_value) > self._limits.max_expected_answer_chars
         ):
             raise ValidationApiError("Expected answer exceeds maximum length.")
         if data.evaluation_method == "llm_judge":

@@ -53,8 +53,9 @@ def test_exact_match_pass_and_fail_include_normalized_metadata_not_content_in_re
             "case_sensitive": False,
             "normalize_newlines": True,
             "collapse_whitespace": True,
+            "expected_value": " STRASSE\r\nOK ",
         },
-        " STRASSE\r\nOK ",
+        None,
     )
     passed = ExactMatchEvaluator().evaluate(item, "straße  OK")
     failed = ExactMatchEvaluator().evaluate(item, "secret-candidate")
@@ -65,6 +66,12 @@ def test_exact_match_pass_and_fail_include_normalized_metadata_not_content_in_re
     assert (failed.score, failed.passed) == (Decimal("0"), False)
     assert "secret-candidate" not in failed.reason
     assert "STRASSE" not in failed.reason
+
+
+def test_exact_match_uses_configured_value_not_legacy_expected_answer() -> None:
+    item = _record("exact_match", {"expected_value": "configured"}, expected="legacy")
+    assert ExactMatchEvaluator().evaluate(item, "configured").passed is True
+    assert ExactMatchEvaluator().evaluate(item, "legacy").passed is False
 
 
 def test_contains_all_any_overlap_and_unicode() -> None:

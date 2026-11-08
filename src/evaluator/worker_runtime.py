@@ -270,7 +270,11 @@ class JudgeCaller:
         )
         prompt = build_judge_prompt(
             prompt=case["prompt"],
-            expected_answer=case.get("expected_answer"),
+            expected_answer=(
+                config.expected_value
+                if config.expected_value is not None
+                else case.get("expected_answer")
+            ),
             rubric=rubric,
             context=config.context,
             candidate=candidate,

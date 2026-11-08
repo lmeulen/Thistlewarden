@@ -292,6 +292,10 @@ class RunViewService:
     def _result(cls, row: dict[str, Any]) -> dict[str, Any]:
         row["evaluation"] = json.loads(row.pop("result_json"))
         row["case"] = json.loads(row.pop("case_json"))
+        config = json.loads(row["case"].get("evaluator_config_json") or "{}")
+        row["case"]["expected_value"] = config.get("expected_value") or row["case"].get(
+            "expected_answer"
+        )
         row["model"] = cls._model(json.loads(row.pop("model_json")))
         row["total_cost"] = decimal_or_none(row.get("target_cost"))
         return row

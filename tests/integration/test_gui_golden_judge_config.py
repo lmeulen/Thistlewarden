@@ -77,6 +77,7 @@ def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
     assert response.status_code == 200
     assert 'id="evaluation-method"' in page
     assert 'id="evaluator-config"' in page
+    assert 'name="expected_answer"' not in page
     assert "method.addEventListener('change'" in page
     assert "JSON.stringify(examples[method.value], null, 2)" in page
     assert re.search(r'<script nonce="[^"]+">', page)
@@ -215,7 +216,7 @@ def test_output_tester_rejects_invalid_config_and_llm_judge(app) -> None:
 @pytest.mark.parametrize(
     ("method", "expected", "config"),
     [
-        ("exact_match", "ja", {}),
+        ("exact_match", None, {"expected_value": "ja"}),
         ("contains", None, {"expected_fragments": ["ja"], "match_mode": "all"}),
         ("regex", None, {"pattern": "^ja$"}),
         ("numeric", None, {"expected_value": "42", "absolute_tolerance": "0.1"}),
@@ -223,7 +224,10 @@ def test_output_tester_rejects_invalid_config_and_llm_judge(app) -> None:
         (
             "llm_judge",
             None,
-            {"rubric": [{"id": "correct", "description": "Juist", "weight": "1"}]},
+            {
+                "expected_value": "ja",
+                "rubric": [{"id": "correct", "description": "Juist", "weight": "1"}],
+            },
         ),
     ],
 )

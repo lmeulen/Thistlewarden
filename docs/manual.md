@@ -45,7 +45,7 @@
    - [7.4 Selecting a judge profile](#74-selecting-a-judge-profile)
 8. [Test cases](#8-test-cases)
    - [8.1 Adding and editing test cases](#81-adding-and-editing-test-cases)
-   - [8.2 Prompts and expected answers](#82-prompts-and-expected-answers)
+   - [8.2 Prompts and expected values](#82-prompts-and-expected-values)
    - [8.3 Categories, tags, weights, and ordering](#83-categories-tags-weights-and-ordering)
    - [8.4 Enabling and disabling test cases](#84-enabling-and-disabling-test-cases)
    - [8.5 Testing candidate output before saving](#85-testing-candidate-output-before-saving)
@@ -947,7 +947,7 @@ Before assigning a profile, confirm that it is configured with an active model p
 
 Open golden set and select **Add test case**. A test case defines one prompt, expected behavior, and evaluation method for every selected model in a run.
 
-Required fields are **Case ID**, **User prompt**, **Evaluation method**, evaluator configuration, and positive **Weight**. Add optional system prompt, expected answer, category, tags, and enabled state as needed. Select **Save**; page stays on case so you can review saved configuration or delete it.
+Required fields are **Case ID**, **User prompt**, **Evaluation method**, evaluator configuration, and positive **Weight**. Add optional system prompt, category, tags, and enabled state as needed. Select **Save**; page stays on case so you can review saved configuration or delete it.
 
 Case ID must be unique within golden set. Use stable descriptive IDs such as `support-refund-policy`, `json-order-status`, or `safety-refusal-001`, rather than row numbers that change when suite evolves. Edit case by selecting its ID from golden-set page. Changes affect future runs only; existing run snapshots and results remain unchanged.
 
@@ -955,11 +955,13 @@ Evaluator configuration is JSON. Form starts with valid method-specific example.
 
 [Back to top](#manual-top)
 
-### 8.2 Prompts and expected answers
+### 8.2 Prompts and expected values
 
 **User prompt** is required text sent to target model. Write it as representative request from intended workload. **System prompt** is optional instruction sent before user prompt; use it when target behavior depends on system-level context.
 
-**Expected answer** supplies reference text or value for evaluators that need it. Exact match requires expected answer. LLM judge requires expected answer or an item rubric in evaluator configuration. Other methods may use method-specific expected value in configuration instead.
+Evaluator configuration JSON supplies method-specific reference data. **Exact match** stores its required reference text as `expected_value`. **LLM judge** also stores optional reference text as `expected_value`; it requires that value or a non-empty item rubric. Other methods use their documented configuration fields.
+
+For backward compatibility, older exact-match and LLM-judge cases may retain a separate legacy expected answer. When loaded, Thistlewarden moves it to `expected_value`. New cases should use configuration JSON.
 
 Write prompts and expectations to make pass condition clear:
 
@@ -1003,12 +1005,12 @@ Disable case to quarantine flaky scenario, pause work in progress, exclude obsol
 Use **Test evaluator** in test-case form to check current unsaved evaluation settings against sample candidate output.
 
 1. Select evaluation method and edit JSON configuration as needed.
-2. Enter reference value in **Expected answer** when method requires it.
+2. For **Exact match** or **LLM judge**, enter reference text as `expected_value` in JSON when needed.
 3. Enter candidate text in **Test output**.
 4. Select **Verify output**.
 5. Read `OK` or `NOK`, score, and evaluator reason.
 
-Preview uses production validation and deterministic evaluator behavior, but writes no test case or output to database. It evaluates only method, configuration, expected answer, and test output, so incomplete Case ID or User prompt does not block experimentation. Changing method, configuration, expected answer, or candidate output clears prior preview result.
+Preview uses production validation and deterministic evaluator behavior, but writes no test case or output to database. It evaluates only method, configuration, and test output, so incomplete Case ID or User prompt does not block experimentation. Changing method, configuration, or candidate output clears prior preview result.
 
 LLM judge preview is unavailable in this form because it needs run/model snapshot, provider call, credentials, rate limiting, and may incur cost. Save case and use a controlled run to evaluate LLM-judge behavior. Do not enter sensitive output into preview field: it is sent in request even though it is not persisted or returned.
 
@@ -1041,10 +1043,11 @@ For every deterministic method, use **Test evaluator** with one known passing ou
 
 ### 9.1 Exact match
 
-Use **Exact match** when candidate must equal expected answer after configured text normalization. It requires **Expected answer** and returns score `1` for match or `0` for mismatch.
+Use **Exact match** when candidate must equal `expected_value` in evaluator configuration after configured text normalization. It returns score `1` for match or `0` for mismatch.
 
 ```json
 {
+  "expected_value": "positive",
   "trim": true,
   "case_sensitive": true,
   "normalize_newlines": true,
@@ -1192,6 +1195,7 @@ Use **LLM judge** when deterministic rules cannot capture quality, relevance, co
 
 ```json
 {
+  "expected_value": "A correct answer should explain the documented behavior.",
   "rubric": [
     {"id": "correct", "description": "Answer is correct and complete.", "weight": "1"}
   ],
@@ -1201,7 +1205,7 @@ Use **LLM judge** when deterministic rules cannot capture quality, relevance, co
 }
 ```
 
-An item needs **Expected answer** or non-empty item `rubric`. Each rubric criterion has unique ID, non-empty description, and positive weight. `rubric_mode` `augment` adds item criteria to judge-profile rubric; `replace` uses item rubric instead. `threshold`, when set, overrides judge profile threshold for this case. `context` adds case-specific information for judge.
+An item needs nonblank `expected_value` or a non-empty item `rubric`. `expected_value` is optional reference text sent to judge. Each rubric criterion has unique ID, non-empty description, and positive weight. `rubric_mode` `augment` adds item criteria to judge-profile rubric; `replace` uses item rubric instead. `threshold`, when set, overrides judge profile threshold for this case. `context` adds case-specific information for judge.
 
 LLM judge makes an additional provider call, can add cost and latency, and sends evaluation context—including prompt, candidate answer, expected answer when present, and rubric—to judge provider. It requires active usable judge profile and model. Results can vary with judge model and configuration. Use clear, observable criteria, conservative judge settings, and review sample result details before basing release decisions on it. Output tester intentionally does not run LLM judge; test it in controlled run.
 
@@ -1211,14 +1215,14 @@ LLM judge makes an additional provider call, can add cost and latency, and sends
 
 Selecting evaluation method fills **Evaluator configuration (JSON)** with valid editable example. These examples show available fields, not generic defaults for every task. Save validates configuration strictly: unknown fields, wrong value types, missing required fields, invalid JSON, invalid regex, or invalid JSON Schema are rejected.
 
-| Method | Best use | Expected answer needed | Candidate pass condition |
+| Method | Best use | Reference configuration | Candidate pass condition |
 |---|---|---:|---|
-| Exact match | Fixed text/value | Yes | Normalized candidate equals expected answer. |
+| Exact match | Fixed text/value | `expected_value` required | Normalized candidate equals expected value. |
 | Contains | Required fragments in prose | No | All or any configured fragments occur. |
 | Regex | Pattern-constrained text | No | Pattern searches or fully matches. |
 | Numeric | Measured numeric answer | No | Extracted number meets exact/tolerance rule. |
 | JSON Schema | Structured JSON | No | Valid JSON satisfies schema and optional expected value. |
-| LLM judge | Qualitative behavior | Expected answer or rubric | Judge score meets applicable threshold. |
+| LLM judge | Qualitative behavior | `expected_value` or rubric | Judge score meets applicable threshold. |
 
 Choose simplest method that measures requirement. Deterministic evaluators are fast, local, repeatable, and usable in unsaved output tester. LLM judge supports nuanced judgment but depends on provider availability, configuration, cost, and nondeterministic model behavior. Every method result stores score, pass/fail state, and reason; inspect individual result details when outcome surprises you.
 
@@ -1883,7 +1887,7 @@ Use this recovery sequence:
 2. Start from method-specific example populated in form.
 3. Ensure configuration is JSON object with double-quoted property names/strings; no comments or trailing commas.
 4. Add only fields documented for selected method.
-5. Add required expected answer or rubric where method needs it.
+5. Add required `expected_value`, fragments, schema, pattern, or rubric in evaluator JSON.
 6. Use **Test evaluator** for deterministic case with known pass/fail sample.
 7. Save case, then inspect stored configuration before run.
 
@@ -1903,7 +1907,7 @@ Use result reason and metadata in individual run result to identify parse vs sch
 
 ### 17.5 LLM judge setup problems
 
-LLM judge needs active judge profile resolved by run override, golden-set override, or active global default. It also needs active judge model profile and active parent endpoint. Check each link before run. Ensure test case has expected answer or item rubric, and rubric IDs are valid and unique.
+LLM judge needs active judge profile resolved by run override, golden-set override, or active global default. It also needs active judge model profile and active parent endpoint. Check each link before run. Ensure test case configuration has `expected_value` or an item rubric, and rubric IDs are valid and unique.
 
 Judge model must return strict JSON response containing score, passed, reason, and exactly configured criterion IDs. Malformed response produces judge parse error. Use capable model, low temperature, adequate output-token limit, clear concise rubric, and small pilot suite. Review individual result details to distinguish judge provider failure, parse failure, and ordinary low score.
 

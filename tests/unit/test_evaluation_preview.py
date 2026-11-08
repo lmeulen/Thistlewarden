@@ -11,8 +11,8 @@ pytestmark = pytest.mark.unit
 @pytest.mark.parametrize(
     ("method", "config", "candidate", "passed"),
     [
-        ("exact_match", {}, "Expected", True),
-        ("exact_match", {}, "Different", False),
+        ("exact_match", {"expected_value": "Expected"}, "Expected", True),
+        ("exact_match", {"expected_value": "Expected"}, "Different", False),
         ("contains", {"expected_fragments": ["needle"]}, "a needle here", True),
         ("regex", {"pattern": r"^value-\d+$"}, "value-42", True),
         ("numeric", {"expected_value": "42", "absolute_tolerance": "0.1"}, "42.05", True),
@@ -25,13 +25,23 @@ def test_preview_uses_production_evaluators(
     result = EvaluationPreviewService(max_candidate_chars=1000).evaluate(
         method=method,
         config=config,
-        expected_answer="Expected",
+        expected_answer=None,
         candidate=candidate,
     )
     assert result.method == method
     assert result.passed is passed
     assert result.model_dump().keys() == {"method", "passed", "score", "reason"}
     assert candidate not in result.model_dump_json()
+
+
+def test_preview_supports_legacy_exact_match_expected_answer() -> None:
+    result = EvaluationPreviewService(max_candidate_chars=100).evaluate(
+        method="exact_match",
+        config={},
+        expected_answer="Legacy expected",
+        candidate="Legacy expected",
+    )
+    assert result.passed is True
 
 
 def test_preview_rejects_invalid_config_and_large_candidate() -> None:
@@ -42,7 +52,10 @@ def test_preview_rejects_invalid_config_and_large_candidate() -> None:
         )
     with pytest.raises(ValidationApiError, match="maximum length"):
         service.evaluate(
-            method="exact_match", config={}, expected_answer="Expected", candidate="123456"
+            method="exact_match",
+            config={"expected_value": "Expected"},
+            expected_answer=None,
+            candidate="123456",
         )
 
 

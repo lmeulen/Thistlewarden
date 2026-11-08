@@ -10,7 +10,6 @@
   <label>Category<input name="category" value="{{ d.category or '' if d else '' }}"></label>
   <label class="wide">System prompt<textarea name="system_prompt">{{ d.system_prompt or '' if d else '' }}</textarea></label>
   <label class="wide">User prompt<textarea name="prompt" required rows="6">{{ d.prompt if d else '' }}</textarea></label>
-  <label class="wide">Expected answer<textarea name="expected_answer" rows="4">{{ d.expected_answer or '' if d else '' }}</textarea></label>
   <label>Evaluation method
     <select name="evaluation_method" id="evaluation-method">
       {% for value,label in [('exact_match','Exact match'),('contains','Contains'),('regex','Regex'),('numeric','Numeric'),('json_schema','JSON Schema'),('llm_judge','LLM judge')] %}
@@ -22,7 +21,7 @@
   <label class="wide">Evaluator configuration (JSON)
     <textarea name="evaluator_config" id="evaluator-config" rows="12" aria-describedby="config-help">{{ d.evaluator_config|tojson(indent=2) if d else evaluator_examples['exact_match']|tojson(indent=2) }}</textarea>
   </label>
-  <p id="config-help" class="help wide">Changing evaluation method replaces configuration with valid example showing available fields. You can edit example before saving. Exact match requires expected answer. LLM judge requires expected answer or item rubric.</p>
+  <p id="config-help" class="help wide">Changing evaluation method replaces configuration with valid example showing available fields. You can edit example before saving. Exact match requires <code>expected_value</code>. LLM judge requires <code>expected_value</code> or an item rubric.</p>
   <section class="panel wide" aria-labelledby="output-tester-title">
     <h2 id="output-tester-title">Test evaluator</h2>
     <p>Verify candidate output against current unsaved evaluator settings. Nothing is saved.</p>
@@ -57,7 +56,7 @@
     config.value = JSON.stringify(examples[method.value], null, 2);
     clearResult();
   });
-  [config, output, form.elements.expected_answer].forEach(function (element) {
+  [config, output].forEach(function (element) {
     element.addEventListener('input', clearResult);
   });
   button.addEventListener('click', function () {

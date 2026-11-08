@@ -22,9 +22,9 @@ class ExactMatchEvaluator:
             ExactMatchConfig,
             validate_evaluator_config(self.method, item.data.evaluator_config),
         )
-        expected = item.data.expected_answer
+        expected = config.expected_value
         if expected is None:
-            raise ValueError("exact_match requires expected_answer")
+            raise ValueError("exact_match requires expected_value")
         options = {
             "normalize_newlines": config.normalize_newlines,
             "trim": config.trim,

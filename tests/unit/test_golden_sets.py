@@ -26,12 +26,19 @@ def _item(**changes: object) -> dict[str, object]:
     return value
 
 
-def test_exact_match_requires_expected_answer_and_positive_weight() -> None:
-    with pytest.raises(ValidationError, match="expected_answer"):
+def test_exact_match_requires_config_expected_value_or_legacy_value_and_positive_weight() -> None:
+    with pytest.raises(ValidationError, match="expected_value"):
         GoldenSetItemInput.model_validate(_item(expected_answer=None))
     with pytest.raises(ValidationError):
         GoldenSetItemInput.model_validate(_item(weight="0"))
-    assert GoldenSetItemInput.model_validate(_item()).weight == Decimal("1.0")
+    legacy = GoldenSetItemInput.model_validate(_item())
+    assert legacy.evaluator_config["expected_value"] == "Antwoord"
+    assert legacy.expected_answer is None
+    configured = GoldenSetItemInput.model_validate(
+        _item(expected_answer=None, evaluator_config={"expected_value": "Configured answer"})
+    )
+    assert configured.evaluator_config["expected_value"] == "Configured answer"
+    assert configured.weight == Decimal("1.0")
 
 
 def test_prompt_is_required_and_only_one_optional_system_prompt_exists() -> None:
@@ -45,7 +52,7 @@ def test_prompt_is_required_and_only_one_optional_system_prompt_exists() -> None
 @pytest.mark.parametrize(
     ("method", "config"),
     [
-        ("exact_match", {}),
+        ("exact_match", {"expected_value": "expected text"}),
         ("contains", {"expected_fragments": ["a"], "match_mode": "any"}),
         ("regex", {"pattern": "^ok$"}),
         ("numeric", {"expected_value": "1.25"}),
@@ -88,12 +95,29 @@ def test_invalid_method_specific_configuration_fails() -> None:
         validate_evaluator_config("numeric", {"expected_value": "not-a-number"})
 
 
-def test_judge_without_expected_answer_requires_rubric() -> None:
+def test_judge_requires_config_expected_value_or_rubric_and_migrates_legacy_value() -> None:
     with pytest.raises(ValidationError, match="rubric"):
         GoldenSetItemInput.model_validate(
             _item(evaluation_method="llm_judge", evaluator_config={}, expected_answer=None)
         )
-    valid = GoldenSetItemInput.model_validate(
+    configured = GoldenSetItemInput.model_validate(
+        _item(
+            evaluation_method="llm_judge",
+            expected_answer=None,
+            evaluator_config={"expected_value": "Configured reference"},
+        )
+    )
+    assert configured.evaluator_config["expected_value"] == "Configured reference"
+    legacy = GoldenSetItemInput.model_validate(
+        _item(
+            evaluation_method="llm_judge",
+            evaluator_config={},
+            expected_answer="Legacy reference",
+        )
+    )
+    assert legacy.evaluator_config["expected_value"] == "Legacy reference"
+    assert legacy.expected_answer is None
+    rubric_only = GoldenSetItemInput.model_validate(
         _item(
             evaluation_method="llm_judge",
             expected_answer=None,
@@ -102,4 +126,5 @@ def test_judge_without_expected_answer_requires_rubric() -> None:
             },
         )
     )
-    assert valid.expected_answer is None
+    assert rubric_only.expected_answer is None
+    assert "expected_value" not in rubric_only.evaluator_config
