@@ -33,6 +33,7 @@ scripts/*
 testsets/
 issues.txt
 issues.md
+*config.json
 
 # Optional per-suite local credentials; fixtures and generators remain versionable.
 testsets/**/secrets.env
