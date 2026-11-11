@@ -212,6 +212,45 @@ def test_cancel_delete_and_export_require_csrf_and_confirmation(app) -> None:
     assert client.get(f"/runs/{run_id}").status_code == 404
 
 
+def test_bulk_delete_runs_with_select_all_control(app) -> None:
+    client = app.test_client()
+    first = create_run(client, app, "Delete first")
+    second = create_run(client, app, "Delete second")
+    retained = create_run(client, app, "Keep this run")
+    for run_id in (first, second, retained):
+        complete_run(app, run_id)
+
+    page = client.get("/runs")
+    text = page.get_data(as_text=True)
+    assert page.status_code == 200
+    assert 'id="select-all-runs"' in text
+    assert "Select all runs" in text
+    assert text.count('class="run-select"') == 3
+    assert "Delete selected runs" in text
+    assert "Permanently delete selected runs?" in text
+
+    token = csrf(client, "/runs")
+    empty = client.post(
+        "/runs/verwijderen", data={"csrf_token": token}, follow_redirects=True
+    )
+    assert "Select one or more valid, completed runs." in empty.get_data(as_text=True)
+
+    token = csrf(client, "/runs")
+    deleted = client.post(
+        "/runs/verwijderen",
+        data={"csrf_token": token, "run_ids": [first, second]},
+        follow_redirects=True,
+    )
+    deleted_text = deleted.get_data(as_text=True)
+    assert "2 runs permanently deleted." in deleted_text
+    assert "Delete first" not in deleted_text
+    assert "Delete second" not in deleted_text
+    assert "Keep this run" in deleted_text
+    assert client.get(f"/runs/{first}").status_code == 404
+    assert client.get(f"/runs/{second}").status_code == 404
+    assert client.get(f"/runs/{retained}").status_code == 200
+
+
 def test_rerun_failed_jobs_from_gui(app) -> None:
     client = app.test_client()
     run_id = create_run(client, app, "Failing")

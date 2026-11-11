@@ -358,10 +358,35 @@ class SQLiteEndpointRepository:
         finally:
             connection.close()
 
-    def delete(self, endpoint_id: UUID) -> bool:
+    def delete(self, endpoint_id: UUID, *, cascade_models: bool = False) -> bool:
         connection = self._factory.connect()
         try:
             with transaction(connection):
+                if cascade_models:
+                    params = (str(endpoint_id),)
+                    connection.execute(
+                        """
+                        UPDATE golden_sets SET judge_profile_id = NULL
+                        WHERE judge_profile_id IN (
+                            SELECT judge_profiles.id FROM judge_profiles
+                            JOIN model_profiles
+                              ON model_profiles.id = judge_profiles.model_profile_id
+                            WHERE model_profiles.endpoint_id = ?
+                        )
+                        """,
+                        params,
+                    )
+                    connection.execute(
+                        """
+                        DELETE FROM judge_profiles WHERE model_profile_id IN (
+                            SELECT id FROM model_profiles WHERE endpoint_id = ?
+                        )
+                        """,
+                        params,
+                    )
+                    connection.execute(
+                        "DELETE FROM model_profiles WHERE endpoint_id = ?", params
+                    )
                 cursor = connection.execute(
                     "DELETE FROM endpoints WHERE id = ?", (str(endpoint_id),)
                 )
@@ -512,15 +537,15 @@ class EndpointService:
         log_semantic_event(_LOG, "endpoint_updated", endpoint_id=endpoint_id)
         return record
 
-    def delete(self, endpoint_id: UUID) -> None:
+    def delete(self, endpoint_id: UUID, *, cascade_models: bool = False) -> None:
         existing = self.get(endpoint_id)
         header_secret_ids = list(self._repository.header_secret_ids(endpoint_id).values())
         try:
-            if not self._repository.delete(endpoint_id):
+            if not self._repository.delete(endpoint_id, cascade_models=cascade_models):
                 raise NotFoundError("Endpoint not found.")
         except sqlite3.IntegrityError as exc:
             raise ConflictError(
-                "Endpoint heeft historische referenties en kan niet worden verwijderd."
+                "Endpoint or its model profiles have historical references and cannot be deleted."
             ) from exc
         if existing.api_key_secret_id:
             self._secrets.delete(existing.api_key_secret_id)

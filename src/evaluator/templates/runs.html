@@ -1,1 +1,62 @@
-{% extends "base.html" %}{% block title %}Runs · Thistlewarden{% endblock %}{% block content %}<div class="heading"><div><h1>Runs</h1><p>Start, monitor, and compare evaluation runs.</p></div><a class="button" href="{{ url_for('gui.run_new') }}">New run</a></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Status</th><th>Score</th><th>Quality gates</th><th>Progress</th><th>Created</th></tr></thead><tbody>{% for run in runs %}<tr><td><a href="{{ url_for('gui.run_detail', run_id=run.id) }}">{{ run.name }}</a></td><td><span class="badge status-{{ run.status }}">{{ status_label(run.status) }}</span></td><td>{{ display_metric(run.weighted_score, places=4) }}</td><td><span class="badge status-{{ run.gate_status }}">{{ status_label(run.gate_status) }}</span></td><td>{{ run.done_jobs }}/{{ run.total_jobs }} ({{ run.progress_percent }}%)</td><td><time data-utc="{{ run.created_at }}">{{ run.created_at }}</time></td></tr>{% else %}<tr><td colspan="6">No runs yet.</td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Runs · Thistlewarden{% endblock %}
+{% block content %}
+<div class="heading">
+  <div><h1>Runs</h1><p>Start, monitor, and compare evaluation runs.</p></div>
+  <a class="button" href="{{ url_for('gui.run_new') }}">New run</a>
+</div>
+<form method="post" action="{{ url_for('gui.runs_delete') }}" id="bulk-delete-runs" data-confirm="Permanently delete selected runs?">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if runs %}
+  <div class="heading bulk-run-actions">
+    <label class="check"><input type="checkbox" id="select-all-runs"> Select all runs</label>
+    <button type="submit" class="danger compact">Delete selected runs</button>
+  </div>
+  {% endif %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="selection-column"><span class="sr-only">Select</span></th><th>Name</th><th>Status</th><th>Score</th><th>Quality gates</th><th>Progress</th><th>Created</th></tr></thead>
+      <tbody>
+      {% for run in runs %}
+        <tr>
+          <td class="selection-column"><input type="checkbox" class="run-select" name="run_ids" value="{{ run.id }}" aria-label="Select run {{ run.name }}"></td>
+          <td><a href="{{ url_for('gui.run_detail', run_id=run.id) }}">{{ run.name }}</a></td>
+          <td><span class="badge status-{{ run.status }}">{{ status_label(run.status) }}</span></td>
+          <td>{{ display_metric(run.weighted_score, places=4) }}</td>
+          <td><span class="badge status-{{ run.gate_status }}">{{ status_label(run.gate_status) }}</span></td>
+          <td>{{ run.done_jobs }}/{{ run.total_jobs }} ({{ run.progress_percent }}%)</td>
+          <td><time data-utc="{{ run.created_at }}">{{ run.created_at }}</time></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7">No runs yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% if runs %}
+<script nonce="{{ csp_nonce() }}">
+const bulkRunForm = document.getElementById('bulk-delete-runs');
+const selectAllRuns = document.getElementById('select-all-runs');
+const runCheckboxes = Array.from(bulkRunForm.querySelectorAll('.run-select'));
+function updateSelectAllRuns() {
+  const selected = runCheckboxes.filter(checkbox => checkbox.checked).length;
+  selectAllRuns.checked = selected === runCheckboxes.length;
+  selectAllRuns.indeterminate = selected > 0 && selected < runCheckboxes.length;
+}
+selectAllRuns.addEventListener('change', function () {
+  runCheckboxes.forEach(checkbox => { checkbox.checked = selectAllRuns.checked; });
+  updateSelectAllRuns();
+});
+runCheckboxes.forEach(checkbox => checkbox.addEventListener('change', updateSelectAllRuns));
+bulkRunForm.addEventListener('submit', function (event) {
+  if (!runCheckboxes.some(checkbox => checkbox.checked)) {
+    event.preventDefault();
+    window.alert('Select at least one run.');
+  } else if (!window.confirm(bulkRunForm.dataset.confirm)) {
+    event.preventDefault();
+  }
+});
+</script>
+{% endif %}
+{% endblock %}

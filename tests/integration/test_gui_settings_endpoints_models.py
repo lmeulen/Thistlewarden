@@ -46,7 +46,7 @@ def _endpoint_form(token: str, **changes: object) -> dict[str, object]:
         "api_key": "gui-fixture-secret",
         "api_key_header": "Authorization",
         "api_key_prefix": "Bearer ",
-        "extra_headers": "X-Tenant|openbaar|team-a\nX-Private|geheim|header-secret",
+        "extra_headers": "X-Tenant|public|team-a\nX-Private|secret|header-secret",
         "timeout_seconds": "30",
         "max_retries": "2",
         "requests_per_minute": "60",
@@ -76,6 +76,104 @@ def test_gui_csrf_blocks_mutation(app) -> None:
     connection = app.extensions["database_factory"].connect()
     try:
         assert connection.execute("SELECT COUNT(*) FROM endpoints").fetchone()[0] == 0
+    finally:
+        connection.close()
+
+
+def test_endpoint_delete_requires_matching_name(app) -> None:
+    endpoint = app.extensions["endpoint_service"].create(
+        {
+            "name": "Provider to delete",
+            "completions_url": "https://provider.example/v1/chat/completions",
+        }
+    )
+    model = app.extensions["model_profile_service"].create(
+        endpoint.id,
+        {
+            "model_id": "model-to-delete",
+            "display_name": "Model to delete",
+            "pricing": {"input_per_million": "0", "output_per_million": "0"},
+        },
+    )
+    judge = app.extensions["judge_profile_service"].create(
+        {
+            "name": "Judge to delete",
+            "model_profile_id": str(model.id),
+            "rubric": [
+                {"id": "quality", "weight": "1", "description": "Overall quality"}
+            ],
+        }
+    )
+    connection = app.extensions["database_factory"].connect()
+    try:
+        connection.execute(
+            """
+            INSERT INTO golden_sets
+            (id,name,description,version,tags_json,active,created_at,updated_at,
+             judge_profile_id,quality_gates_json)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                "00000000-0000-4000-8000-000000000099",
+                "Set with judge override",
+                None,
+                "1.0",
+                "[]",
+                1,
+                "2026-01-01T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+                str(judge.id),
+                "{}",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    client = app.test_client()
+    path = f"/endpoints/{endpoint.id}"
+    page = client.get(path)
+    text = page.get_data(as_text=True)
+    assert "Danger zone" in text
+    assert "Type <strong>Provider to delete</strong> to confirm" in text
+    assert 'name="confirmation_name"' in text
+    assert "Permanently delete endpoint" in text
+
+    token = _csrf(client, path)
+    rejected = client.post(
+        f"{path}/verwijderen",
+        data={"csrf_token": token, "confirmation_name": "wrong name"},
+        follow_redirects=True,
+    )
+    assert rejected.status_code == 200
+    assert "Endpoint name did not match. Endpoint was not deleted." in rejected.get_data(
+        as_text=True
+    )
+    assert app.extensions["endpoint_service"].get(endpoint.id).data.name == "Provider to delete"
+
+    token = _csrf(client, path)
+    deleted = client.post(
+        f"{path}/verwijderen",
+        data={"csrf_token": token, "confirmation_name": "Provider to delete"},
+        follow_redirects=True,
+    )
+    assert deleted.status_code == 200
+    assert "Endpoint and its model profiles deleted." in deleted.get_data(as_text=True)
+    assert all(
+        existing.id != endpoint.id
+        for existing in app.extensions["endpoint_service"].list_all()
+    )
+    connection = app.extensions["database_factory"].connect()
+    try:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM model_profiles WHERE id = ?", (str(model.id),)
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM judge_profiles WHERE id = ?", (str(judge.id),)
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT judge_profile_id FROM golden_sets WHERE name = ?",
+            ("Set with judge override",),
+        ).fetchone()[0] is None
     finally:
         connection.close()
 
@@ -321,7 +419,7 @@ def test_gui_creates_endpoint_preserves_blank_secrets_and_creates_model(app) -> 
             token,
             name="Gewijzigde provider",
             api_key="",
-            extra_headers="X-Tenant|openbaar|team-b\nX-Private|geheim|",
+            extra_headers="X-Tenant|public|team-b\nX-Private|secret|",
         ),
         follow_redirects=True,
     )

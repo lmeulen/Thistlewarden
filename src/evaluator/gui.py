@@ -169,11 +169,14 @@ def _headers_from_form() -> list[HeaderInput]:
         if not line.strip():
             continue
         parts = line.split("|", 2)
-        if len(parts) != 3 or parts[1].strip().lower() not in {"openbaar", "geheim"}:
+        visibility = parts[1].strip().lower() if len(parts) == 3 else ""
+        if visibility not in {"public", "secret", "openbaar", "geheim"}:
             raise ValueError(f"Header line {number}: use Name|public|Value or Name|secret|Value")
         result.append(
             HeaderInput(
-                name=parts[0].strip(), secret=parts[1].strip().lower() == "geheim", value=parts[2]
+                name=parts[0].strip(),
+                secret=visibility in {"secret", "geheim"},
+                value=parts[2],
             )
         )
     return result
@@ -365,9 +368,14 @@ def endpoint_edit(endpoint_id: UUID) -> str | Response:
 
 @gui.post("/endpoints/<uuid:endpoint_id>/verwijderen")
 def endpoint_delete(endpoint_id: UUID) -> Response:
+    service = _endpoint_service()
     try:
-        _endpoint_service().delete(endpoint_id)
-        flash("Endpoint deleted.", "success")
+        endpoint = service.get(endpoint_id)
+        if request.form.get("confirmation_name", "") != endpoint.data.name:
+            flash("Endpoint name did not match. Endpoint was not deleted.", "error")
+            return redirect(url_for("gui.endpoint_edit", endpoint_id=endpoint_id))
+        service.delete(endpoint_id, cascade_models=True)
+        flash("Endpoint and its model profiles deleted.", "success")
     except ApiError as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.endpoints_page"))
@@ -969,6 +977,18 @@ def run_rerun_failures(run_id: UUID) -> Response:
     except ApiError as exc:
         flash(_error_message(exc), "error")
         return redirect(url_for("gui.run_detail", run_id=run_id))
+
+
+@gui.post("/runs/verwijderen")
+def runs_delete() -> Response:
+    try:
+        run_ids = [UUID(value) for value in request.form.getlist("run_ids")]
+        _run_exports().delete_many(run_ids)
+        count = len(set(run_ids))
+        flash(f"{count} run{'s' if count != 1 else ''} permanently deleted.", "success")
+    except (ApiError, ValueError):
+        flash("Select one or more valid, completed runs.", "error")
+    return redirect(url_for("gui.runs_page"))
 
 
 @gui.post("/runs/<uuid:run_id>/verwijderen")

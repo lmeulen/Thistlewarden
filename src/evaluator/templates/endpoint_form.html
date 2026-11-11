@@ -12,5 +12,22 @@
 <label>Requests/minute<input type="number" min="1" name="requests_per_minute" value="{{ d.requests_per_minute or '' if d else '' }}"></label><label>Tokens/minute<input type="number" min="1" name="tokens_per_minute" value="{{ d.tokens_per_minute or '' if d else '' }}"></label><label>Max. concurrent<input type="number" min="1" name="max_concurrency" value="{{ d.max_concurrency or '' if d else '' }}"></label>
 <label class="check"><input type="checkbox" name="active" {% if not d or d.active %}checked{% endif %}> Active</label><label class="check"><input type="checkbox" name="trusted_internal_http" {% if d and d.trusted_internal_http %}checked{% endif %}> Trusted internal HTTP endpoint</label><label class="check wide warning"><input type="checkbox" name="security_warning_confirmed" {% if d and d.security_warning_confirmed %}checked{% endif %}> I confirm that unsecured HTTP may expose traffic and secrets.</label>
 <div class="actions wide"><button>Save</button>{% if endpoint %}<a class="button secondary" href="{{ url_for('gui.discover', endpoint_id=endpoint.id) }}">Test connection and discover models</a>{% endif %}<a href="{{ url_for('gui.endpoints_page') }}">Cancel</a></div></form>
-{% if endpoint %}<form method="post" action="{{ url_for('gui.endpoint_delete', endpoint_id=endpoint.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger">Delete endpoint</button></form>{% endif %}
+{% if endpoint %}
+<section class="panel danger-zone">
+  <h2>Danger zone</h2>
+  <p>Deleting this endpoint is permanent. Its model profiles and secrets are removed too. Historical run or judge references still prevent deletion.</p>
+  <form method="post" action="{{ url_for('gui.endpoint_delete', endpoint_id=endpoint.id) }}" id="delete-endpoint-form" data-endpoint-name="{{ d.name }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Type <strong>{{ d.name }}</strong> to confirm<input name="confirmation_name" required autocomplete="off"></label>
+    <button class="danger">Delete endpoint</button>
+  </form>
+</section>
+<script nonce="{{ csp_nonce() }}">
+const deleteEndpointForm = document.getElementById('delete-endpoint-form');
+deleteEndpointForm.addEventListener('submit', function (event) {
+  const name = deleteEndpointForm.dataset.endpointName;
+  if (!window.confirm(`Permanently delete endpoint ${name}?`)) event.preventDefault();
+});
+</script>
+{% endif %}
 {% endblock %}

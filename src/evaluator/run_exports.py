@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from evaluator.api.errors import ConflictError, NotFoundError
+from evaluator.api.errors import ConflictError, NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.logging_config import log_semantic_event
 from evaluator.time import Clock, SystemClock, to_utc_iso
@@ -137,18 +137,32 @@ class RunExportService:
         return result
 
     def delete(self, run_id: UUID) -> None:
+        self.delete_many([run_id])
+
+    def delete_many(self, run_ids: list[UUID]) -> None:
+        unique_ids = list(dict.fromkeys(run_ids))
+        if not unique_ids:
+            raise ValidationApiError("Select at least one run.")
         c = self._factory.connect()
         try:
             with transaction(c):
-                row = c.execute("SELECT status FROM runs WHERE id=?", (str(run_id),)).fetchone()
-                if row is None:
-                    raise NotFoundError("Run not found.")
-                if row[0] in {"pending", "running"}:
-                    raise ConflictError("Active run cannot be deleted.")
-                c.execute("DELETE FROM runs WHERE id=?", (str(run_id),))
+                placeholders = ",".join("?" for _ in unique_ids)
+                rows = c.execute(
+                    f"SELECT id,status FROM runs WHERE id IN ({placeholders})",
+                    tuple(str(run_id) for run_id in unique_ids),
+                ).fetchall()
+                if len(rows) != len(unique_ids):
+                    raise NotFoundError("One or more runs were not found.")
+                if any(row[1] in {"pending", "running"} for row in rows):
+                    raise ConflictError("Active runs cannot be deleted.")
+                c.execute(
+                    f"DELETE FROM runs WHERE id IN ({placeholders})",
+                    tuple(str(run_id) for run_id in unique_ids),
+                )
         finally:
             c.close()
-        log_semantic_event(_LOG, "run_deleted", object_id=run_id)
+        for run_id in unique_ids:
+            log_semantic_event(_LOG, "run_deleted", object_id=run_id)
 
     def cleanup(self, retention_days: int) -> int:
         if retention_days < 0:
