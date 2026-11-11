@@ -78,8 +78,88 @@ def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
     assert 'id="evaluation-method"' in page
     assert 'id="evaluator-config"' in page
     assert 'name="expected_answer"' not in page
+    assert 'id="exact-match-mode"' in page
+    assert 'id="show-exact-form"' in page
+    assert 'id="show-exact-json"' in page
+    assert 'id="exact-expected-value"' in page
+    assert all(
+        f'id="exact-{field}"' in page
+        for field in ("trim", "case-sensitive", "normalize-newlines", "collapse-whitespace")
+    )
     assert "method.addEventListener('change'" in page
     assert "JSON.stringify(examples[method.value], null, 2)" in page
+    assert "value = {expected_value: expectedValue.value}" in page
+    assert "jsonEditor.style.display = useForm ? 'none' : '';" in page
+    assert "Fix invalid JSON before switching to form fields." in page
+    assert 'id="contains-mode"' in page
+    assert 'id="show-contains-form"' in page
+    assert 'id="show-contains-json"' in page
+    assert 'id="contains-fragments"' in page
+    assert 'id="add-contains-fragment"' in page
+    assert 'id="contains-match-mode"' in page
+    assert all(
+        f'id="contains-{field}"' in page
+        for field in ("case-sensitive", "normalize-newlines", "collapse-whitespace")
+    )
+    assert 'id="regex-mode"' in page
+    assert 'id="show-regex-form"' in page
+    assert 'id="show-regex-json"' in page
+    assert 'id="regex-pattern"' in page
+    assert all(
+        f'id="regex-{field}"' in page
+        for field in ("full-match", "case-sensitive", "multiline", "dot-all")
+    )
+    assert 'id="numeric-mode"' in page
+    assert 'class="field-with-info numeric-checkbox"' in page
+    assert 'id="show-numeric-form"' in page
+    assert 'id="show-numeric-json"' in page
+    assert all(
+        f'id="numeric-{field}"' in page
+        for field in (
+            "expected-value",
+            "absolute-tolerance",
+            "relative-tolerance",
+            "extraction",
+            "decimal-separator",
+            "allow-thousands",
+        )
+    )
+    assert 'id="json-schema-mode"' in page
+    assert 'id="show-json-schema-form"' in page
+    assert 'id="show-json-schema-json"' in page
+    assert 'id="json-schema-schema"' in page
+    assert 'id="json-schema-draft"' in page
+    assert 'id="json-schema-code-fence"' in page
+    assert 'id="json-schema-use-expected"' in page
+    assert 'id="json-schema-expected"' in page
+    assert "configToJsonSchemaFields" in page
+    assert "jsonSchemaFieldsToConfig" in page
+    assert "if (method.value === 'json_schema') setJsonSchemaEditor(true);" in page
+    assert 'id="llm-judge-mode"' in page
+    assert 'id="show-llm-form"' in page
+    assert 'id="show-llm-json"' in page
+    assert 'id="llm-expected-value"' in page
+    assert 'id="llm-context"' in page
+    assert 'id="llm-threshold"' in page
+    assert page.count('class="llm-rubric-weight"') == 8
+    assert 'id="llm-rubric-factual_correctness"' in page
+    assert 'data-default-weight="2"' in page
+    assert page.count('class="info-button"') == 37
+    assert page.count('role="tooltip" hidden') == 37
+    assert "configToLlmFields" in page
+    assert "llmFieldsToConfig" in page
+    assert "configToNumericFields" in page
+    assert "numericFieldsToConfig" in page
+    assert "configToRegexFields" in page
+    assert "regexFieldsToConfig" in page
+    assert "configToContainsFields" in page
+    assert "containsFieldsToConfig" in page
+    assert "addFragmentField" in page
+    assert "document.createElement('input')" in page
+    assert "field.type = 'text'" in page
+    assert "document.createElement('textarea')" not in page
+    assert "closeInfoPopups" in page
+    assert "event.key === 'Escape'" in page
     assert re.search(r'<script nonce="[^"]+">', page)
     assert all(
         f"&quot;{method}&quot;" in page or f'"{method}"' in page

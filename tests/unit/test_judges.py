@@ -13,6 +13,7 @@ from evaluator.judges import (
     parse_judge_output,
     resolve_rubric,
 )
+from evaluator.worker_runtime import _effective_judge_threshold
 
 pytestmark = pytest.mark.unit
 
@@ -40,6 +41,37 @@ def test_defaults_and_rubric_augment_replace() -> None:
         ),
     )
     assert [x.id for x in replaced] == ["only"]
+
+
+def test_zero_weight_disables_rubric_criterion() -> None:
+    resolved = resolve_rubric(
+        profile(),
+        LlmJudgeConfig(
+            rubric_mode="replace",
+            rubric=[
+                RubricCriterion(id="enabled", description="Enabled", weight=Decimal("2")),
+                RubricCriterion(id="disabled", description="Disabled", weight=Decimal("0")),
+            ],
+        ),
+    )
+    assert [criterion.id for criterion in resolved] == ["enabled"]
+    with pytest.raises(ValueError, match="positive weight"):
+        resolve_rubric(
+            profile(),
+            LlmJudgeConfig(
+                rubric_mode="replace",
+                rubric=[
+                    RubricCriterion(id="disabled", description="Disabled", weight=Decimal("0"))
+                ],
+            ),
+        )
+
+
+def test_case_threshold_overrides_profile_threshold() -> None:
+    assert _effective_judge_threshold(
+        LlmJudgeConfig(threshold=Decimal("0.85")), "0.7"
+    ) == Decimal("0.85")
+    assert _effective_judge_threshold(LlmJudgeConfig(), "0.7") == Decimal("0.7")
 
 
 def test_strict_weighted_parse_threshold_and_audit() -> None:

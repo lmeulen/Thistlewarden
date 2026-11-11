@@ -32,6 +32,11 @@ from evaluator.workers import TargetOutcome, WorkerPipeline
 _LOG = logging.getLogger(__name__)
 
 
+def _effective_judge_threshold(config: LlmJudgeConfig, profile_threshold: Any) -> Decimal:
+    """Prefer a case-specific threshold and otherwise use the snapshotted judge profile."""
+    return config.threshold if config.threshold is not None else Decimal(str(profile_threshold))
+
+
 def _profile_from_snapshot(model: dict[str, Any]) -> ModelProfileInput:
     decimal_fields = (
         "input_per_million",
@@ -279,6 +284,7 @@ class JudgeCaller:
             context=config.context,
             candidate=candidate,
         )
+        threshold = _effective_judge_threshold(config, snapshot["threshold"])
         for attempt in range(2):
             output = self._executor.execute(
                 endpoint,
@@ -286,7 +292,7 @@ class JudgeCaller:
                 estimated_tokens=profile.max_tokens or 0,
             )
             try:
-                return parse_judge_output(output, rubric, Decimal(str(snapshot["threshold"])))
+                return parse_judge_output(output, rubric, threshold)
             except Exception:
                 if attempt == 1:
                     raise

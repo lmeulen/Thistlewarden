@@ -111,7 +111,7 @@ class RubricCriterion(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_-]*$", max_length=100)
     description: str = Field(min_length=1, max_length=20_000)
-    weight: Decimal = Field(default=Decimal("1"), gt=0)
+    weight: Decimal = Field(default=Decimal("1"), ge=0)
 
 
 class LlmJudgeConfig(BaseModel):
@@ -131,6 +131,14 @@ class LlmJudgeConfig(BaseModel):
         if value is not None and len({item.id for item in value}) != len(value):
             raise ValueError("rubric criterion IDs must be unique")
         return value
+
+    @model_validator(mode="after")
+    def active_replacement_rubric(self) -> LlmJudgeConfig:
+        if self.rubric_mode == "replace" and self.rubric and not any(
+            item.weight > 0 for item in self.rubric
+        ):
+            raise ValueError("replacement rubric requires a criterion with positive weight")
+        return self
 
 
 EvaluatorConfig = Annotated[
@@ -182,12 +190,47 @@ _EVALUATOR_CONFIG_EXAMPLES: dict[str, dict[str, Any]] = {
         "expected_value": "expected answer or reference text",
         "rubric": [
             {
-                "id": "correct",
-                "description": "Answer is correct and complete.",
+                "id": "factual_correctness",
+                "description": "Claims and conclusions are factually correct.",
+                "weight": "2",
+            },
+            {
+                "id": "completeness",
+                "description": "Answer covers all requested points.",
                 "weight": "1",
-            }
+            },
+            {
+                "id": "relevance",
+                "description": "Answer directly addresses request without irrelevant content.",
+                "weight": "1",
+            },
+            {
+                "id": "instruction_compliance",
+                "description": "Answer follows instructions, constraints, format, and language.",
+                "weight": "1",
+            },
+            {
+                "id": "consistency",
+                "description": "Answer contains no internal contradictions.",
+                "weight": "1",
+            },
+            {
+                "id": "clarity",
+                "description": "Answer is understandable, structured, and unambiguous.",
+                "weight": "1",
+            },
+            {
+                "id": "groundedness",
+                "description": "Claims are supported by supplied context or reference material.",
+                "weight": "0",
+            },
+            {
+                "id": "safety",
+                "description": "Answer avoids harmful, prohibited, or inappropriate guidance.",
+                "weight": "0",
+            },
         ],
-        "rubric_mode": "augment",
+        "rubric_mode": "replace",
         "threshold": "0.8",
         "context": None,
     },

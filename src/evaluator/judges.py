@@ -108,17 +108,21 @@ _FENCE = re.compile(r"\A\s*```(?:json)?\s*\n(?P<body>.*?)\n```\s*\Z", re.DOTALL 
 
 def resolve_rubric(profile: JudgeProfileInput, item: LlmJudgeConfig) -> list[RubricCriterion]:
     if item.rubric is None:
-        return list(profile.rubric)
-    if item.rubric_mode == "replace":
-        return list(item.rubric)
-    result = list(profile.rubric)
-    positions = {criterion.id: index for index, criterion in enumerate(result)}
-    for criterion in item.rubric:
-        if criterion.id in positions:
-            result[positions[criterion.id]] = criterion
-        else:
-            result.append(criterion)
-    return result
+        result = list(profile.rubric)
+    elif item.rubric_mode == "replace":
+        result = list(item.rubric)
+    else:
+        result = list(profile.rubric)
+        positions = {criterion.id: index for index, criterion in enumerate(result)}
+        for criterion in item.rubric:
+            if criterion.id in positions:
+                result[positions[criterion.id]] = criterion
+            else:
+                result.append(criterion)
+    active = [criterion for criterion in result if criterion.weight > 0]
+    if not active:
+        raise ValueError("rubric must contain at least one criterion with positive weight")
+    return active
 
 
 def build_judge_prompt(

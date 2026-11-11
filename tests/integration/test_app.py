@@ -56,6 +56,26 @@ def test_index_renders_english_page_with_empty_dashboard(app) -> None:
     assert 'href="/runs"' in page
     assert 'href="/endpoints"' in page
     assert 'href="/golden-sets"' in page
+    assert '<link rel="icon" href="/static/app-icon.svg" type="image/svg+xml">' in page
+    assert 'class="brand" href="/"' in page
+    assert 'src="/static/app-icon.svg" alt="" width="32" height="32"' in page
+
+
+def test_application_icon_is_served(app) -> None:
+    response = app.test_client().get("/static/app-icon.svg")
+
+    assert response.status_code == 200
+    assert response.content_type.startswith("image/svg+xml")
+    assert b"<title id=\"title\">Thistlewarden</title>" in response.data
+
+
+def test_numeric_thousands_info_stays_inline(app) -> None:
+    css = app.test_client().get("/static/app.css").get_data(as_text=True)
+
+    assert ".numeric-options>.numeric-checkbox{" in css
+    rule = css.split(".numeric-options>.numeric-checkbox{", 1)[1].split("}", 1)[0]
+    assert "flex-direction:row" in rule
+    assert "flex-wrap:nowrap" in rule
 
 
 def test_index_renders_all_dashboard_statistics(app) -> None:

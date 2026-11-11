@@ -18,9 +18,287 @@
     </select>
   </label>
   <label>Weight<input type="number" step="any" min="0.000001" name="weight" value="{{ d.weight if d else '1' }}"></label>
-  <label class="wide">Evaluator configuration (JSON)
-    <textarea name="evaluator_config" id="evaluator-config" rows="12" aria-describedby="config-help">{{ d.evaluator_config|tojson(indent=2) if d else evaluator_examples['exact_match']|tojson(indent=2) }}</textarea>
-  </label>
+  <div class="wide" id="evaluator-config-editor">
+    <div class="heading">
+      <strong>Evaluator configuration</strong>
+      <div class="actions" id="exact-match-mode" hidden aria-label="Exact match editor mode">
+        <button type="button" class="secondary compact" id="show-exact-form" aria-pressed="false">Form fields</button>
+        <button type="button" class="secondary compact" id="show-exact-json" aria-pressed="true">JSON</button>
+      </div>
+      <div class="actions" id="contains-mode" hidden aria-label="Contains editor mode">
+        <button type="button" class="secondary compact" id="show-contains-form" aria-pressed="false">Form fields</button>
+        <button type="button" class="secondary compact" id="show-contains-json" aria-pressed="true">JSON</button>
+      </div>
+      <div class="actions" id="regex-mode" hidden aria-label="Regex editor mode">
+        <button type="button" class="secondary compact" id="show-regex-form" aria-pressed="false">Form fields</button>
+        <button type="button" class="secondary compact" id="show-regex-json" aria-pressed="true">JSON</button>
+      </div>
+      <div class="actions" id="numeric-mode" hidden aria-label="Numeric editor mode">
+        <button type="button" class="secondary compact" id="show-numeric-form" aria-pressed="false">Form fields</button>
+        <button type="button" class="secondary compact" id="show-numeric-json" aria-pressed="true">JSON</button>
+      </div>
+      <div class="actions" id="llm-judge-mode" hidden aria-label="LLM judge editor mode">
+        <button type="button" class="secondary compact" id="show-llm-form" aria-pressed="false">Form fields</button>
+        <button type="button" class="secondary compact" id="show-llm-json" aria-pressed="true">JSON</button>
+      </div>
+      <div class="actions" id="json-schema-mode" hidden aria-label="JSON Schema editor mode">
+        <button type="button" class="secondary compact" id="show-json-schema-form" aria-pressed="false">Form fields</button>
+        <button type="button" class="secondary compact" id="show-json-schema-json" aria-pressed="true">JSON</button>
+      </div>
+    </div>
+    <label id="evaluator-config-json">JSON
+      <textarea name="evaluator_config" id="evaluator-config" rows="12" aria-describedby="config-help config-mode-error">{{ d.evaluator_config|tojson(indent=2) if d else evaluator_examples['exact_match']|tojson(indent=2) }}</textarea>
+    </label>
+    <fieldset id="exact-match-fields" hidden>
+      <legend>Exact match settings</legend>
+      <div class="field-with-info">
+        <label for="exact-expected-value">Text to match</label>
+        <span class="info-popup">
+          <button type="button" class="info-button" aria-expanded="false" aria-controls="info-expected-value" aria-label="About text to match">i</button>
+          <span id="info-expected-value" class="info-content" role="tooltip" hidden>Exact text expected from model output.</span>
+        </span>
+      </div>
+      <textarea id="exact-expected-value" rows="6"></textarea>
+      <div class="check-list exact-settings-list">
+        <div class="field-with-info">
+          <label class="check"><input type="checkbox" id="exact-trim"> Trim leading and trailing whitespace</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-trim" aria-label="About trimming whitespace">i</button>
+            <span id="info-trim" class="info-content" role="tooltip" hidden>Ignores spaces and line breaks before and after both texts.</span>
+          </span>
+        </div>
+        <div class="field-with-info">
+          <label class="check"><input type="checkbox" id="exact-case-sensitive"> Case sensitive</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-case-sensitive" aria-label="About case sensitivity">i</button>
+            <span id="info-case-sensitive" class="info-content" role="tooltip" hidden>When enabled, uppercase and lowercase letters must match.</span>
+          </span>
+        </div>
+        <div class="field-with-info">
+          <label class="check"><input type="checkbox" id="exact-normalize-newlines"> Normalize newlines</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-normalize-newlines" aria-label="About newline normalization">i</button>
+            <span id="info-normalize-newlines" class="info-content" role="tooltip" hidden>Treats Windows and Unix line breaks as equal.</span>
+          </span>
+        </div>
+        <div class="field-with-info">
+          <label class="check"><input type="checkbox" id="exact-collapse-whitespace"> Collapse whitespace</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-collapse-whitespace" aria-label="About collapsing whitespace">i</button>
+            <span id="info-collapse-whitespace" class="info-content" role="tooltip" hidden>Compares every sequence of whitespace as one space.</span>
+          </span>
+        </div>
+      </div>
+    </fieldset>
+    <fieldset id="contains-fields" hidden>
+      <legend>Contains settings</legend>
+      <div class="field-with-info">
+        <strong>Expected fragments</strong>
+        <span class="info-popup">
+          <button type="button" class="info-button" aria-expanded="false" aria-controls="info-contains-fragments" aria-label="About expected fragments">i</button>
+          <span id="info-contains-fragments" class="info-content" role="tooltip" hidden>Add each single-line piece of text that model output should contain.</span>
+        </span>
+      </div>
+      <div id="contains-fragments" class="fragment-list"></div>
+      <button type="button" class="secondary compact" id="add-contains-fragment">Add fragment</button>
+      <div class="contains-options">
+        <div>
+          <div class="field-with-info">
+            <label for="contains-match-mode">Match mode</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-contains-match-mode" aria-label="About match mode">i</button>
+              <span id="info-contains-match-mode" class="info-content" role="tooltip" hidden>Choose whether all fragments or at least one fragment must occur.</span>
+            </span>
+          </div>
+          <select id="contains-match-mode"><option value="all">All fragments</option><option value="any">Any fragment</option></select>
+        </div>
+        <div class="check-list">
+          <div class="field-with-info">
+            <label class="check"><input type="checkbox" id="contains-case-sensitive"> Case sensitive</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-contains-case-sensitive" aria-label="About contains case sensitivity">i</button>
+              <span id="info-contains-case-sensitive" class="info-content" role="tooltip" hidden>When enabled, uppercase and lowercase letters must match.</span>
+            </span>
+          </div>
+          <div class="field-with-info">
+            <label class="check"><input type="checkbox" id="contains-normalize-newlines"> Normalize newlines</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-contains-normalize-newlines" aria-label="About contains newline normalization">i</button>
+              <span id="info-contains-normalize-newlines" class="info-content" role="tooltip" hidden>Treats Windows and Unix line breaks as equal.</span>
+            </span>
+          </div>
+          <div class="field-with-info">
+            <label class="check"><input type="checkbox" id="contains-collapse-whitespace"> Collapse whitespace</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-contains-collapse-whitespace" aria-label="About contains whitespace collapsing">i</button>
+              <span id="info-contains-collapse-whitespace" class="info-content" role="tooltip" hidden>Treats every sequence of whitespace as one space.</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+    <fieldset id="regex-fields" hidden>
+      <legend>Regular expression settings</legend>
+      <div class="field-with-info">
+        <label for="regex-pattern">Pattern</label>
+        <span class="info-popup">
+          <button type="button" class="info-button" aria-expanded="false" aria-controls="info-regex-pattern" aria-label="About regular expression pattern">i</button>
+          <span id="info-regex-pattern" class="info-content" role="tooltip" hidden>Regular expression searched for in model output.</span>
+        </span>
+      </div>
+      <input id="regex-pattern" class="config-main-text" type="text" spellcheck="false">
+      <div class="check-list exact-settings-list">
+        <div class="field-with-info">
+          <label class="check"><input type="checkbox" id="regex-full-match"> Full match</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-regex-full-match" aria-label="About full match">i</button>
+            <span id="info-regex-full-match" class="info-content" role="tooltip" hidden>Requires pattern to match complete output instead of any part.</span>
+          </span>
+        </div>
+        <div class="field-with-info">
+          <label class="check"><input type="checkbox" id="regex-case-sensitive"> Case sensitive</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-regex-case-sensitive" aria-label="About regex case sensitivity">i</button>
+            <span id="info-regex-case-sensitive" class="info-content" role="tooltip" hidden>When enabled, uppercase and lowercase letters must match.</span>
+          </span>
+        </div>
+        <div class="field-with-info">
+          <label class="check"><input type="checkbox" id="regex-multiline"> Multiline</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-regex-multiline" aria-label="About multiline mode">i</button>
+            <span id="info-regex-multiline" class="info-content" role="tooltip" hidden>Makes ^ and $ match start and end of each line.</span>
+          </span>
+        </div>
+        <div class="field-with-info">
+          <label class="check"><input type="checkbox" id="regex-dot-all"> Dot matches newlines</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-regex-dot-all" aria-label="About dot-all mode">i</button>
+            <span id="info-regex-dot-all" class="info-content" role="tooltip" hidden>Makes a dot in pattern match newline characters too.</span>
+          </span>
+        </div>
+      </div>
+    </fieldset>
+    <fieldset id="numeric-fields" hidden>
+      <legend>Numeric settings</legend>
+      <div class="numeric-options">
+        <div>
+          <div class="field-with-info">
+            <label for="numeric-expected-value">Expected value</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-numeric-expected-value" aria-label="About numeric expected value">i</button>
+              <span id="info-numeric-expected-value" class="info-content" role="tooltip" hidden>Number expected in model output.</span>
+            </span>
+          </div>
+          <input id="numeric-expected-value" type="text" inputmode="decimal">
+        </div>
+        <div>
+          <div class="field-with-info">
+            <label for="numeric-absolute-tolerance">Absolute tolerance</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-numeric-absolute-tolerance" aria-label="About absolute tolerance">i</button>
+              <span id="info-numeric-absolute-tolerance" class="info-content" role="tooltip" hidden>Maximum fixed difference from expected value. Leave empty to disable.</span>
+            </span>
+          </div>
+          <input id="numeric-absolute-tolerance" type="text" inputmode="decimal">
+        </div>
+        <div>
+          <div class="field-with-info">
+            <label for="numeric-relative-tolerance">Relative tolerance (%)</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-numeric-relative-tolerance" aria-label="About relative tolerance">i</button>
+              <span id="info-numeric-relative-tolerance" class="info-content" role="tooltip" hidden>Maximum percentage difference from expected value. Leave empty to disable.</span>
+            </span>
+          </div>
+          <input id="numeric-relative-tolerance" type="text" inputmode="decimal">
+        </div>
+        <div>
+          <div class="field-with-info">
+            <label for="numeric-extraction">Number extraction</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-numeric-extraction" aria-label="About number extraction">i</button>
+              <span id="info-numeric-extraction" class="info-content" role="tooltip" hidden>Require complete output to be a number or use first number found.</span>
+            </span>
+          </div>
+          <select id="numeric-extraction"><option value="entire_answer">Entire answer</option><option value="first_number">First number</option></select>
+        </div>
+        <div>
+          <div class="field-with-info">
+            <label for="numeric-decimal-separator">Decimal separator</label>
+            <span class="info-popup">
+              <button type="button" class="info-button" aria-expanded="false" aria-controls="info-numeric-decimal-separator" aria-label="About decimal separator">i</button>
+              <span id="info-numeric-decimal-separator" class="info-content" role="tooltip" hidden>Character used between whole and fractional digits in model output.</span>
+            </span>
+          </div>
+          <select id="numeric-decimal-separator"><option value=".">Period (.)</option><option value=",">Comma (,)</option></select>
+        </div>
+        <div class="field-with-info numeric-checkbox">
+          <label class="check"><input type="checkbox" id="numeric-allow-thousands"> Allow thousands separator</label>
+          <span class="info-popup">
+            <button type="button" class="info-button" aria-expanded="false" aria-controls="info-numeric-thousands" aria-label="About thousands separators">i</button>
+            <span id="info-numeric-thousands" class="info-content" role="tooltip" hidden>Accepts grouped digits such as 1,000.50 or 1.000,50.</span>
+          </span>
+        </div>
+      </div>
+    </fieldset>
+    <fieldset id="llm-judge-fields" hidden>
+      <legend>LLM judge settings</legend>
+      <div class="llm-text-fields">
+        <div>
+          <div class="field-with-info"><label for="llm-expected-value">Expected value</label><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-llm-expected" aria-label="About expected value">i</button><span id="info-llm-expected" class="info-content" role="tooltip" hidden>Optional reference answer supplied to judge.</span></span></div>
+          <textarea id="llm-expected-value" rows="4"></textarea>
+        </div>
+        <div>
+          <div class="field-with-info"><label for="llm-context">Context</label><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-llm-context" aria-label="About judge context">i</button><span id="info-llm-context" class="info-content" role="tooltip" hidden>Optional case-specific information supplied to judge.</span></span></div>
+          <textarea id="llm-context" rows="4"></textarea>
+        </div>
+      </div>
+      <div class="field-with-info"><label for="llm-threshold">Pass threshold</label><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-llm-threshold" aria-label="About judge threshold">i</button><span id="info-llm-threshold" class="info-content" role="tooltip" hidden>Score from 0 to 1 required to pass. Empty uses judge-profile threshold.</span></span></div>
+      <input id="llm-threshold" type="number" min="0" max="1" step="any">
+      <div class="field-with-info rubric-heading"><strong>Rubric weights</strong><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-llm-rubrics" aria-label="About rubric weights">i</button><span id="info-llm-rubrics" class="info-content" role="tooltip" hidden>Higher weight gives criterion more influence. Set weight to 0 to disable it.</span></span></div>
+      <div class="rubric-grid">
+        {% for id,label,description,weight in [
+          ('factual_correctness','Factual correctness','Claims and conclusions are factually correct.','2'),
+          ('completeness','Completeness','Answer covers all requested points.','1'),
+          ('relevance','Relevance','Answer directly addresses the request without irrelevant content.','1'),
+          ('instruction_compliance','Instruction compliance','Answer follows explicit instructions, constraints, format, and language.','1'),
+          ('consistency','Internal consistency','Answer contains no internal contradictions.','1'),
+          ('clarity','Clarity','Answer is understandable, structured, and unambiguous.','1'),
+          ('groundedness','Groundedness','Claims are supported by supplied context or reference material.','0'),
+          ('safety','Safety','Answer avoids harmful, prohibited, or inappropriate guidance.','0')
+        ] %}
+        <div class="rubric-row">
+          <div class="field-with-info"><label for="llm-rubric-{{ id }}">{{ label }}</label><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-llm-{{ id }}" aria-label="About {{ label }}">i</button><span id="info-llm-{{ id }}" class="info-content" role="tooltip" hidden>{{ description }}</span></span></div>
+          <input id="llm-rubric-{{ id }}" class="llm-rubric-weight" data-rubric-id="{{ id }}" data-description="{{ description }}" data-default-weight="{{ weight }}" type="number" min="0" step="any" value="{{ weight }}">
+        </div>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <fieldset id="json-schema-fields" hidden>
+      <legend>JSON Schema settings</legend>
+      <div class="field-with-info"><label for="json-schema-schema">Schema (JSON)</label><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-json-schema-schema" aria-label="About JSON Schema">i</button><span id="info-json-schema-schema" class="info-content" role="tooltip" hidden>Draft 2020-12 schema used to validate model output.</span></span></div>
+      <textarea id="json-schema-schema" class="json-field" rows="12" spellcheck="false"></textarea>
+      <div class="json-schema-options">
+        <div>
+          <div class="field-with-info"><label for="json-schema-draft">Schema draft</label><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-json-schema-draft" aria-label="About schema draft">i</button><span id="info-json-schema-draft" class="info-content" role="tooltip" hidden>Current validator supports JSON Schema Draft 2020-12.</span></span></div>
+          <input id="json-schema-draft" value="2020-12" readonly>
+        </div>
+        <div class="field-with-info json-schema-checkbox">
+          <label class="check"><input type="checkbox" id="json-schema-code-fence"> Allow Markdown code fence</label>
+          <span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-json-schema-fence" aria-label="About Markdown code fences">i</button><span id="info-json-schema-fence" class="info-content" role="tooltip" hidden>Accepts one complete unlabeled or json-labelled fenced block.</span></span>
+        </div>
+      </div>
+      <div class="field-with-info expected-toggle">
+        <label class="check"><input type="checkbox" id="json-schema-use-expected"> Require exact expected value</label>
+        <span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-json-schema-expected-toggle" aria-label="About exact expected value">i</button><span id="info-json-schema-expected-toggle" class="info-content" role="tooltip" hidden>After schema validation, require parsed output to equal configured JSON value.</span></span>
+      </div>
+      <div id="json-schema-expected-wrap" hidden>
+        <label for="json-schema-expected">Expected value (JSON)</label>
+        <textarea id="json-schema-expected" class="json-field" rows="8" spellcheck="false"></textarea>
+      </div>
+      <p id="json-schema-field-error" class="message error" role="alert" hidden></p>
+    </fieldset>
+    <p id="config-mode-error" class="message error" role="alert" hidden></p>
+  </div>
   <p id="config-help" class="help wide">Changing evaluation method replaces configuration with valid example showing available fields. You can edit example before saving. Exact match requires <code>expected_value</code>. LLM judge requires <code>expected_value</code> or an item rubric.</p>
   <section class="panel wide" aria-labelledby="output-tester-title">
     <h2 id="output-tester-title">Test evaluator</h2>
@@ -47,19 +325,567 @@
   var output = document.getElementById('test-output');
   var button = document.getElementById('verify-output');
   var result = document.getElementById('verification-result');
+  var exactMode = document.getElementById('exact-match-mode');
+  var containsMode = document.getElementById('contains-mode');
+  var regexMode = document.getElementById('regex-mode');
+  var numericMode = document.getElementById('numeric-mode');
+  var llmMode = document.getElementById('llm-judge-mode');
+  var jsonSchemaMode = document.getElementById('json-schema-mode');
+  var jsonEditor = document.getElementById('evaluator-config-json');
+  var exactFields = document.getElementById('exact-match-fields');
+  var containsFields = document.getElementById('contains-fields');
+  var regexFields = document.getElementById('regex-fields');
+  var numericFields = document.getElementById('numeric-fields');
+  var llmFields = document.getElementById('llm-judge-fields');
+  var jsonSchemaFields = document.getElementById('json-schema-fields');
+  var showExactForm = document.getElementById('show-exact-form');
+  var showExactJson = document.getElementById('show-exact-json');
+  var showContainsForm = document.getElementById('show-contains-form');
+  var showContainsJson = document.getElementById('show-contains-json');
+  var containsFragments = document.getElementById('contains-fragments');
+  var addContainsFragment = document.getElementById('add-contains-fragment');
+  var containsMatchMode = document.getElementById('contains-match-mode');
+  var containsBooleans = {
+    case_sensitive: document.getElementById('contains-case-sensitive'),
+    normalize_newlines: document.getElementById('contains-normalize-newlines'),
+    collapse_whitespace: document.getElementById('contains-collapse-whitespace')
+  };
+  var containsDefaults = {
+    case_sensitive: true,
+    normalize_newlines: true,
+    collapse_whitespace: false
+  };
+  var showRegexForm = document.getElementById('show-regex-form');
+  var showRegexJson = document.getElementById('show-regex-json');
+  var regexPattern = document.getElementById('regex-pattern');
+  var regexBooleans = {
+    full_match: document.getElementById('regex-full-match'),
+    case_sensitive: document.getElementById('regex-case-sensitive'),
+    multiline: document.getElementById('regex-multiline'),
+    dot_all: document.getElementById('regex-dot-all')
+  };
+  var regexDefaults = {
+    full_match: false,
+    case_sensitive: true,
+    multiline: false,
+    dot_all: false
+  };
+  var showNumericForm = document.getElementById('show-numeric-form');
+  var showNumericJson = document.getElementById('show-numeric-json');
+  var numericExpectedValue = document.getElementById('numeric-expected-value');
+  var numericAbsoluteTolerance = document.getElementById('numeric-absolute-tolerance');
+  var numericRelativeTolerance = document.getElementById('numeric-relative-tolerance');
+  var numericExtraction = document.getElementById('numeric-extraction');
+  var numericDecimalSeparator = document.getElementById('numeric-decimal-separator');
+  var numericAllowThousands = document.getElementById('numeric-allow-thousands');
+  var showLlmForm = document.getElementById('show-llm-form');
+  var showLlmJson = document.getElementById('show-llm-json');
+  var llmExpectedValue = document.getElementById('llm-expected-value');
+  var llmContext = document.getElementById('llm-context');
+  var llmThreshold = document.getElementById('llm-threshold');
+  var llmRubricWeights = Array.from(document.querySelectorAll('.llm-rubric-weight'));
+  var showJsonSchemaForm = document.getElementById('show-json-schema-form');
+  var showJsonSchemaJson = document.getElementById('show-json-schema-json');
+  var jsonSchemaSchema = document.getElementById('json-schema-schema');
+  var jsonSchemaCodeFence = document.getElementById('json-schema-code-fence');
+  var jsonSchemaUseExpected = document.getElementById('json-schema-use-expected');
+  var jsonSchemaExpectedWrap = document.getElementById('json-schema-expected-wrap');
+  var jsonSchemaExpected = document.getElementById('json-schema-expected');
+  var jsonSchemaFieldError = document.getElementById('json-schema-field-error');
+  var configModeError = document.getElementById('config-mode-error');
+  var expectedValue = document.getElementById('exact-expected-value');
+  var exactBooleans = {
+    trim: document.getElementById('exact-trim'),
+    case_sensitive: document.getElementById('exact-case-sensitive'),
+    normalize_newlines: document.getElementById('exact-normalize-newlines'),
+    collapse_whitespace: document.getElementById('exact-collapse-whitespace')
+  };
+  var exactDefaults = {
+    trim: true,
+    case_sensitive: true,
+    normalize_newlines: true,
+    collapse_whitespace: false
+  };
   var examples = {{ evaluator_examples|tojson }};
   function clearResult() {
     result.className = '';
     result.textContent = '';
   }
+  function clearConfigError() {
+    configModeError.hidden = true;
+    configModeError.textContent = '';
+  }
+  function configToExactFields() {
+    var value;
+    try {
+      value = JSON.parse(config.value);
+    } catch (error) {
+      configModeError.textContent = 'Fix invalid JSON before switching to form fields.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      configModeError.textContent = 'Evaluator configuration must be a JSON object.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (value.expected_value !== undefined && typeof value.expected_value !== 'string') {
+      configModeError.textContent = 'expected_value must be text before switching to form fields.';
+      configModeError.hidden = false;
+      return false;
+    }
+    expectedValue.value = value.expected_value || '';
+    Object.keys(exactBooleans).forEach(function (name) {
+      exactBooleans[name].checked = typeof value[name] === 'boolean' ? value[name] : exactDefaults[name];
+    });
+    clearConfigError();
+    return true;
+  }
+  function exactFieldsToConfig() {
+    var value = {expected_value: expectedValue.value};
+    Object.keys(exactBooleans).forEach(function (name) {
+      value[name] = exactBooleans[name].checked;
+    });
+    config.value = JSON.stringify(value, null, 2);
+    clearConfigError();
+  }
+  function setExactEditor(useForm) {
+    if (useForm && !configToExactFields()) return;
+    if (!useForm) exactFieldsToConfig();
+    exactFields.hidden = !useForm;
+    exactFields.style.display = useForm ? '' : 'none';
+    jsonEditor.hidden = useForm;
+    jsonEditor.style.display = useForm ? 'none' : '';
+    showExactForm.setAttribute('aria-pressed', String(useForm));
+    showExactJson.setAttribute('aria-pressed', String(!useForm));
+  }
+  function updateRemoveFragmentButtons() {
+    var buttons = containsFragments.querySelectorAll('.remove-fragment');
+    buttons.forEach(function (removeButton) { removeButton.disabled = buttons.length === 1; });
+  }
+  function containsFieldsToConfig() {
+    var value = {
+      expected_fragments: Array.from(containsFragments.querySelectorAll('textarea')).map(function (field) {
+        return field.value;
+      }),
+      match_mode: containsMatchMode.value
+    };
+    Object.keys(containsBooleans).forEach(function (name) {
+      value[name] = containsBooleans[name].checked;
+    });
+    config.value = JSON.stringify(value, null, 2);
+    clearConfigError();
+  }
+  function addFragmentField(value) {
+    var row = document.createElement('div');
+    var field = document.createElement('input');
+    var removeButton = document.createElement('button');
+    row.className = 'fragment-row';
+    field.type = 'text';
+    field.value = value || '';
+    field.setAttribute('aria-label', 'Expected fragment');
+    removeButton.type = 'button';
+    removeButton.className = 'danger compact remove-fragment';
+    removeButton.textContent = 'Remove';
+    field.addEventListener('input', function () { containsFieldsToConfig(); clearResult(); });
+    removeButton.addEventListener('click', function () {
+      row.remove();
+      updateRemoveFragmentButtons();
+      containsFieldsToConfig();
+      clearResult();
+    });
+    row.appendChild(field);
+    row.appendChild(removeButton);
+    containsFragments.appendChild(row);
+    updateRemoveFragmentButtons();
+  }
+  function configToContainsFields() {
+    var value;
+    try {
+      value = JSON.parse(config.value);
+    } catch (error) {
+      configModeError.textContent = 'Fix invalid JSON before switching to form fields.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      configModeError.textContent = 'Evaluator configuration must be a JSON object.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (!Array.isArray(value.expected_fragments) || !value.expected_fragments.length ||
+        value.expected_fragments.some(function (fragment) { return typeof fragment !== 'string'; })) {
+      configModeError.textContent = 'expected_fragments must contain at least one text value.';
+      configModeError.hidden = false;
+      return false;
+    }
+    containsFragments.textContent = '';
+    value.expected_fragments.forEach(addFragmentField);
+    containsMatchMode.value = value.match_mode === 'any' ? 'any' : 'all';
+    Object.keys(containsBooleans).forEach(function (name) {
+      containsBooleans[name].checked = typeof value[name] === 'boolean' ? value[name] : containsDefaults[name];
+    });
+    clearConfigError();
+    return true;
+  }
+  function setContainsEditor(useForm) {
+    if (useForm && !configToContainsFields()) return;
+    if (!useForm) containsFieldsToConfig();
+    containsFields.hidden = !useForm;
+    containsFields.style.display = useForm ? '' : 'none';
+    jsonEditor.hidden = useForm;
+    jsonEditor.style.display = useForm ? 'none' : '';
+    showContainsForm.setAttribute('aria-pressed', String(useForm));
+    showContainsJson.setAttribute('aria-pressed', String(!useForm));
+  }
+  function regexFieldsToConfig() {
+    var value = {pattern: regexPattern.value};
+    Object.keys(regexBooleans).forEach(function (name) {
+      value[name] = regexBooleans[name].checked;
+    });
+    config.value = JSON.stringify(value, null, 2);
+    clearConfigError();
+  }
+  function configToRegexFields() {
+    var value;
+    try {
+      value = JSON.parse(config.value);
+    } catch (error) {
+      configModeError.textContent = 'Fix invalid JSON before switching to form fields.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      configModeError.textContent = 'Evaluator configuration must be a JSON object.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (typeof value.pattern !== 'string') {
+      configModeError.textContent = 'pattern must be text before switching to form fields.';
+      configModeError.hidden = false;
+      return false;
+    }
+    regexPattern.value = value.pattern;
+    Object.keys(regexBooleans).forEach(function (name) {
+      regexBooleans[name].checked = typeof value[name] === 'boolean' ? value[name] : regexDefaults[name];
+    });
+    clearConfigError();
+    return true;
+  }
+  function setRegexEditor(useForm) {
+    if (useForm && !configToRegexFields()) return;
+    if (!useForm) regexFieldsToConfig();
+    regexFields.hidden = !useForm;
+    regexFields.style.display = useForm ? '' : 'none';
+    jsonEditor.hidden = useForm;
+    jsonEditor.style.display = useForm ? 'none' : '';
+    showRegexForm.setAttribute('aria-pressed', String(useForm));
+    showRegexJson.setAttribute('aria-pressed', String(!useForm));
+  }
+  function numericFieldsToConfig() {
+    config.value = JSON.stringify({
+      expected_value: numericExpectedValue.value,
+      absolute_tolerance: numericAbsoluteTolerance.value || null,
+      relative_tolerance_percent: numericRelativeTolerance.value || null,
+      extraction: numericExtraction.value,
+      decimal_separator: numericDecimalSeparator.value,
+      allow_thousands_separator: numericAllowThousands.checked
+    }, null, 2);
+    clearConfigError();
+  }
+  function configToNumericFields() {
+    var value;
+    try {
+      value = JSON.parse(config.value);
+    } catch (error) {
+      configModeError.textContent = 'Fix invalid JSON before switching to form fields.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      configModeError.textContent = 'Evaluator configuration must be a JSON object.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if ((typeof value.expected_value !== 'string' && typeof value.expected_value !== 'number') ||
+        (value.absolute_tolerance != null && typeof value.absolute_tolerance !== 'string' && typeof value.absolute_tolerance !== 'number') ||
+        (value.relative_tolerance_percent != null && typeof value.relative_tolerance_percent !== 'string' && typeof value.relative_tolerance_percent !== 'number')) {
+      configModeError.textContent = 'Numeric values must be numbers or numeric text.';
+      configModeError.hidden = false;
+      return false;
+    }
+    numericExpectedValue.value = String(value.expected_value);
+    numericAbsoluteTolerance.value = value.absolute_tolerance == null ? '' : String(value.absolute_tolerance);
+    numericRelativeTolerance.value = value.relative_tolerance_percent == null ? '' : String(value.relative_tolerance_percent);
+    numericExtraction.value = value.extraction === 'first_number' ? 'first_number' : 'entire_answer';
+    numericDecimalSeparator.value = value.decimal_separator === ',' ? ',' : '.';
+    numericAllowThousands.checked = value.allow_thousands_separator === true;
+    clearConfigError();
+    return true;
+  }
+  function setNumericEditor(useForm) {
+    if (useForm && !configToNumericFields()) return;
+    if (!useForm) numericFieldsToConfig();
+    numericFields.hidden = !useForm;
+    numericFields.style.display = useForm ? '' : 'none';
+    jsonEditor.hidden = useForm;
+    jsonEditor.style.display = useForm ? 'none' : '';
+    showNumericForm.setAttribute('aria-pressed', String(useForm));
+    showNumericJson.setAttribute('aria-pressed', String(!useForm));
+  }
+  function llmFieldsToConfig() {
+    var rubric = llmRubricWeights.map(function (field) {
+      return {id: field.dataset.rubricId, description: field.dataset.description, weight: field.value || '0'};
+    });
+    config.value = JSON.stringify({
+      expected_value: llmExpectedValue.value || null,
+      rubric: rubric,
+      rubric_mode: 'replace',
+      threshold: llmThreshold.value || null,
+      context: llmContext.value || null
+    }, null, 2);
+    clearConfigError();
+  }
+  function configToLlmFields() {
+    var value;
+    try {
+      value = JSON.parse(config.value);
+    } catch (error) {
+      configModeError.textContent = 'Fix invalid JSON before switching to form fields.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      configModeError.textContent = 'Evaluator configuration must be a JSON object.';
+      configModeError.hidden = false;
+      return false;
+    }
+    var rubric = Array.isArray(value.rubric) ? value.rubric : [];
+    var knownIds = llmRubricWeights.map(function (field) { return field.dataset.rubricId; });
+    if (rubric.some(function (criterion) { return !criterion || !knownIds.includes(criterion.id); })) {
+      configModeError.textContent = 'Custom rubric criteria can only be edited in JSON mode.';
+      configModeError.hidden = false;
+      return false;
+    }
+    llmExpectedValue.value = typeof value.expected_value === 'string' ? value.expected_value : '';
+    llmContext.value = typeof value.context === 'string' ? value.context : '';
+    llmThreshold.value = value.threshold == null ? '' : String(value.threshold);
+    llmRubricWeights.forEach(function (field) {
+      var criterion = rubric.find(function (item) { return item.id === field.dataset.rubricId; });
+      field.value = criterion ? String(criterion.weight) : field.dataset.defaultWeight;
+    });
+    clearConfigError();
+    return true;
+  }
+  function setLlmEditor(useForm) {
+    if (useForm && !configToLlmFields()) return;
+    if (!useForm) llmFieldsToConfig();
+    llmFields.hidden = !useForm;
+    llmFields.style.display = useForm ? '' : 'none';
+    jsonEditor.hidden = useForm;
+    jsonEditor.style.display = useForm ? 'none' : '';
+    showLlmForm.setAttribute('aria-pressed', String(useForm));
+    showLlmJson.setAttribute('aria-pressed', String(!useForm));
+  }
+  function parseJsonField(field, label) {
+    try {
+      return {ok: true, value: JSON.parse(field.value)};
+    } catch (error) {
+      return {ok: false, message: label + ' must contain valid JSON: ' + error.message};
+    }
+  }
+  function jsonSchemaFieldsToConfig() {
+    var schema = parseJsonField(jsonSchemaSchema, 'Schema');
+    var expected = jsonSchemaUseExpected.checked
+      ? parseJsonField(jsonSchemaExpected, 'Expected value') : {ok: true};
+    if (!schema.ok || !expected.ok) {
+      jsonSchemaFieldError.textContent = schema.message || expected.message;
+      jsonSchemaFieldError.hidden = false;
+      return false;
+    }
+    var value = {schema: schema.value, allow_markdown_code_fence: jsonSchemaCodeFence.checked};
+    if (jsonSchemaUseExpected.checked) value.expected_value = expected.value;
+    config.value = JSON.stringify(value, null, 2);
+    jsonSchemaFieldError.hidden = true;
+    clearConfigError();
+    return true;
+  }
+  function configToJsonSchemaFields() {
+    var value;
+    try {
+      value = JSON.parse(config.value);
+    } catch (error) {
+      configModeError.textContent = 'Fix invalid JSON before switching to form fields.';
+      configModeError.hidden = false;
+      return false;
+    }
+    if (!value || Array.isArray(value) || typeof value !== 'object' ||
+        !value.schema || Array.isArray(value.schema) || typeof value.schema !== 'object') {
+      configModeError.textContent = 'JSON Schema configuration requires a schema object.';
+      configModeError.hidden = false;
+      return false;
+    }
+    jsonSchemaSchema.value = JSON.stringify(value.schema, null, 2);
+    jsonSchemaCodeFence.checked = value.allow_markdown_code_fence === true;
+    jsonSchemaUseExpected.checked = Object.prototype.hasOwnProperty.call(value, 'expected_value');
+    jsonSchemaExpected.value = jsonSchemaUseExpected.checked
+      ? JSON.stringify(value.expected_value, null, 2) : '';
+    jsonSchemaExpectedWrap.hidden = !jsonSchemaUseExpected.checked;
+    jsonSchemaFieldError.hidden = true;
+    clearConfigError();
+    return true;
+  }
+  function setJsonSchemaEditor(useForm) {
+    if (useForm && !configToJsonSchemaFields()) return;
+    if (!useForm && !jsonSchemaFieldsToConfig()) return;
+    jsonSchemaFields.hidden = !useForm;
+    jsonSchemaFields.style.display = useForm ? '' : 'none';
+    jsonEditor.hidden = useForm;
+    jsonEditor.style.display = useForm ? 'none' : '';
+    showJsonSchemaForm.setAttribute('aria-pressed', String(useForm));
+    showJsonSchemaJson.setAttribute('aria-pressed', String(!useForm));
+  }
+  function updateEditorForMethod() {
+    var isExact = method.value === 'exact_match';
+    var isContains = method.value === 'contains';
+    var isRegex = method.value === 'regex';
+    var isNumeric = method.value === 'numeric';
+    var isLlm = method.value === 'llm_judge';
+    var isJsonSchema = method.value === 'json_schema';
+    exactMode.hidden = !isExact;
+    containsMode.hidden = !isContains;
+    regexMode.hidden = !isRegex;
+    numericMode.hidden = !isNumeric;
+    llmMode.hidden = !isLlm;
+    jsonSchemaMode.hidden = !isJsonSchema;
+    exactFields.hidden = true;
+    exactFields.style.display = 'none';
+    containsFields.hidden = true;
+    containsFields.style.display = 'none';
+    regexFields.hidden = true;
+    regexFields.style.display = 'none';
+    numericFields.hidden = true;
+    numericFields.style.display = 'none';
+    llmFields.hidden = true;
+    llmFields.style.display = 'none';
+    jsonSchemaFields.hidden = true;
+    jsonSchemaFields.style.display = 'none';
+    jsonEditor.hidden = false;
+    jsonEditor.style.display = '';
+    showExactForm.setAttribute('aria-pressed', 'false');
+    showExactJson.setAttribute('aria-pressed', 'true');
+    showContainsForm.setAttribute('aria-pressed', 'false');
+    showContainsJson.setAttribute('aria-pressed', 'true');
+    showRegexForm.setAttribute('aria-pressed', 'false');
+    showRegexJson.setAttribute('aria-pressed', 'true');
+    showNumericForm.setAttribute('aria-pressed', 'false');
+    showNumericJson.setAttribute('aria-pressed', 'true');
+    showLlmForm.setAttribute('aria-pressed', 'false');
+    showLlmJson.setAttribute('aria-pressed', 'true');
+    showJsonSchemaForm.setAttribute('aria-pressed', 'false');
+    showJsonSchemaJson.setAttribute('aria-pressed', 'true');
+    clearConfigError();
+  }
+  function openDefaultEditor() {
+    if (method.value === 'exact_match') setExactEditor(true);
+    if (method.value === 'contains') setContainsEditor(true);
+    if (method.value === 'regex') setRegexEditor(true);
+    if (method.value === 'numeric') setNumericEditor(true);
+    if (method.value === 'llm_judge') setLlmEditor(true);
+    if (method.value === 'json_schema') setJsonSchemaEditor(true);
+  }
   method.addEventListener('change', function () {
     config.value = JSON.stringify(examples[method.value], null, 2);
+    updateEditorForMethod();
+    openDefaultEditor();
     clearResult();
   });
+  showExactForm.addEventListener('click', function () { setExactEditor(true); });
+  showExactJson.addEventListener('click', function () { setExactEditor(false); });
+  showContainsForm.addEventListener('click', function () { setContainsEditor(true); });
+  showContainsJson.addEventListener('click', function () { setContainsEditor(false); });
+  showRegexForm.addEventListener('click', function () { setRegexEditor(true); });
+  showRegexJson.addEventListener('click', function () { setRegexEditor(false); });
+  showNumericForm.addEventListener('click', function () { setNumericEditor(true); });
+  showNumericJson.addEventListener('click', function () { setNumericEditor(false); });
+  showLlmForm.addEventListener('click', function () { setLlmEditor(true); });
+  showLlmJson.addEventListener('click', function () { setLlmEditor(false); });
+  showJsonSchemaForm.addEventListener('click', function () { setJsonSchemaEditor(true); });
+  showJsonSchemaJson.addEventListener('click', function () { setJsonSchemaEditor(false); });
+  jsonSchemaUseExpected.addEventListener('change', function () {
+    jsonSchemaExpectedWrap.hidden = !jsonSchemaUseExpected.checked;
+    if (jsonSchemaUseExpected.checked && !jsonSchemaExpected.value) jsonSchemaExpected.value = 'null';
+    jsonSchemaFieldsToConfig(); clearResult();
+  });
+  [jsonSchemaSchema, jsonSchemaExpected].forEach(function (field) {
+    field.addEventListener('input', function () { jsonSchemaFieldsToConfig(); clearResult(); });
+  });
+  jsonSchemaCodeFence.addEventListener('change', function () {
+    jsonSchemaFieldsToConfig(); clearResult();
+  });
+  [llmExpectedValue, llmContext, llmThreshold].concat(llmRubricWeights).forEach(function (field) {
+    field.addEventListener('input', function () { llmFieldsToConfig(); clearResult(); });
+  });
+  [numericExpectedValue, numericAbsoluteTolerance, numericRelativeTolerance].forEach(function (field) {
+    field.addEventListener('input', function () { numericFieldsToConfig(); clearResult(); });
+  });
+  [numericExtraction, numericDecimalSeparator, numericAllowThousands].forEach(function (field) {
+    field.addEventListener('change', function () { numericFieldsToConfig(); clearResult(); });
+  });
+  regexPattern.addEventListener('input', function () { regexFieldsToConfig(); clearResult(); });
+  Object.keys(regexBooleans).forEach(function (name) {
+    regexBooleans[name].addEventListener('change', function () { regexFieldsToConfig(); clearResult(); });
+  });
+  addContainsFragment.addEventListener('click', function () {
+    addFragmentField('');
+    containsFieldsToConfig();
+    containsFragments.lastElementChild.querySelector('textarea').focus();
+  });
+  containsMatchMode.addEventListener('change', function () { containsFieldsToConfig(); clearResult(); });
+  Object.keys(containsBooleans).forEach(function (name) {
+    containsBooleans[name].addEventListener('change', function () { containsFieldsToConfig(); clearResult(); });
+  });
+  expectedValue.addEventListener('input', function () { exactFieldsToConfig(); clearResult(); });
+  Object.keys(exactBooleans).forEach(function (name) {
+    exactBooleans[name].addEventListener('change', function () { exactFieldsToConfig(); clearResult(); });
+  });
   [config, output].forEach(function (element) {
-    element.addEventListener('input', clearResult);
+    element.addEventListener('input', function () { clearConfigError(); clearResult(); });
+  });
+  updateEditorForMethod();
+  openDefaultEditor();
+  function closeInfoPopups(exceptButton) {
+    document.querySelectorAll('.info-button').forEach(function (infoButton) {
+      if (infoButton === exceptButton) return;
+      infoButton.setAttribute('aria-expanded', 'false');
+      document.getElementById(infoButton.getAttribute('aria-controls')).hidden = true;
+    });
+  }
+  document.querySelectorAll('.info-button').forEach(function (infoButton) {
+    infoButton.addEventListener('click', function (event) {
+      var content = document.getElementById(infoButton.getAttribute('aria-controls'));
+      var willOpen = content.hidden;
+      closeInfoPopups(infoButton);
+      content.hidden = !willOpen;
+      infoButton.setAttribute('aria-expanded', String(willOpen));
+      event.stopPropagation();
+    });
+  });
+  document.addEventListener('click', function () { closeInfoPopups(); });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeInfoPopups();
+  });
+  form.addEventListener('submit', function (event) {
+    if (method.value === 'json_schema' && !jsonSchemaFields.hidden && !jsonSchemaFieldsToConfig()) {
+      event.preventDefault();
+      jsonSchemaFieldError.focus();
+    }
   });
   button.addEventListener('click', function () {
+    if (method.value === 'json_schema' && !jsonSchemaFields.hidden && !jsonSchemaFieldsToConfig()) {
+      jsonSchemaFieldError.focus();
+      return;
+    }
     button.disabled = true;
     button.textContent = 'Verifying…';
     clearResult();
