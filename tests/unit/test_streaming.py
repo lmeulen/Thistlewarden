@@ -9,10 +9,11 @@ from uuid import uuid4
 import httpx
 import pytest
 
-from evaluator.api.errors import ProviderClientError
+from evaluator.api.errors import ProviderClientError, TimeoutError
 from evaluator.endpoints import EndpointInput, EndpointRecord
 from evaluator.models import ModelProfileInput
 from evaluator.provider import ProviderHeaderResolver
+from evaluator.rate_limits import CentralEndpointLimiter, ProviderCallExecutor, RetryPolicy
 from evaluator.streaming import OpenAIStreamingClient, SseParser
 
 pytestmark = pytest.mark.unit
@@ -73,11 +74,21 @@ class Chunks(httpx.SyncByteStream):
         yield from self.chunks
 
 
-def _endpoint() -> EndpointRecord:
+class FailingChunks(httpx.SyncByteStream):
+    def __init__(self, chunks: list[bytes], error: httpx.HTTPError) -> None:
+        self.chunks = chunks
+        self.error = error
+
+    def __iter__(self):
+        yield from self.chunks
+        raise self.error
+
+
+def _endpoint(**changes) -> EndpointRecord:
     now = datetime.now(UTC)
     return EndpointRecord(
         uuid4(),
-        EndpointInput(name="p", completions_url="https://provider.test/chat"),
+        EndpointInput(name="p", completions_url="https://provider.test/chat", **changes),
         None,
         now,
         now,
@@ -105,6 +116,131 @@ def _client(
         clock=clock,
         transport=httpx.MockTransport(handler),
     )
+
+
+def _executor() -> ProviderCallExecutor:
+    policy = RetryPolicy(jitter_ratio=0)
+    policy.sleep = lambda seconds, cancelled=None: None  # type: ignore[method-assign]
+    return ProviderCallExecutor(CentralEndpointLimiter(), policy)
+
+
+def test_timeout_before_response_data_retries_until_exhausted() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        raise httpx.ConnectTimeout("timed out", request=request)
+
+    client = OpenAIStreamingClient(
+        ProviderHeaderResolver(FakeEndpoints(), FakeSecrets(), {}),  # type: ignore[arg-type]
+        max_response_bytes=10000,
+        clock=FakeClock([1.0, 2.0, 3.0]),
+        transport=httpx.MockTransport(handler),
+    )
+    endpoint = _endpoint(max_retries=2)
+
+    with pytest.raises(TimeoutError, match="before response data"):
+        _executor().execute(
+            endpoint,
+            lambda: client.complete(
+                endpoint, ModelProfileInput(model_id="m", display_name="M"), prompt="p"
+            ),
+        )
+
+    assert attempts == 3
+
+
+def test_network_failure_before_response_data_is_retried() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise httpx.ConnectError("disconnected", request=request)
+        return httpx.Response(200, stream=Chunks([b"data: [DONE]\n\n"]))
+
+    client = OpenAIStreamingClient(
+        ProviderHeaderResolver(FakeEndpoints(), FakeSecrets(), {}),  # type: ignore[arg-type]
+        max_response_bytes=10000,
+        clock=FakeClock([1.0, 2.0, 3.0]),
+        transport=httpx.MockTransport(handler),
+    )
+    endpoint = _endpoint(max_retries=1)
+    result = _executor().execute(
+        endpoint,
+        lambda: client.complete(
+            endpoint, ModelProfileInput(model_id="m", display_name="M"), prompt="p"
+        ),
+    )
+
+    assert attempts == 2
+    assert result.successful
+
+
+def test_timeout_after_partial_stream_is_not_retried() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        error = httpx.ReadTimeout("timed out", request=request)
+        return httpx.Response(
+            200,
+            stream=FailingChunks(
+                [b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'], error
+            ),
+        )
+
+    client = OpenAIStreamingClient(
+        ProviderHeaderResolver(FakeEndpoints(), FakeSecrets(), {}),  # type: ignore[arg-type]
+        max_response_bytes=10000,
+        clock=FakeClock([1.0, 1.1, 1.2]),
+        transport=httpx.MockTransport(handler),
+    )
+    endpoint = _endpoint(max_retries=2)
+    result = _executor().execute(
+        endpoint,
+        lambda: client.complete(
+            endpoint, ModelProfileInput(model_id="m", display_name="M"), prompt="p"
+        ),
+    )
+
+    assert attempts == 1
+    assert result.content == "partial"
+    assert result.error_code == "timeout"
+    assert not result.successful
+
+
+def test_rate_limit_and_server_errors_remain_retryable() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(429)
+        if attempts == 2:
+            return httpx.Response(503)
+        return httpx.Response(200, stream=Chunks([b"data: [DONE]\n\n"]))
+
+    client = OpenAIStreamingClient(
+        ProviderHeaderResolver(FakeEndpoints(), FakeSecrets(), {}),  # type: ignore[arg-type]
+        max_response_bytes=10000,
+        clock=FakeClock([1.0, 2.0, 3.0, 4.0]),
+        transport=httpx.MockTransport(handler),
+    )
+    endpoint = _endpoint(max_retries=2)
+    result = _executor().execute(
+        endpoint,
+        lambda: client.complete(
+            endpoint, ModelProfileInput(model_id="m", display_name="M"), prompt="p"
+        ),
+    )
+
+    assert attempts == 3
+    assert result.successful
 
 
 def test_close_interrupts_blocked_provider_response() -> None:

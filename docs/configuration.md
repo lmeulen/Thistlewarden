@@ -27,6 +27,10 @@ All non-bootstrap settings except `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS` are r
 
 Compose enforces one app service, one named local volume and host-loopback publication. Network filesystems, shared volumes and additional app replicas are unsupported.
 
+## Provider retries
+
+Each provider call makes at most `max_retries + 1` physical attempts. Rate-limit responses, provider server errors, and timeout/network failures before any response body data are retryable. Every physical attempt is logged with endpoint and attempt number. After any streaming response data arrives, transport failures return a partial failed result and are never replayed automatically, preventing duplicate execution and billing.
+
 ## Shutdown budget
 
 Worker shutdown has one global 30-second deadline inside Compose's 40-second stop grace period. Shutdown signals limiter/retry waits, closes lifecycle-owned provider transports to interrupt blocked responses, and then joins all workers against same absolute deadline. Interrupted jobs remain leased rather than being recorded as provider failures; normal lease-expiry recovery makes them available after restart. A missed deadline is logged as `worker_shutdown_timed_out` and `shutdown_incomplete`; daemon worker threads prevent blocked third-party transports from extending process lifetime beyond external grace period.

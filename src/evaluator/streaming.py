@@ -11,7 +11,7 @@ import httpx
 import simplejson
 from pydantic import ValidationError
 
-from evaluator.api.errors import ApiError
+from evaluator.api import errors as api_errors
 from evaluator.endpoints import EndpointRecord
 from evaluator.models import ModelProfileInput
 from evaluator.network_security import validate_destination
@@ -240,7 +240,7 @@ class OpenAIStreamingClient:
             ) as response:
                 try:
                     OpenAIProviderClient._classify_status(response)
-                except ApiError as exc:
+                except api_errors.ApiError as exc:
                     if diagnostic_mode:
                         attach_provider_diagnostic(
                             exc,
@@ -266,10 +266,22 @@ class OpenAIStreamingClient:
             return accumulator.result(self._clock.monotonic(), request_id, "invalid_stream")
         except OverflowError:
             return accumulator.result(self._clock.monotonic(), request_id, "answer_too_large")
-        except httpx.TimeoutException:
+        except httpx.TimeoutException as exc:
+            if wire_bytes == 0:
+                raise api_errors.TimeoutError(
+                    "Provider request timed out before response data."
+                ) from exc
             return accumulator.result(self._clock.monotonic(), request_id, "timeout")
-        except httpx.NetworkError:
+        except httpx.NetworkError as exc:
+            if wire_bytes == 0:
+                raise api_errors.NetworkError(
+                    "Provider network request failed before response data."
+                ) from exc
             return accumulator.result(self._clock.monotonic(), request_id, "network_error")
-        except httpx.HTTPError:
+        except httpx.HTTPError as exc:
+            if wire_bytes == 0:
+                raise api_errors.NetworkError(
+                    "Provider HTTP transport failed before response data."
+                ) from exc
             return accumulator.result(self._clock.monotonic(), request_id, "network_error")
         return accumulator.result(self._clock.monotonic(), request_id, None)
