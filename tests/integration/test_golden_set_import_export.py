@@ -18,6 +18,7 @@ def app(tmp_path: Path):
     return create_app(
         env_file=None,
         settings_environment={
+            "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
             "DATABASE_PATH": str(tmp_path / "io.db"),
             "ENCRYPTION_KEY": base64.urlsafe_b64encode(os.urandom(32)).decode(),
             "LOG_LEVEL": "WARNING",

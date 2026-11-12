@@ -14,7 +14,9 @@ pytestmark = pytest.mark.integration
 
 
 def test_app_starts_with_minimal_environment() -> None:
-    app = create_app(env_file=None, settings_environment={})
+    app = create_app(
+        env_file=None, settings_environment={"SECRET_KEY": "test-secret-key-with-at-least-32-bytes"}
+    )
 
     resolved = app.extensions["settings"]
     assert resolved.values.port == 5000
@@ -26,6 +28,7 @@ def test_app_refuses_invalid_concurrency_combination() -> None:
         create_app(
             env_file=None,
             settings_environment={
+                "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
                 "DEFAULT_RUN_CONCURRENCY": "20",
                 "MAX_RUN_CONCURRENCY": "10",
             },
@@ -37,7 +40,10 @@ def test_environment_remains_authoritative_after_database_update_attempt() -> No
     app = create_app(
         env_file=None,
         settings_repository=repository,
-        settings_environment={"RUN_RETENTION_DAYS": "7"},
+        settings_environment={
+            "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
+            "RUN_RETENTION_DAYS": "7",
+        },
     )
     service = app.extensions["settings_service"]
 
@@ -53,6 +59,7 @@ def test_environment_remains_authoritative_after_database_update_attempt() -> No
 def test_database_setting_survives_app_restart(tmp_path: Path) -> None:
     database = tmp_path / "persistent.db"
     environment = {
+        "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
         "DATABASE_PATH": str(database),
         "ENCRYPTION_KEY": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
     }
@@ -83,6 +90,7 @@ def test_app_ignores_bootstrap_database_setting_when_environment_is_absent(
         env_file=None,
         settings_repository=repository,
         settings_environment={
+            "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
             "DATABASE_PATH": str(tmp_path / "unused.db"),
             "EXPORT_PATH": str(tmp_path / "unused-exports"),
         },
@@ -98,7 +106,11 @@ def test_app_ignores_bootstrap_database_setting_when_environment_is_absent(
 
 def test_bootstrap_setting_update_is_rejected_by_running_app() -> None:
     repository = InMemorySettingsRepository()
-    app = create_app(env_file=None, settings_repository=repository, settings_environment={})
+    app = create_app(
+        env_file=None,
+        settings_repository=repository,
+        settings_environment={"SECRET_KEY": "test-secret-key-with-at-least-32-bytes"},
+    )
 
     with pytest.raises(ConfigurationError, match="bootstrap setting"):
         app.extensions["settings_service"].set_database_value("workers_enabled", "false")
@@ -108,6 +120,7 @@ def test_bootstrap_setting_update_is_rejected_by_running_app() -> None:
 
 def test_restart_required_update_remains_desired_until_restart(tmp_path: Path) -> None:
     environment = {
+        "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
         "DATABASE_PATH": str(tmp_path / "restart-required.db"),
         "ENCRYPTION_KEY": "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=",
     }
@@ -134,7 +147,9 @@ def test_restart_required_update_remains_desired_until_restart(tmp_path: Path) -
 
 
 def test_dynamic_settings_apply_to_running_services() -> None:
-    app = create_app(env_file=None, settings_environment={})
+    app = create_app(
+        env_file=None, settings_environment={"SECRET_KEY": "test-secret-key-with-at-least-32-bytes"}
+    )
     service = app.extensions["settings_service"]
 
     service.set_database_value("log_level", "DEBUG")

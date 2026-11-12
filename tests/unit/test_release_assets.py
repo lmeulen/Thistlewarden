@@ -65,7 +65,11 @@ def test_release_configuration_passes_real_import_validation(tmp_path: Path) -> 
 
 
 def test_container_bind_requires_explicit_container_mode() -> None:
-    common = {"HOST": "0.0.0.0", "DATABASE_PATH": "/tmp/evaluator.db"}
+    common = {
+        "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
+        "HOST": "0.0.0.0",
+        "DATABASE_PATH": "/tmp/evaluator.db",
+    }
     with pytest.raises(ConfigurationError):
         load_bootstrap_settings(env_file=None, environment=common)
     settings = load_bootstrap_settings(

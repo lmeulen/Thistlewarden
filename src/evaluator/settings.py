@@ -11,6 +11,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from evaluator.config import SECRET_KEY_PLACEHOLDER
 from evaluator.errors import ConfigurationError
 from evaluator.logging_config import log_semantic_event
 
@@ -89,7 +90,7 @@ class ApplicationSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     flask_env: str = "development"
-    secret_key: str = "change-me"
+    secret_key: str = SECRET_KEY_PLACEHOLDER
     encryption_key: str = "change-me"
     host: str = "127.0.0.1"
     port: int = Field(default=5000, ge=1, le=65535)
@@ -178,7 +179,7 @@ SETTINGS_REGISTRY: dict[str, SettingDefinition] = {
     definition.name: definition
     for definition in (
         SettingDefinition("flask_env", "FLASK_ENV", str, "development", _B),
-        SettingDefinition("secret_key", "SECRET_KEY", str, "change-me", _B, secret=True),
+        SettingDefinition("secret_key", "SECRET_KEY", str, SECRET_KEY_PLACEHOLDER, _B, secret=True),
         SettingDefinition("encryption_key", "ENCRYPTION_KEY", str, "change-me", _B, secret=True),
         SettingDefinition("host", "HOST", str, "127.0.0.1", _B),
         SettingDefinition("port", "PORT", int, 5000, _B, 1, 65535),

@@ -14,6 +14,8 @@ Every setting has one explicit lifecycle:
 
 All non-bootstrap settings except `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS` are restart-required. `GET /api/v1/settings` reports `active_value`, `desired_value`, `lifecycle`, and `pending_restart`; compatibility field `value` is always active value. Secrets remain suppressed in every value field.
 
+`SECRET_KEY` is mandatory and must be a non-default random value of at least 32 UTF-8 bytes. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, store it in the deployment secret mechanism or `.env`, and never commit it. Changing it invalidates all existing browser sessions and CSRF tokens, requiring users to reload and sign in again if authentication is configured. Startup errors identify `SECRET_KEY` but never include its value. `.env.example` intentionally contains a rejected placeholder.
+
 ## Runtime topology
 
 | Variable | Constraint |

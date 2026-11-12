@@ -17,6 +17,7 @@ def app(tmp_path: Path):
     settings = load_bootstrap_settings(
         env_file=None,
         environment={
+            "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
             "DATABASE_PATH": str(tmp_path / "data" / "production.db"),
             "EXPORT_PATH": str(tmp_path / "exports"),
             "LOG_LEVEL": "WARNING",
@@ -171,6 +172,7 @@ def test_app_start_does_not_create_runtime_files(app, tmp_path: Path) -> None:
 
 def test_app_factory_accepts_container_bind_environment(tmp_path: Path) -> None:
     environment = {
+        "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
         "CONTAINER_MODE": "true",
         "HOST": "0.0.0.0",
         "DATABASE_PATH": str(tmp_path / "container.db"),

@@ -72,7 +72,9 @@ def create_app(
     """Create the web application without touching runtime data paths."""
 
     loaded_from_environment = settings is None
-    active_settings = settings or load_bootstrap_settings(env_file)
+    active_settings = settings or load_bootstrap_settings(
+        env_file, environment=settings_environment
+    )
     environment = dict(
         settings_environment
         if settings_environment is not None

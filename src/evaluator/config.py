@@ -12,6 +12,24 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from evaluator.errors import ConfigurationError
 
 SUPPORTED_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
+SECRET_KEY_PLACEHOLDER = "replace-with-at-least-32-random-bytes"
+_WEAK_SECRET_KEYS = frozenset(
+    {
+        "",
+        "change-me",
+        "change-me-local",
+        "replace-with-a-long-random-value",
+        SECRET_KEY_PLACEHOLDER,
+    }
+)
+
+
+def validate_secret_key(value: str) -> str:
+    """Reject predictable or undersized Flask signing keys without exposing value."""
+
+    if value in _WEAK_SECRET_KEYS or len(value.encode("utf-8")) < 32:
+        raise ValueError("SECRET_KEY must be a non-default random value of at least 32 bytes")
+    return value
 
 
 class BootstrapSettings(BaseModel):
@@ -20,7 +38,7 @@ class BootstrapSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     flask_env: str = "development"
-    secret_key: str = "change-me"
+    secret_key: str = SECRET_KEY_PLACEHOLDER
     host: str = "127.0.0.1"
     port: int = Field(default=5000, ge=1, le=65535)
     log_level: str = "INFO"
@@ -31,6 +49,11 @@ class BootstrapSettings(BaseModel):
     workers_enabled: bool = True
     reloader_enabled: bool = False
     container_mode: bool = False
+
+    @field_validator("secret_key")
+    @classmethod
+    def require_strong_secret_key(cls, value: str) -> str:
+        return validate_secret_key(value)
 
     @field_validator("log_level", mode="before")
     @classmethod
@@ -85,7 +108,7 @@ def load_bootstrap_settings(
 
     values = {
         "flask_env": _env_value(source, "FLASK_ENV", "development"),
-        "secret_key": _env_value(source, "SECRET_KEY", "change-me"),
+        "secret_key": _env_value(source, "SECRET_KEY", SECRET_KEY_PLACEHOLDER),
         "host": _env_value(source, "HOST", "127.0.0.1"),
         "port": _env_value(source, "PORT", 5000),
         "log_level": _env_value(source, "LOG_LEVEL", "INFO"),
@@ -100,4 +123,8 @@ def load_bootstrap_settings(
     try:
         return BootstrapSettings.model_validate(values)
     except ValidationError as exc:
-        raise ConfigurationError(f"Invalid bootstrap configuration: {exc}") from exc
+        details = "; ".join(
+            f"{'.'.join(str(part) for part in item['loc'])}: {item['msg']}"
+            for item in exc.errors(include_url=False, include_input=False)
+        )
+        raise ConfigurationError(f"Invalid bootstrap configuration: {details}") from exc

@@ -21,7 +21,7 @@ def app(tmp_path: Path):
         environment={
             "DATABASE_PATH": str(tmp_path / "unused.db"),
             "LOG_LEVEL": "WARNING",
-            "SECRET_KEY": "fixture-secret",
+            "SECRET_KEY": "fixture-secret-with-at-least-32-bytes",
         },
     )
     app = create_app(settings=settings, test_config={"TESTING": False})
@@ -29,13 +29,13 @@ def app(tmp_path: Path):
     @app.get("/api/v1/_test/validation")
     def force_validation():
         raise ValidationApiError(
-            "fixture-secret is invalid",
-            details=(ErrorDetail("name", "fixture-secret is not allowed"),),
+            "fixture-secret-with-at-least-32-bytes is invalid",
+            details=(ErrorDetail("name", "fixture-secret-with-at-least-32-bytes is not allowed"),),
         )
 
     @app.post("/api/v1/_test/internal")
     def force_internal():
-        raise RuntimeError("private body fixture-secret")
+        raise RuntimeError("private body fixture-secret-with-at-least-32-bytes")
 
     return app
 

@@ -40,7 +40,9 @@ def test_production_server_logs_visible_lifecycle(
     monkeypatch.setattr("evaluator.server.create_app", lambda **kwargs: app)
     monkeypatch.setattr("evaluator.server.create_server", lambda *args, **kwargs: FakeServer())
     monkeypatch.setattr("evaluator.server.InstanceLock.for_database", lambda path: _FakeLock())
-    settings = BootstrapSettings(database_path=tmp_path / "test.db")
+    settings = BootstrapSettings(
+        secret_key="test-secret-key-with-at-least-32-bytes", database_path=tmp_path / "test.db"
+    )
 
     with caplog.at_level(logging.INFO, logger="evaluator.server"):
         run(settings)
@@ -71,7 +73,12 @@ def test_production_server_logs_incomplete_shutdown(
     monkeypatch.setattr("evaluator.server.InstanceLock.for_database", lambda path: _FakeLock())
 
     with caplog.at_level(logging.INFO, logger="evaluator.server"):
-        run(BootstrapSettings(database_path=tmp_path / "test.db"))
+        run(
+            BootstrapSettings(
+                secret_key="test-secret-key-with-at-least-32-bytes",
+                database_path=tmp_path / "test.db",
+            )
+        )
 
     messages = [record.getMessage() for record in caplog.records]
     assert any("shutdown_incomplete" in message for message in messages)

@@ -17,6 +17,7 @@ def app(tmp_path: Path):
     return create_app(
         env_file=None,
         settings_environment={
+            "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
             "DATABASE_PATH": str(tmp_path / "models.db"),
             "ENCRYPTION_KEY": key,
             "LOG_LEVEL": "WARNING",

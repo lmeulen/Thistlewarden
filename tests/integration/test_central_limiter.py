@@ -20,6 +20,7 @@ def test_all_provider_call_types_share_one_limiter_and_concurrency_budget(tmp_pa
     app = create_app(
         env_file=None,
         settings_environment={
+            "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
             "DATABASE_PATH": str(tmp_path / "limiter.db"),
             "ENCRYPTION_KEY": base64.urlsafe_b64encode(os.urandom(32)).decode(),
             "LOG_LEVEL": "WARNING",
