@@ -450,6 +450,10 @@ When the baseline is stable, expand the golden set into a regression suite. Run 
 
 The dashboard is the application home page. It provides a read-only summary of evaluation activity, configured model access, and available test material. The summary updates when you refresh the page.
 
+![Dashboard with evaluation, configuration, and test-material summaries](images/dashboard.png)
+
+*Dashboard overview. Screenshots use synthetic demonstration data.*
+
 It has three cards:
 
 - **Evaluate** shows run counts:
@@ -510,6 +514,10 @@ The main navigation bar remains available on every page. Use it to move directly
 ### 5.1 Adding an endpoint
 
 An endpoint defines one OpenAI-compatible provider connection. Create an endpoint before creating model profiles. It stores connection details shared by every model profile under that provider.
+
+![Endpoint and model-profile overview with synthetic demonstration entries](images/endpoints.png)
+
+*Endpoint overview with two model profiles. No real provider URL or credential is shown.*
 
 1. Open **Endpoints** from the navigation bar or dashboard.
 2. Select **Add endpoint**.
@@ -947,6 +955,10 @@ Before assigning a profile, confirm that it is configured with an active model p
 
 Open golden set and select **Add test case**. A test case defines one prompt, expected behavior, and evaluation method for every selected model in a run.
 
+![Test-case form with evaluator configuration fields](images/test-case.png)
+
+*Test-case editor using synthetic content. Method-specific form fields appear below common case fields.*
+
 Required fields are **Case ID**, **User prompt**, **Evaluation method**, evaluator configuration, and positive **Weight**. Add optional system prompt, category, tags, and enabled state as needed. Select **Save**; page stays on case so you can review saved configuration or delete it.
 
 Case ID must be unique within golden set. Use stable descriptive IDs such as `support-refund-policy`, `json-order-status`, or `safety-refusal-001`, rather than row numbers that change when suite evolves. Edit case by selecting its ID from golden-set page. Changes affect future runs only; existing run snapshots and results remain unchanged.
@@ -1047,6 +1059,10 @@ In examples below, **evaluator configuration** is validator input, **candidate o
 
 Use **Exact match** when candidate must equal `expected_value` in evaluator configuration after configured text normalization. It returns score `1` for match or `0` for mismatch.
 
+![Exact match evaluation form with expected text and normalization options](images/evaluation-exact-match.png)
+
+*Exact match form fields with synthetic demonstration data.*
+
 ```json
 {
   "expected_value": "positive",
@@ -1134,6 +1150,10 @@ Result: **Pass**, score `1`; newline and spaces collapse to one space. With `col
 
 Use **Contains** when candidate must contain one or more required fragments. It returns score `1` when configured fragment condition matches, otherwise `0`. It does not use **Expected answer**.
 
+![Contains evaluation form with required fragments and matching options](images/evaluation-contains.png)
+
+*Contains form fields with two synthetic required fragments.*
+
 ```json
 {
   "expected_fragments": ["refund", "five business days"],
@@ -1213,6 +1233,10 @@ Candidate output using Windows line endings between sentences → **Pass**, beca
 ### 9.3 Regular expression
 
 Use **Regex** for a pattern requirement. It returns score `1` when pattern matches candidate, otherwise `0`.
+
+![Regular-expression evaluation form with pattern and matching options](images/evaluation-regex.png)
+
+*Regex form fields for a synthetic ticket-ID pattern.*
 
 ```json
 {
@@ -1301,6 +1325,10 @@ Result: **Pass**, score `1`; `multiline` lets both anchors address lines and `do
 ### 9.4 Numeric comparison
 
 Use **Numeric** when candidate contains numeric value close to configured expected value. It returns score `1` inside tolerance and `0` outside tolerance or when unambiguous number cannot be extracted.
+
+![Numeric evaluation form with expected value, tolerances, and parsing options](images/evaluation-numeric.png)
+
+*Numeric form fields for a synthetic order total.*
 
 ```json
 {
@@ -1392,6 +1420,10 @@ With `expected_value: "0.0012"`, `extraction: "first_number"`, and decimal separ
 ### 9.5 JSON Schema
 
 Use **JSON Schema** for structured JSON output. Candidate must be standalone valid JSON and satisfy configured Draft 2020-12 schema. Form fields open by default and validate schema and optional expected-value JSON before saving or verifying. It returns score `1` on success and `0` for parsing, schema, or optional expected-value mismatch.
+
+![JSON Schema evaluation form with schema editor and parsing options](images/evaluation-json-schema.png)
+
+*JSON Schema form fields for a synthetic order-status response.*
 
 ```json
 {
@@ -1509,6 +1541,10 @@ Use schema to enforce keys, types, arrays, enums, and required fields. Add `addi
 ### 9.6 LLM judge
 
 Use **LLM judge** when deterministic rules cannot capture quality, relevance, completeness, or style. Judge profile calls separate configured model to assess candidate output. Judge returns score from `0` to `1`; pass/fail uses configured threshold.
+
+![LLM judge evaluation form with expected value, context, threshold, and rubric weights](images/evaluation-llm-judge.png)
+
+*LLM judge form fields with synthetic reference text and fixed rubric weights.*
 
 ```json
 {
@@ -1705,6 +1741,10 @@ Confirm selected judge is active and backed by available active model profile be
 ### 11.1 Creating a run
 
 A run evaluates every enabled test case in one active golden set against one or more active model profiles. Open **Runs** and select **New run** to create one.
+
+![Runs overview with synthetic terminal evaluation runs](images/runs.png)
+
+*Runs overview. Select rows to perform bulk deletion of terminal runs.*
 
 1. Enter a descriptive **Name**. Include purpose, suite version, and comparison when useful, for example `Support regression 1.2 — GPT-4.1 vs GPT-5`.
 2. Choose an active **Golden set**.
