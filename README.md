@@ -6,13 +6,12 @@ Local single-user web app for reproducible evaluation of OpenAI-compatible langu
 
 ## Status
 
-MVP implementation **30/30 steps completed**: golden sets, six evaluators, multiple model profiles, streaming metrics, exact costs, sustainable queue/recovery, LLM judging, quality gates, configuration exchange, exports, retention, Dutch GUI and security/performance hardening.
+MVP implementation: golden sets, evaluators, multiple model profiles, streaming metrics, exact costs, sustainable queue/recovery, LLM judging, quality gates, configuration exchange, exports, retention, English GUI and security/performance hardening.
 
 ## Requirements
 
 - Python 3.12+ or Docker Compose v2
 - Local file system for SQLite, WAL, exports and backups
-- Exactly one application process; no network file system or multiprocess deployment
 
 ## Docker Compose — recommended
 
@@ -63,26 +62,18 @@ Copy-Item .env.example .env
 python -m evaluator
 ```
 
-Production server is Waitress with one process and four HTTP threads. Worker threads are bounded by `RUN_CONCURRENCY`. Flask reloader remains off.
+Production server is Waitress with one process and four worker threads. Worker threads are bounded by `RUN_CONCURRENCY`. Flask reloader remains off.
 
 ## URLs
 
 - App: <http://127.0.0.1:5000>
-- Settings: <http://127.0.0.1:5000/instellingen>
-- Endpoints/models: <http://127.0.0.1:5000/endpoints>
-- Golden sets: <http://127.0.0.1:5000/golden-sets>
-- Judges: <http://127.0.0.1:5000/judges>
-- Configuration: <http://127.0.0.1:5000/configuratie>
-- Runs: <http://127.0.0.1:5000/runs>
-- Liveness: <http://127.0.0.1:5000/health>
-- Readiness: <http://127.0.0.1:5000/ready>
 - OpenAPI 3.1: <http://127.0.0.1:5000/api/v1/openapi.json>
 
 ## Configuration
 
 `.env` deliberately uses `python-dotenv override=True`: file overwrites process environment. Priority: `.env > GUI/database > default`. Active environment values ​​are read-only in GUI/API.
 
-Belangrijkste velden:
+Most important fields:
 
 | Variable | Default | Meaning |
 |---|---:|---|
@@ -128,6 +119,5 @@ Offline Docker E2E uses `compose.e2e.yaml`, `evaluator.mock_provider`, `examples
 
 - [User manual](docs/manual.md) — application workflows and reference
 - `docs/configuration.md` — settings and schedules
-- `docs/operations.md` — startup, backup, restore, storage and recovery
 - `docs/release.md` — release gate, Docker E2E and rollback
 - `SECURITY.md` — threat model and security policy

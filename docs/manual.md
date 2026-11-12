@@ -276,13 +276,6 @@ Protect the computer, database, backups, and exported files according to the sen
 
 Thistlewarden is local, single-user evaluation application. It does not provide multi-user accounts, roles, remote collaboration, or a supported public/network deployment.
 
-Other current limits that affect workflow:
-
-- **Test evaluator** previews deterministic methods only; it cannot run LLM judge.
-- **Retry failed jobs** creates a new run; it cannot retry one individual test case only.
-- Case order is stored and preserved, but GUI has no manual reorder control.
-- Judge-profile prompt-template text is retained and snapshotted, but current judge request uses built-in contract rather than interpolating template text.
-
 [Back to top](#manual-top)
 
 ## 2. Quick start
@@ -357,24 +350,16 @@ The port may be different if `PORT` was changed during installation. Use the add
 
 The application opens on the dashboard. The navigation bar provides access to endpoints and model profiles, golden sets, judge profiles, runs, settings, and configuration exchange.
 
-Thistlewarden deliberately listens on the local computer by default. Open it from a browser on the same computer that runs the application. Do not replace `127.0.0.1` with a network address or expose the application through a proxy unless a qualified operator has reviewed the security implications.
+Thistlewarden deliberately listens on the local computer by default. Open it from a browser on the same computer that runs the application. Do not replace `127.0.0.1` with a network address or expose the application through a proxy.
 
-Before entering data, confirm that the application is ready:
-
-1. Open the application address.
-2. Confirm that the dashboard appears without an error message.
-3. Confirm that the main navigation links open their pages.
-4. If the application has just started, wait a few seconds and refresh once before reporting a startup problem.
-
-If the browser reports that it cannot connect:
+If the browser reports that it cannot connect to `http://127.0.0.1:5000`:
 
 - confirm that Thistlewarden is running;
 - confirm that you are using the configured port;
-- use `http`, not `https`, unless an operator configured TLS separately;
+- use `http`, not `https`;
 - check application or container status according to the installation instructions;
-- ask the operator to check the readiness endpoint at `/ready` if the process is running but pages remain unavailable.
 
-Do not continue if the browser shows a certificate warning, an unexpected login page, or a different application. Verify the address with the operator first.
+Do not continue if the browser shows a certificate warning, an unexpected login page, or a different application.
 
 [Back to top](#manual-top)
 
