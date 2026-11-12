@@ -68,6 +68,40 @@ def test_gui_renders_english_navigation_and_masks_settings_secrets(app) -> None:
     assert "gui-fixture-secret" not in text
     assert "ENCRYPTION_KEY" in text and "••••••••" in text
     assert "Read-only" in text
+    assert "bootstrap" in text
+    assert "restart required" in text
+    assert "dynamic" in text
+
+
+def test_gui_restart_required_setting_shows_desired_value_as_pending(app) -> None:
+    client = app.test_client()
+
+    response = client.post(
+        "/instellingen/max_model_profiles_per_run",
+        data={"csrf_token": _csrf(client, "/instellingen"), "value": "12"},
+        follow_redirects=True,
+    )
+    text = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Restart required to activate it" in text
+    assert "Pending" in text
+    assert app.extensions["settings_service"].active.values.max_model_profiles_per_run == 20
+    assert app.extensions["settings_service"].desired.values.max_model_profiles_per_run == 12
+
+
+def test_gui_bootstrap_setting_update_is_rejected(app) -> None:
+    client = app.test_client()
+
+    response = client.post(
+        "/instellingen/port",
+        data={"csrf_token": _csrf(client, "/instellingen"), "value": "5100"},
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "bootstrap setting" in response.get_data(as_text=True)
+    assert app.extensions["settings_repository"].get("port") is None
 
 
 def test_gui_csrf_blocks_mutation(app) -> None:

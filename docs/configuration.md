@@ -2,11 +2,17 @@
 
 Technical names remain English; GUI labels are Dutch.
 
-## Source precedence
+## Source precedence and lifecycle
 
-Effective order is `.env > GUI/database > default`. `.env` is loaded with `override=True`, so file values replace existing process environment. Active environment-backed settings are read-only in GUI/API.
+For restart-required and dynamic settings, effective order is `.env > GUI/database > default`. `.env` is loaded with `override=True`, so file values replace existing process environment. Environment-backed settings are read-only in GUI/API.
 
-Bootstrap fields (`HOST`, `PORT`, paths, process topology, container mode) require restart. Runtime fields are shown on `/instellingen` with source badge.
+Every setting has one explicit lifecycle:
+
+- **Bootstrap:** environment/config-file only and always read-only in GUI/API. Database values are ignored because these settings locate or initialize the database and process. This includes `FLASK_ENV`, `SECRET_KEY`, `ENCRYPTION_KEY`, `HOST`, `PORT`, `DATABASE_PATH`, `EXPORT_PATH`, `APP_PROCESS_COUNT`, `STORAGE_BACKEND`, `WORKERS_ENABLED`, `RELOADER_ENABLED`, and `CONTAINER_MODE`.
+- **Restart required:** GUI changes persist as desired configuration but do not change current process or constructed services. `/instellingen` shows active and desired values separately and marks differences pending. Restart process to activate them.
+- **Dynamic:** changes are applied through an explicit thread-safe runtime callback before persistence. `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS` are dynamic; answer-limit changes atomically update active evaluation-preview service.
+
+All non-bootstrap settings except `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS` are restart-required. `GET /api/v1/settings` reports `active_value`, `desired_value`, `lifecycle`, and `pending_restart`; compatibility field `value` is always active value. Secrets remain suppressed in every value field.
 
 ## Runtime topology
 

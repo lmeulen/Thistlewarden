@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
 from flask import Flask, Response, jsonify
 
@@ -40,6 +42,7 @@ from evaluator.run_views import (
 from evaluator.runs import RunQueue
 from evaluator.secrets import EncryptionKeyring, SecretEncryptionService, SQLiteSecretRepository
 from evaluator.settings import (
+    SETTINGS_REGISTRY,
     InMemorySettingsRepository,
     SettingsRepository,
     SettingsResolver,
@@ -69,14 +72,19 @@ def create_app(
 
     loaded_from_environment = settings is None
     active_settings = settings or load_bootstrap_settings(env_file)
-    environment = (
+    environment = dict(
         settings_environment
         if settings_environment is not None
         else os.environ
         if loaded_from_environment
         else {}
     )
-    bootstrap_resolution = SettingsResolver(InMemorySettingsRepository()).resolve(environment)
+    if not loaded_from_environment:
+        for name in BootstrapSettings.model_fields:
+            value = getattr(active_settings, name)
+            environment[SETTINGS_REGISTRY[name].env_name] = (
+                str(value).lower() if isinstance(value, bool) else str(value)
+            )
     should_initialize_database = (
         loaded_from_environment and settings_environment is None
         if initialize_database is None
@@ -85,14 +93,13 @@ def create_app(
     database_factory: SQLiteConnectionFactory | None = None
     repository = settings_repository
     if repository is None and should_initialize_database:
-        database_factory = SQLiteConnectionFactory(bootstrap_resolution.values.database_path)
+        database_factory = SQLiteConnectionFactory(active_settings.database_path)
         MigrationManager(database_factory).migrate()
         repository = SQLiteSettingsRepository(database_factory)
     if repository is None:
         repository = InMemorySettingsRepository()
 
     resolved_settings = SettingsResolver(repository).resolve(environment)
-    settings_service = SettingsService(repository, environment)
     evaluation_preview_service = EvaluationPreviewService(
         max_candidate_chars=resolved_settings.values.max_model_answer_chars
     )
@@ -199,6 +206,17 @@ def create_app(
     }
     logging_secrets.add(active_settings.secret_key)
     configure_logging(resolved_settings.values.log_level, secrets=logging_secrets)
+    settings_service = SettingsService(
+        repository,
+        environment,
+        active=resolved_settings,
+        dynamic_appliers={
+            "log_level": lambda value: logging.getLogger().setLevel(str(value)),
+            "max_model_answer_chars": lambda value: (
+                evaluation_preview_service.apply_max_candidate_chars(cast(int, value))
+            ),
+        },
+    )
 
     app = Flask(__name__)
     app.config.from_mapping(
@@ -211,6 +229,9 @@ def create_app(
         app.config.update(test_config)
     app.extensions["bootstrap_settings"] = active_settings
     app.extensions["settings_repository"] = repository
+    app.extensions["active_settings"] = resolved_settings
+    app.extensions["desired_settings"] = resolved_settings
+    # Compatibility alias: `settings` always means configuration active in this process.
     app.extensions["settings"] = resolved_settings
     app.extensions["settings_service"] = settings_service
     app.extensions["evaluation_preview_service"] = evaluation_preview_service

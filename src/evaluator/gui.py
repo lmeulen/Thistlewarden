@@ -41,7 +41,7 @@ from evaluator.models import ModelProfileService
 from evaluator.run_exports import RunExportService, safe_filename
 from evaluator.run_views import RESULT_PAGE_SIZE, ResultQuery, RunViewService
 from evaluator.runs import RunQueue
-from evaluator.settings import ResolvedSettings, SettingsService
+from evaluator.settings import ResolvedSettings, SettingLifecycle, SettingsService
 
 gui = Blueprint("gui", __name__)
 _LOG = logging.getLogger(__name__)
@@ -320,17 +320,30 @@ def dashboard() -> str:
 
 @gui.get("/instellingen")
 def settings_page() -> str:
-    resolved: ResolvedSettings = current_app.extensions["settings"]
-    return render_template("settings.html", settings=resolved.metadata.values())
+    service: SettingsService = current_app.extensions["settings_service"]
+    active: ResolvedSettings = service.active
+    desired: ResolvedSettings = service.desired
+    return render_template(
+        "settings.html", active=active.metadata, settings=desired.metadata.values()
+    )
 
 
 @gui.post("/instellingen/<name>")
 def update_setting(name: str) -> Response:
     service: SettingsService = current_app.extensions["settings_service"]
     try:
-        resolved = service.set_database_value(name, request.form.get("value", ""))
-        current_app.extensions["settings"] = resolved
-        flash("Setting saved.", "success")
+        service.set_database_value(name, request.form.get("value", ""))
+        current_app.extensions["active_settings"] = service.active
+        current_app.extensions["desired_settings"] = service.desired
+        current_app.extensions["settings"] = service.active
+        lifecycle = service.desired.get(name).definition.lifecycle
+        if lifecycle is SettingLifecycle.RESTART_REQUIRED:
+            flash(
+                "Setting saved as desired configuration. Restart required to activate it.",
+                "success",
+            )
+        else:
+            flash("Setting saved and applied.", "success")
     except (ConfigurationError, KeyError) as exc:
         flash(_error_message(exc), "error")
     return redirect(url_for("gui.settings_page"))

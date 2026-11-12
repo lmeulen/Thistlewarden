@@ -23,7 +23,7 @@ from evaluator.judges import JudgeProfileService, judge_profile_to_dict
 from evaluator.models import ModelProfileService, profile_to_dict
 from evaluator.run_exports import RunExportService, safe_filename
 from evaluator.runs import RunQueue
-from evaluator.settings import ResolvedSettings
+from evaluator.settings import SettingsService
 
 api_v1 = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
@@ -59,21 +59,31 @@ def import_configuration() -> Response:
 def get_settings() -> Response:
     """Return resolved settings while suppressing all secret values."""
 
-    resolved = current_app.extensions["settings"]
-    if not isinstance(resolved, ResolvedSettings):
-        raise RuntimeError("Settings extension is unavailable")
+    service = current_app.extensions["settings_service"]
+    if not isinstance(service, SettingsService):
+        raise RuntimeError("Settings service is unavailable")
+    active = service.active
+    desired = service.desired
     items = []
-    for name, item in resolved.metadata.items():
-        value = item.public_value()
-        if isinstance(value, Path):
-            value = str(value)
+    for name, desired_item in desired.metadata.items():
+        active_item = active.get(name)
+        active_value = active_item.public_value()
+        desired_value = desired_item.public_value()
+        if isinstance(active_value, Path):
+            active_value = str(active_value)
+        if isinstance(desired_value, Path):
+            desired_value = str(desired_value)
         items.append(
             {
                 "name": name,
-                "value": value,
-                "source": item.source.value,
-                "read_only": item.read_only,
-                "secret": item.definition.secret,
+                "value": active_value,
+                "active_value": active_value,
+                "desired_value": desired_value,
+                "source": desired_item.source.value,
+                "read_only": desired_item.read_only,
+                "secret": desired_item.definition.secret,
+                "lifecycle": desired_item.definition.lifecycle.value,
+                "pending_restart": active_item.value != desired_item.value,
             }
         )
     return jsonify({"settings": items})

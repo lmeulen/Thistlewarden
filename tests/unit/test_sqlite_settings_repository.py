@@ -12,20 +12,23 @@ from evaluator.settings import SettingSource, SettingsResolver
 pytestmark = pytest.mark.unit
 
 
-def test_repository_maps_database_strings_to_domain_types(tmp_path: Path) -> None:
+def test_repository_maps_runtime_strings_and_resolver_ignores_bootstrap_records(
+    tmp_path: Path,
+) -> None:
     factory = SQLiteConnectionFactory(tmp_path / "settings.db")
     MigrationManager(factory).migrate()
     repository = SQLiteSettingsRepository(factory)
+    repository.set("run_retention_days", "7")
     repository.set("port", "5123")
-    repository.set("workers_enabled", "false")
     repository.set("database_path", "custom/evaluator.db")
 
     resolved = SettingsResolver(repository).resolve({})
 
-    assert resolved.values.port == 5123
-    assert resolved.values.workers_enabled is False
-    assert resolved.values.database_path == Path("custom/evaluator.db")
-    assert resolved.get("port").source is SettingSource.DATABASE
+    assert resolved.values.run_retention_days == 7
+    assert resolved.get("run_retention_days").source is SettingSource.DATABASE
+    assert resolved.values.port == 5000
+    assert resolved.values.database_path == Path("data/evaluator.db")
+    assert resolved.get("port").source is SettingSource.DEFAULT
 
 
 def test_repository_set_update_delete_and_all(tmp_path: Path) -> None:

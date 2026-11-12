@@ -59,6 +59,20 @@ def test_preview_rejects_invalid_config_and_large_candidate() -> None:
         )
 
 
+def test_preview_limit_can_be_reconfigured_safely() -> None:
+    service = EvaluationPreviewService(max_candidate_chars=100)
+
+    service.apply_max_candidate_chars(3)
+
+    with pytest.raises(ValidationApiError, match="maximum length"):
+        service.evaluate(
+            method="exact_match",
+            config={"expected_value": "long"},
+            expected_answer=None,
+            candidate="long",
+        )
+
+
 def test_preview_rejects_llm_judge_without_calling_provider() -> None:
     with pytest.raises(ValidationApiError, match="requires a run"):
         EvaluationPreviewService(max_candidate_chars=100).evaluate(

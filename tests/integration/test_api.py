@@ -106,6 +106,22 @@ def test_settings_endpoint_never_exposes_secret_values(app) -> None:
     settings = {item["name"]: item for item in response.get_json()["settings"]}
     assert settings["secret_key"]["secret"] is True
     assert settings["secret_key"]["value"] is None
+    assert settings["secret_key"]["lifecycle"] == "bootstrap"
+    assert settings["secret_key"]["read_only"] is True
+
+
+def test_settings_endpoint_distinguishes_active_and_desired_values(app) -> None:
+    app.extensions["settings_service"].set_database_value("max_model_profiles_per_run", "12")
+
+    response = app.test_client().get("/api/v1/settings")
+    settings = {item["name"]: item for item in response.get_json()["settings"]}
+    profile_limit = settings["max_model_profiles_per_run"]
+
+    assert profile_limit["value"] == 20
+    assert profile_limit["active_value"] == 20
+    assert profile_limit["desired_value"] == 12
+    assert profile_limit["lifecycle"] == "restart_required"
+    assert profile_limit["pending_restart"] is True
 
 
 def test_openapi_document_is_valid_shape_and_contains_all_api_routes(app) -> None:

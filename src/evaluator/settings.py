@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -23,11 +23,19 @@ type SettingType = type[str] | type[int] | type[bool] | type[Path]
 
 
 class SettingSource(StrEnum):
-    """Active source for a resolved setting."""
+    """Source for a resolved setting."""
 
     DEFAULT = "default"
     DATABASE = "database"
     ENVIRONMENT = "environment"
+
+
+class SettingLifecycle(StrEnum):
+    """When a validated setting can become active."""
+
+    BOOTSTRAP = "bootstrap"
+    RESTART_REQUIRED = "restart_required"
+    DYNAMIC = "dynamic"
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +46,7 @@ class SettingDefinition:
     env_name: str
     value_type: SettingType
     default: SettingValue
+    lifecycle: SettingLifecycle
     minimum: int | None = None
     maximum: int | None = None
     secret: bool = False
@@ -138,7 +147,10 @@ class ResolvedSetting:
 
     @property
     def read_only(self) -> bool:
-        return self.source is SettingSource.ENVIRONMENT
+        return (
+            self.definition.lifecycle is SettingLifecycle.BOOTSTRAP
+            or self.source is SettingSource.ENVIRONMENT
+        )
 
     def public_value(self) -> SettingValue | None:
         return None if self.definition.secret else self.value
@@ -158,54 +170,67 @@ class ResolvedSettings:
             raise KeyError(f"Unknown setting: {name}") from exc
 
 
-# Defaults and validation bounds are defined exactly once here.
+# Defaults, validation bounds, and lifecycle are defined exactly once here.
+_B = SettingLifecycle.BOOTSTRAP
+_R = SettingLifecycle.RESTART_REQUIRED
+_D = SettingLifecycle.DYNAMIC
 SETTINGS_REGISTRY: dict[str, SettingDefinition] = {
     definition.name: definition
     for definition in (
-        SettingDefinition("flask_env", "FLASK_ENV", str, "development"),
-        SettingDefinition("secret_key", "SECRET_KEY", str, "change-me", secret=True),
-        SettingDefinition("encryption_key", "ENCRYPTION_KEY", str, "change-me", secret=True),
-        SettingDefinition("host", "HOST", str, "127.0.0.1"),
-        SettingDefinition("port", "PORT", int, 5000, 1, 65535),
-        SettingDefinition("log_level", "LOG_LEVEL", str, "INFO"),
-        SettingDefinition("database_path", "DATABASE_PATH", Path, Path("./data/evaluator.db")),
-        SettingDefinition("export_path", "EXPORT_PATH", Path, Path("./exports")),
-        SettingDefinition("app_process_count", "APP_PROCESS_COUNT", int, 1, 1, 1),
-        SettingDefinition("storage_backend", "STORAGE_BACKEND", str, "local"),
-        SettingDefinition("workers_enabled", "WORKERS_ENABLED", bool, True),
-        SettingDefinition("reloader_enabled", "RELOADER_ENABLED", bool, False),
-        SettingDefinition("container_mode", "CONTAINER_MODE", bool, False),
+        SettingDefinition("flask_env", "FLASK_ENV", str, "development", _B),
+        SettingDefinition("secret_key", "SECRET_KEY", str, "change-me", _B, secret=True),
+        SettingDefinition("encryption_key", "ENCRYPTION_KEY", str, "change-me", _B, secret=True),
+        SettingDefinition("host", "HOST", str, "127.0.0.1", _B),
+        SettingDefinition("port", "PORT", int, 5000, _B, 1, 65535),
+        SettingDefinition("log_level", "LOG_LEVEL", str, "INFO", _D),
+        SettingDefinition("database_path", "DATABASE_PATH", Path, Path("./data/evaluator.db"), _B),
+        SettingDefinition("export_path", "EXPORT_PATH", Path, Path("./exports"), _B),
+        SettingDefinition("app_process_count", "APP_PROCESS_COUNT", int, 1, _B, 1, 1),
+        SettingDefinition("storage_backend", "STORAGE_BACKEND", str, "local", _B),
+        SettingDefinition("workers_enabled", "WORKERS_ENABLED", bool, True, _B),
+        SettingDefinition("reloader_enabled", "RELOADER_ENABLED", bool, False, _B),
+        SettingDefinition("container_mode", "CONTAINER_MODE", bool, False, _B),
         SettingDefinition(
-            "default_request_timeout_seconds", "DEFAULT_REQUEST_TIMEOUT_SECONDS", int, 60, 1
+            "default_request_timeout_seconds", "DEFAULT_REQUEST_TIMEOUT_SECONDS", int, 60, _R, 1
         ),
-        SettingDefinition("default_max_retries", "DEFAULT_MAX_RETRIES", int, 2, 0),
-        SettingDefinition("run_concurrency", "RUN_CONCURRENCY", int, 4, 1),
-        SettingDefinition("default_run_concurrency", "DEFAULT_RUN_CONCURRENCY", int, 4, 1),
-        SettingDefinition("max_run_concurrency", "MAX_RUN_CONCURRENCY", int, 10, 1),
-        SettingDefinition("run_retention_days", "RUN_RETENTION_DAYS", int, 0, 0),
-        SettingDefinition("max_prompt_chars", "MAX_PROMPT_CHARS", int, 1_000_000, 1),
-        SettingDefinition("max_system_prompt_chars", "MAX_SYSTEM_PROMPT_CHARS", int, 100_000, 1),
+        SettingDefinition("default_max_retries", "DEFAULT_MAX_RETRIES", int, 2, _R, 0),
+        SettingDefinition("run_concurrency", "RUN_CONCURRENCY", int, 4, _R, 1),
+        SettingDefinition("default_run_concurrency", "DEFAULT_RUN_CONCURRENCY", int, 4, _R, 1),
+        SettingDefinition("max_run_concurrency", "MAX_RUN_CONCURRENCY", int, 10, _R, 1),
+        SettingDefinition("run_retention_days", "RUN_RETENTION_DAYS", int, 0, _R, 0),
+        SettingDefinition("max_prompt_chars", "MAX_PROMPT_CHARS", int, 1_000_000, _R, 1),
         SettingDefinition(
-            "max_expected_answer_chars", "MAX_EXPECTED_ANSWER_CHARS", int, 1_000_000, 1
+            "max_system_prompt_chars", "MAX_SYSTEM_PROMPT_CHARS", int, 100_000, _R, 1
         ),
-        SettingDefinition("max_model_answer_chars", "MAX_MODEL_ANSWER_CHARS", int, 10_000_000, 1),
+        SettingDefinition(
+            "max_expected_answer_chars", "MAX_EXPECTED_ANSWER_CHARS", int, 1_000_000, _R, 1
+        ),
+        SettingDefinition(
+            "max_model_answer_chars", "MAX_MODEL_ANSWER_CHARS", int, 10_000_000, _D, 1
+        ),
         SettingDefinition(
             "max_judge_rubric_context_chars",
             "MAX_JUDGE_RUBRIC_CONTEXT_CHARS",
             int,
             100_000,
+            _R,
             1,
         ),
-        SettingDefinition("max_import_file_bytes", "MAX_IMPORT_FILE_BYTES", int, 104_857_600, 1),
+        SettingDefinition(
+            "max_import_file_bytes", "MAX_IMPORT_FILE_BYTES", int, 104_857_600, _R, 1
+        ),
         SettingDefinition(
             "max_provider_response_bytes",
             "MAX_PROVIDER_RESPONSE_BYTES",
             int,
             104_857_600,
+            _R,
             1,
         ),
-        SettingDefinition("max_golden_set_items", "MAX_GOLDEN_SET_ITEMS", int, 10_000, 1),
-        SettingDefinition("max_model_profiles_per_run", "MAX_MODEL_PROFILES_PER_RUN", int, 20, 1),
+        SettingDefinition("max_golden_set_items", "MAX_GOLDEN_SET_ITEMS", int, 10_000, _R, 1),
+        SettingDefinition(
+            "max_model_profiles_per_run", "MAX_MODEL_PROFILES_PER_RUN", int, 20, _R, 1
+        ),
     )
 }
 
@@ -251,7 +276,11 @@ class SettingsResolver:
         errors: list[str] = []
 
         for name, definition in SETTINGS_REGISTRY.items():
-            database_value = self._repository.get(name)
+            database_value = (
+                None
+                if definition.lifecycle is SettingLifecycle.BOOTSTRAP
+                else self._repository.get(name)
+            )
             if definition.env_name in environment:
                 raw: object = environment[definition.env_name]
                 source = SettingSource.ENVIRONMENT
@@ -279,37 +308,78 @@ class SettingsResolver:
 
 
 class SettingsService:
-    """Mutate database-backed settings while respecting environment overrides."""
+    """Manage desired settings and explicitly apply dynamic changes."""
 
-    def __init__(self, repository: SettingsRepository, environment: Mapping[str, str]) -> None:
+    def __init__(
+        self,
+        repository: SettingsRepository,
+        environment: Mapping[str, str],
+        active: ResolvedSettings | None = None,
+        dynamic_appliers: Mapping[str, Callable[[SettingValue], None]] | None = None,
+    ) -> None:
         self._repository = repository
         self._environment = environment
+        self._active = active or SettingsResolver(repository).resolve(environment)
+        self._desired = self._active
+        self._dynamic_appliers = dict(dynamic_appliers or {})
 
-    def set_database_value(self, name: str, raw_value: str) -> ResolvedSettings:
+    @property
+    def active(self) -> ResolvedSettings:
+        return self._active
+
+    @property
+    def desired(self) -> ResolvedSettings:
+        return self._desired
+
+    def _require_mutable(self, name: str) -> SettingDefinition:
         definition = SETTINGS_REGISTRY.get(name)
         if definition is None:
             raise KeyError(f"Unknown setting: {name}")
+        if definition.lifecycle is SettingLifecycle.BOOTSTRAP:
+            raise ConfigurationError(
+                f"{definition.env_name} is a bootstrap setting and cannot be stored in the database"
+            )
         if definition.env_name in self._environment:
             raise ConfigurationError(
                 f"{definition.env_name} is controlled by the environment and is read-only"
             )
+        return definition
+
+    def _commit_resolution(
+        self, definition: SettingDefinition, resolved: ResolvedSettings
+    ) -> ResolvedSettings:
+        if definition.lifecycle is SettingLifecycle.DYNAMIC:
+            applier = self._dynamic_appliers.get(definition.name)
+            if applier is None:
+                raise RuntimeError(f"No dynamic applier registered for {definition.name}")
+            desired_item = resolved.get(definition.name)
+            applier(desired_item.value)
+            active_metadata = dict(self._active.metadata)
+            active_metadata[definition.name] = desired_item
+            self._active = ResolvedSettings(
+                values=self._active.values.model_copy(update={definition.name: desired_item.value}),
+                metadata=active_metadata,
+            )
+        self._desired = resolved
+        return resolved
+
+    def set_database_value(self, name: str, raw_value: str) -> ResolvedSettings:
+        definition = self._require_mutable(name)
         # Resolve against a temporary copy first, so invalid writes are atomic.
         candidate = InMemorySettingsRepository(self._repository.all())
         candidate.set(name, raw_value)
         resolved = SettingsResolver(candidate).resolve(self._environment)
+        self._commit_resolution(definition, resolved)
         self._repository.set(name, raw_value)
         log_semantic_event(_LOG, "setting_updated", setting=name, source="database")
         return resolved
 
     def delete_database_value(self, name: str) -> ResolvedSettings:
-        definition = SETTINGS_REGISTRY.get(name)
-        if definition is None:
-            raise KeyError(f"Unknown setting: {name}")
-        if definition.env_name in self._environment:
-            raise ConfigurationError(
-                f"{definition.env_name} is controlled by the environment and is read-only"
-            )
+        definition = self._require_mutable(name)
+        candidate = InMemorySettingsRepository(self._repository.all())
+        candidate.delete(name)
+        resolved = SettingsResolver(candidate).resolve(self._environment)
+        self._commit_resolution(definition, resolved)
         self._repository.delete(name)
-        resolved = SettingsResolver(self._repository).resolve(self._environment)
         log_semantic_event(_LOG, "setting_updated", setting=name, source="default")
         return resolved

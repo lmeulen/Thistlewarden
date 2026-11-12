@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from threading import Lock
 from typing import Any
 from uuid import UUID
 
@@ -34,7 +35,16 @@ class EvaluationPreviewService:
         if max_candidate_chars < 1:
             raise ValueError("max_candidate_chars must be positive")
         self._max_candidate_chars = max_candidate_chars
+        self._limits_lock = Lock()
         self._evaluators = evaluators or EvaluatorRegistry()
+
+    def apply_max_candidate_chars(self, value: int) -> None:
+        """Apply validated candidate limit atomically for concurrent previews."""
+
+        if value < 1:
+            raise ValueError("max_candidate_chars must be positive")
+        with self._limits_lock:
+            self._max_candidate_chars = value
 
     def evaluate(
         self,
@@ -44,7 +54,9 @@ class EvaluationPreviewService:
         expected_answer: str | None,
         candidate: str,
     ) -> EvaluationPreviewResult:
-        if len(candidate) > self._max_candidate_chars:
+        with self._limits_lock:
+            max_candidate_chars = self._max_candidate_chars
+        if len(candidate) > max_candidate_chars:
             raise ValidationApiError("Test output exceeds maximum length.")
         try:
             data = GoldenSetItemInput.model_validate(

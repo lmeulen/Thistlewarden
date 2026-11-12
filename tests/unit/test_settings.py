@@ -9,6 +9,7 @@ from evaluator.settings import (
     SETTINGS_REGISTRY,
     ApplicationSettings,
     InMemorySettingsRepository,
+    SettingLifecycle,
     SettingSource,
     SettingsResolver,
     SettingsService,
@@ -21,6 +22,10 @@ def test_registry_contains_every_application_setting() -> None:
     assert set(SETTINGS_REGISTRY) == set(ApplicationSettings.model_fields)
     assert all(definition.env_name for definition in SETTINGS_REGISTRY.values())
     assert all(definition.value_type for definition in SETTINGS_REGISTRY.values())
+    assert all(
+        isinstance(definition.lifecycle, SettingLifecycle)
+        for definition in SETTINGS_REGISTRY.values()
+    )
 
 
 def test_every_setting_resolves_to_registered_default() -> None:
@@ -30,36 +35,43 @@ def test_every_setting_resolves_to_registered_default() -> None:
         item = resolved.get(name)
         assert item.value == definition.default
         assert item.source is SettingSource.DEFAULT
-        assert item.read_only is False
+        assert item.read_only is (definition.lifecycle is SettingLifecycle.BOOTSTRAP)
 
 
-def test_database_value_overrides_default() -> None:
-    repository = InMemorySettingsRepository({"port": "5100"})
+def test_database_value_overrides_default_for_non_bootstrap_setting() -> None:
+    repository = InMemorySettingsRepository({"run_retention_days": "30"})
 
     resolved = SettingsResolver(repository).resolve({})
 
-    assert resolved.values.port == 5100
-    assert resolved.get("port").source is SettingSource.DATABASE
+    assert resolved.values.run_retention_days == 30
+    assert resolved.get("run_retention_days").source is SettingSource.DATABASE
+
+
+def test_bootstrap_database_value_is_ignored() -> None:
+    resolved = SettingsResolver(InMemorySettingsRepository({"port": "5100"})).resolve({})
+
+    assert resolved.values.port == 5000
+    assert resolved.get("port").source is SettingSource.DEFAULT
 
 
 def test_environment_value_overrides_database() -> None:
-    repository = InMemorySettingsRepository({"port": "5100"})
+    repository = InMemorySettingsRepository({"run_retention_days": "30"})
 
-    resolved = SettingsResolver(repository).resolve({"PORT": "5200"})
+    resolved = SettingsResolver(repository).resolve({"RUN_RETENTION_DAYS": "7"})
 
-    assert resolved.values.port == 5200
-    assert resolved.get("port").source is SettingSource.ENVIRONMENT
-    assert resolved.get("port").read_only is True
+    assert resolved.values.run_retention_days == 7
+    assert resolved.get("run_retention_days").source is SettingSource.ENVIRONMENT
+    assert resolved.get("run_retention_days").read_only is True
 
 
 def test_environment_override_is_read_only_for_database_service() -> None:
-    repository = InMemorySettingsRepository({"port": "5100"})
-    service = SettingsService(repository, {"PORT": "5200"})
+    repository = InMemorySettingsRepository({"run_retention_days": "30"})
+    service = SettingsService(repository, {"RUN_RETENTION_DAYS": "7"})
 
     with pytest.raises(ConfigurationError, match="read-only"):
-        service.set_database_value("port", "5300")
+        service.set_database_value("run_retention_days", "14")
 
-    assert repository.get("port") == "5100"
+    assert repository.get("run_retention_days") == "30"
 
 
 def test_valid_database_update_is_persisted_and_resolved() -> None:
@@ -161,14 +173,31 @@ def test_path_values_are_typed() -> None:
 
 
 def test_delete_restores_default() -> None:
-    repository = InMemorySettingsRepository({"port": "5100"})
+    repository = InMemorySettingsRepository({"run_retention_days": "30"})
     service = SettingsService(repository, {})
 
-    resolved = service.delete_database_value("port")
+    resolved = service.delete_database_value("run_retention_days")
+
+    assert repository.get("run_retention_days") is None
+    assert resolved.values.run_retention_days == 0
+    assert resolved.get("run_retention_days").source is SettingSource.DEFAULT
+
+
+def test_bootstrap_setting_database_write_is_rejected() -> None:
+    repository = InMemorySettingsRepository()
+    service = SettingsService(repository, {})
+
+    with pytest.raises(ConfigurationError, match="bootstrap setting"):
+        service.set_database_value("port", "5100")
 
     assert repository.get("port") is None
-    assert resolved.values.port == 5000
-    assert resolved.get("port").source is SettingSource.DEFAULT
+
+
+def test_dynamic_setting_requires_registered_applier() -> None:
+    service = SettingsService(InMemorySettingsRepository(), {})
+
+    with pytest.raises(RuntimeError, match="No dynamic applier"):
+        service.set_database_value("log_level", "DEBUG")
 
 
 def test_unknown_setting_is_rejected() -> None:
