@@ -67,8 +67,11 @@ def run(settings: BootstrapSettings | None = None) -> None:
         finally:
             log_event(_LOG, logging.INFO, "shutdown_started")
             server.close()
-            app.extensions["shutdown_services"]()
-            log_event(_LOG, logging.INFO, "shutdown_completed")
+            stopped = app.extensions["shutdown_services"]()
+            if stopped is False:
+                log_event(_LOG, logging.ERROR, "shutdown_incomplete")
+            else:
+                log_event(_LOG, logging.INFO, "shutdown_completed")
 
 
 def main() -> None:

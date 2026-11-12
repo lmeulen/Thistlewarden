@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from concurrent.futures import CancelledError
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Protocol
@@ -53,7 +54,9 @@ class WorkerPipeline:
         self._heartbeat_interval = heartbeat_interval
         self._gates = gates
 
-    def run_once(self, owner: str) -> bool:
+    def run_once(self, owner: str, *, cancelled: threading.Event | None = None) -> bool:
+        if cancelled is not None and cancelled.is_set():
+            return False
         lease = self._queue.claim(owner)
         if lease is None:
             return False
@@ -68,7 +71,7 @@ class WorkerPipeline:
                 case_id=str(case["case_id"]),
                 execution_id=str(uuid4()),
             ):
-                return self._execute_claimed(lease, case, stop, lost, thread)
+                return self._execute_claimed(lease, case, stop, lost, thread, cancelled)
         finally:
             if thread.is_alive():
                 stop.set()
@@ -81,6 +84,7 @@ class WorkerPipeline:
         stop: threading.Event,
         lost: threading.Event,
         thread: threading.Thread,
+        cancelled: threading.Event | None,
     ) -> bool:
         log_event(
             _LOG,
@@ -99,7 +103,11 @@ class WorkerPipeline:
                 model_id=model["model_id"],
                 endpoint_id=model["endpoint_id"],
             )
+            if cancelled is not None and cancelled.is_set():
+                raise CancelledError
             outcome = self._target(case, model)
+            if cancelled is not None and cancelled.is_set():
+                raise CancelledError
             if lost.is_set():
                 raise LeaseLost
             for attempt in outcome.attempts:
@@ -132,6 +140,9 @@ class WorkerPipeline:
                     score=result.score,
                     outcome="passed" if result.passed else "failed",
                 )
+        except CancelledError:
+            log_event(_LOG, logging.WARNING, "job_interrupted", job_id=lease.job_id)
+            return True
         except LeaseLost:
             log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
             return True

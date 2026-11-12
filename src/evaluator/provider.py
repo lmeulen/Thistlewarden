@@ -220,6 +220,16 @@ class OpenAIProviderClient:
         self._headers = header_resolver
         self._max_response_bytes = max_response_bytes
         self._transport = transport
+        self._client = httpx.Client(
+            follow_redirects=False,
+            transport=transport,
+            trust_env=False,
+        )
+
+    def close(self) -> None:
+        """Close transport, interrupting active requests during application shutdown."""
+
+        self._client.close()
 
     def complete(
         self,
@@ -235,21 +245,16 @@ class OpenAIProviderClient:
         encoded = simplejson.dumps(body, use_decimal=True, allow_nan=False).encode()
         timeout = httpx.Timeout(float(endpoint.data.timeout_seconds))
         try:
-            with httpx.Client(
+            with self._client.stream(
+                "POST",
+                endpoint.data.completions_url,
+                headers=self._headers.resolve(endpoint),
+                content=encoded,
                 timeout=timeout,
-                follow_redirects=False,
-                transport=self._transport,
-                trust_env=False,
-            ) as client:
-                with client.stream(
-                    "POST",
-                    endpoint.data.completions_url,
-                    headers=self._headers.resolve(endpoint),
-                    content=encoded,
-                ) as response:
-                    self._classify_status(response)
-                    content = self._read_limited(response)
-                    return parse_completion_response(content, response.headers)
+            ) as response:
+                self._classify_status(response)
+                content = self._read_limited(response)
+                return parse_completion_response(content, response.headers)
         except httpx.TimeoutException as exc:
             raise TimeoutError() from exc
         except httpx.NetworkError as exc:

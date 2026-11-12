@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from collections.abc import Callable
+from concurrent.futures import CancelledError
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -147,10 +149,12 @@ class StreamingTargetCaller:
         endpoints: SQLiteEndpointRepository,
         client: OpenAIStreamingClient,
         executor: ProviderCallExecutor,
+        cancelled: threading.Event | None = None,
     ) -> None:
         self._endpoints = endpoints
         self._client = client
         self._executor = executor
+        self._cancelled = cancelled
 
     def __call__(self, case: dict[str, Any], model: dict[str, Any]) -> TargetOutcome:
         endpoint = self._endpoints.get(UUID(model["endpoint_id"]))
@@ -167,7 +171,10 @@ class StreamingTargetCaller:
             ),
             estimated_tokens=profile.max_tokens or 0,
             usage_tokens=self._usage_tokens,
+            cancelled=self._cancelled,
         )
+        if self._cancelled is not None and self._cancelled.is_set():
+            raise CancelledError
         usage = result.usage
         log_event(
             _LOG,
@@ -235,11 +242,13 @@ class JudgeCaller:
         endpoints: SQLiteEndpointRepository,
         client: OpenAIProviderClient,
         executor: ProviderCallExecutor,
+        cancelled: threading.Event | None = None,
     ) -> None:
         self._queue = queue
         self._endpoints = endpoints
         self._client = client
         self._executor = executor
+        self._cancelled = cancelled
 
     def __call__(self, run_id: UUID, case: dict[str, Any], candidate: str) -> EvaluationResult:
         snapshot = self._queue.judge_snapshot(run_id)
@@ -290,6 +299,7 @@ class JudgeCaller:
                 endpoint,
                 lambda: self._client.complete(endpoint, profile, prompt=prompt).content,
                 estimated_tokens=profile.max_tokens or 0,
+                cancelled=self._cancelled,
             )
             try:
                 return parse_judge_output(output, rubric, threshold)
@@ -308,13 +318,16 @@ class WorkerRuntime:
         *,
         concurrency: int,
         idle_seconds: float = 0.25,
+        cancel_in_flight: Callable[[], None] | None = None,
+        cancellation_event: threading.Event | None = None,
     ) -> None:
         if concurrency <= 0:
             raise ValueError("concurrency must be positive")
         self._factory = pipeline_factory
         self._concurrency = concurrency
         self._idle_seconds = idle_seconds
-        self._stop = threading.Event()
+        self._cancel_in_flight = cancel_in_flight
+        self._stop = cancellation_event or threading.Event()
         self._threads: list[threading.Thread] = []
 
     @property
@@ -331,7 +344,8 @@ class WorkerRuntime:
                 target=self._loop,
                 args=(owner,),
                 name=f"evaluator-worker-{index}",
-                daemon=False,
+                # Timed-out provider transports must never keep process alive past grace.
+                daemon=True,
             )
             self._threads.append(thread)
             thread.start()
@@ -339,8 +353,11 @@ class WorkerRuntime:
 
     def stop(self, timeout: float = 30.0) -> bool:
         self._stop.set()
+        if self._cancel_in_flight is not None:
+            self._cancel_in_flight()
+        deadline = time.monotonic() + max(0.0, timeout)
         for thread in self._threads:
-            thread.join(timeout=max(0.0, timeout))
+            thread.join(timeout=max(0.0, deadline - time.monotonic()))
         stopped = not any(thread.is_alive() for thread in self._threads)
         if stopped:
             self._threads.clear()
@@ -351,7 +368,7 @@ class WorkerRuntime:
         pipeline = self._factory()
         while not self._stop.is_set():
             try:
-                worked = pipeline.run_once(owner)
+                worked = pipeline.run_once(owner, cancelled=self._stop)
             except Exception as exc:
                 log_event(
                     _LOG,

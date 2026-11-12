@@ -48,7 +48,7 @@ class Pipeline:
         self.calls = calls
         self.block = block
 
-    def run_once(self, owner: str) -> bool:
+    def run_once(self, owner: str, *, cancelled: threading.Event | None = None) -> bool:
         self.calls.append(owner)
         if self.block is not None:
             self.block.wait(2)
@@ -112,6 +112,41 @@ def test_worker_runtime_is_bounded_and_stops_idle_threads() -> None:
     assert runtime.running_threads == 3
     assert len(set(calls)) == 3
     assert runtime.stop(timeout=1)
+    assert runtime.running_threads == 0
+
+
+def test_multiple_blocked_workers_share_one_global_shutdown_deadline() -> None:
+    release = threading.Event()
+    runtime = WorkerRuntime(lambda: Pipeline([], release), concurrency=3)  # type: ignore[arg-type]
+    runtime.start()
+
+    started = time.monotonic()
+    assert not runtime.stop(timeout=0.05)
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.12
+    assert runtime.running_threads == 3
+    release.set()
+    assert runtime.stop(timeout=1)
+
+
+def test_stop_closes_in_flight_transport_and_clears_worker_state() -> None:
+    release = threading.Event()
+    callback_calls: list[bool] = []
+
+    def cancel_in_flight() -> None:
+        callback_calls.append(True)
+        release.set()
+
+    runtime = WorkerRuntime(
+        lambda: Pipeline([], release),  # type: ignore[arg-type]
+        concurrency=2,
+        cancel_in_flight=cancel_in_flight,
+    )
+    runtime.start()
+
+    assert runtime.stop(timeout=1)
+    assert callback_calls == [True]
     assert runtime.running_threads == 0
 
 

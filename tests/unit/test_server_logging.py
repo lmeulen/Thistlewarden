@@ -53,6 +53,31 @@ def test_production_server_logs_visible_lifecycle(
     assert shutdown == [True]
 
 
+def test_production_server_logs_incomplete_shutdown(
+    monkeypatch: Any, caplog: Any, tmp_path: Path
+) -> None:
+    app = type(
+        "App",
+        (),
+        {
+            "extensions": {
+                "worker_runtime": FakeRuntime(),
+                "shutdown_services": lambda: False,
+            }
+        },
+    )()
+    monkeypatch.setattr("evaluator.server.create_app", lambda **kwargs: app)
+    monkeypatch.setattr("evaluator.server.create_server", lambda *args, **kwargs: FakeServer())
+    monkeypatch.setattr("evaluator.server.InstanceLock.for_database", lambda path: _FakeLock())
+
+    with caplog.at_level(logging.INFO, logger="evaluator.server"):
+        run(BootstrapSettings(database_path=tmp_path / "test.db"))
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("shutdown_incomplete" in message for message in messages)
+    assert not any("shutdown_completed" in message for message in messages)
+
+
 class _FakeLock:
     def __enter__(self) -> _FakeLock:
         return self

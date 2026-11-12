@@ -198,6 +198,16 @@ class OpenAIStreamingClient:
         self._max_answer_bytes = max_answer_bytes or max_response_bytes
         self._clock = clock or SystemClock()
         self._transport = transport
+        self._client = httpx.Client(
+            follow_redirects=False,
+            transport=transport,
+            trust_env=False,
+        )
+
+    def close(self) -> None:
+        """Close transport, interrupting active streams during application shutdown."""
+
+        self._client.close()
 
     def complete(
         self,
@@ -221,42 +231,37 @@ class OpenAIStreamingClient:
         wire_bytes = 0
         try:
             resolved_headers = self._headers.resolve(endpoint)
-            with httpx.Client(
+            with self._client.stream(
+                "POST",
+                endpoint.data.completions_url,
+                headers=resolved_headers,
+                content=encoded,
                 timeout=httpx.Timeout(float(endpoint.data.timeout_seconds)),
-                follow_redirects=False,
-                transport=self._transport,
-                trust_env=False,
-            ) as client:
-                with client.stream(
-                    "POST",
-                    endpoint.data.completions_url,
-                    headers=resolved_headers,
-                    content=encoded,
-                ) as response:
-                    try:
-                        OpenAIProviderClient._classify_status(response)
-                    except ApiError as exc:
-                        if diagnostic_mode:
-                            attach_provider_diagnostic(
-                                exc,
-                                response,
-                                redact_values=tuple(resolved_headers.values()),
-                            )
-                        raise
-                    lowered = {key.lower(): value for key, value in response.headers.items()}
-                    request_id = next(
-                        (lowered[name] for name in _REQUEST_ID_HEADERS if lowered.get(name)), None
-                    )
-                    for chunk in response.iter_raw():
-                        wire_bytes += len(chunk)
-                        if wire_bytes > self._max_bytes:
-                            return accumulator.result(
-                                self._clock.monotonic(), request_id, "stream_too_large"
-                            )
-                        for event in parser.feed(chunk):
-                            accumulator.event(event)
-                    for event in parser.finish():
+            ) as response:
+                try:
+                    OpenAIProviderClient._classify_status(response)
+                except ApiError as exc:
+                    if diagnostic_mode:
+                        attach_provider_diagnostic(
+                            exc,
+                            response,
+                            redact_values=tuple(resolved_headers.values()),
+                        )
+                    raise
+                lowered = {key.lower(): value for key, value in response.headers.items()}
+                request_id = next(
+                    (lowered[name] for name in _REQUEST_ID_HEADERS if lowered.get(name)), None
+                )
+                for chunk in response.iter_raw():
+                    wire_bytes += len(chunk)
+                    if wire_bytes > self._max_bytes:
+                        return accumulator.result(
+                            self._clock.monotonic(), request_id, "stream_too_large"
+                        )
+                    for event in parser.feed(chunk):
                         accumulator.event(event)
+                for event in parser.finish():
+                    accumulator.event(event)
         except (json.JSONDecodeError, UnicodeDecodeError, ValidationError, ValueError):
             return accumulator.result(self._clock.monotonic(), request_id, "invalid_stream")
         except OverflowError:

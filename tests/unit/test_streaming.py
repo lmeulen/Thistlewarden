@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
@@ -35,6 +37,32 @@ class FakeClock:
 
     def now_utc(self):
         return datetime.now(UTC)
+
+
+class BlockingStream(httpx.SyncByteStream):
+    def __init__(self, closed: threading.Event, accepted: threading.Event) -> None:
+        self.closed = closed
+        self.accepted = accepted
+
+    def __iter__(self):
+        self.accepted.set()
+        self.closed.wait(2)
+        if not self.closed.is_set():
+            raise RuntimeError("transport was not closed")
+        return
+        yield b""  # pragma: no cover
+
+
+class BlockingTransport(httpx.BaseTransport):
+    def __init__(self) -> None:
+        self.closed = threading.Event()
+        self.accepted = threading.Event()
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=BlockingStream(self.closed, self.accepted))
+
+    def close(self) -> None:
+        self.closed.set()
 
 
 class Chunks(httpx.SyncByteStream):
@@ -77,6 +105,36 @@ def _client(
         clock=clock,
         transport=httpx.MockTransport(handler),
     )
+
+
+def test_close_interrupts_blocked_provider_response() -> None:
+    transport = BlockingTransport()
+    resolver = ProviderHeaderResolver(FakeEndpoints(), FakeSecrets(), {})  # type: ignore[arg-type]
+    client = OpenAIStreamingClient(
+        resolver,
+        max_response_bytes=10000,
+        transport=transport,
+    )
+    completed = threading.Event()
+
+    def call() -> None:
+        client.complete(
+            _endpoint(),
+            ModelProfileInput(model_id="m", display_name="M"),
+            prompt="p",
+        )
+        completed.set()
+
+    thread = threading.Thread(target=call)
+    thread.start()
+    assert transport.accepted.wait(1)
+
+    started = time.monotonic()
+    client.close()
+    thread.join(1)
+
+    assert completed.is_set()
+    assert time.monotonic() - started < 0.5
 
 
 def test_diagnostic_mode_attaches_provider_error_without_exposing_header_secret() -> None:

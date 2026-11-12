@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import threading
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from tests.integration.test_run_queue import fixture_app
+from tests.integration.test_run_queue import FakeClock, fixture_app
 
 from evaluator.runs import RunQueue
 from evaluator.workers import TargetOutcome, WorkerPipeline
@@ -34,6 +36,32 @@ def test_worker_completes_deterministic_run_and_partial_stream_errors(tmp_path: 
     )
     assert partial.run_once("worker")
     assert queue.get_run(second)["status"] == "failed"
+
+
+def test_interrupted_provider_job_remains_recoverable(tmp_path: Path) -> None:
+    app, golden, model = fixture_app(tmp_path)
+    clock = FakeClock()
+    queue = RunQueue(app.extensions["database_factory"], clock=clock, lease_seconds=1)
+    run_id = queue.create_run(
+        {
+            "name": "interrupted",
+            "golden_set_id": str(golden.id),
+            "model_profile_ids": [str(model.id)],
+        }
+    )
+    cancelled = threading.Event()
+
+    def interrupt(case, model):
+        cancelled.set()
+        return TargetOutcome("ignored")
+
+    worker = WorkerPipeline(queue, interrupt, heartbeat_interval=0.01)
+
+    assert worker.run_once("worker", cancelled=cancelled)
+    assert queue.get_run(run_id)["status"] == "running"
+    clock.now += timedelta(seconds=2)
+    assert queue.recover_expired() == {"jobs": 1, "runs": 1}
+    assert queue.claim("recovery-worker") is not None
 
 
 def test_cancel_skips_pending_jobs(tmp_path: Path) -> None:

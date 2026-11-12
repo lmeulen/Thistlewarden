@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Mapping
+import threading
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import cast
 
@@ -25,7 +26,7 @@ from evaluator.gates import QualityGateService
 from evaluator.golden_sets import GoldenSetLimits, GoldenSetService, SQLiteGoldenSetRepository
 from evaluator.gui import csrf_token, gui
 from evaluator.judges import JudgeProfileService, SQLiteJudgeProfileRepository
-from evaluator.logging_config import configure_logging
+from evaluator.logging_config import configure_logging, log_event
 from evaluator.migrations import MigrationManager
 from evaluator.models import ModelProfileService, SQLiteModelProfileRepository
 from evaluator.provider import OpenAIProviderClient, ProviderHeaderResolver
@@ -85,6 +86,7 @@ def create_app(
             environment[SETTINGS_REGISTRY[name].env_name] = (
                 str(value).lower() if isinstance(value, bool) else str(value)
             )
+    bootstrap_resolution = SettingsResolver(InMemorySettingsRepository()).resolve(environment)
     should_initialize_database = (
         loaded_from_environment and settings_environment is None
         if initialize_database is None
@@ -93,7 +95,7 @@ def create_app(
     database_factory: SQLiteConnectionFactory | None = None
     repository = settings_repository
     if repository is None and should_initialize_database:
-        database_factory = SQLiteConnectionFactory(active_settings.database_path)
+        database_factory = SQLiteConnectionFactory(bootstrap_resolution.values.database_path)
         MigrationManager(database_factory).migrate()
         repository = SQLiteSettingsRepository(database_factory)
     if repository is None:
@@ -168,6 +170,7 @@ def create_app(
                 max_import_file_bytes=resolved_settings.values.max_import_file_bytes,
             ),
         )
+        worker_cancelled = threading.Event()
         streaming_client = OpenAIStreamingClient(
             provider_headers,
             max_response_bytes=resolved_settings.values.max_provider_response_bytes,
@@ -176,21 +179,29 @@ def create_app(
             endpoint_repository,
             streaming_client,
             provider_call_executor,
+            worker_cancelled,
         )
         model_profile_tester = ModelProfileTester(
             endpoint_repository,
             streaming_client,
             provider_call_executor,
         )
+        judge_client = OpenAIProviderClient(
+            provider_headers,
+            max_response_bytes=resolved_settings.values.max_provider_response_bytes,
+        )
         judge_caller = JudgeCaller(
             run_queue,
             endpoint_repository,
-            OpenAIProviderClient(
-                provider_headers,
-                max_response_bytes=resolved_settings.values.max_provider_response_bytes,
-            ),
+            judge_client,
             provider_call_executor,
+            worker_cancelled,
         )
+
+        def cancel_provider_calls() -> None:
+            streaming_client.close()
+            judge_client.close()
+
         worker_runtime = WorkerRuntime(
             lambda: WorkerPipeline(
                 run_queue,
@@ -199,6 +210,8 @@ def create_app(
                 gates=quality_gate_service,
             ),
             concurrency=resolved_settings.values.run_concurrency,
+            cancellation_event=worker_cancelled,
+            cancel_in_flight=cancel_provider_calls,
         )
 
     logging_secrets = {
@@ -240,8 +253,15 @@ def create_app(
     app.extensions["target_call_executor"] = provider_call_executor
     app.extensions["judge_call_executor"] = provider_call_executor
     app.extensions["connection_test_call_executor"] = provider_call_executor
-    shutdown_callbacks = [endpoint_limiter.close]
-    app.extensions["shutdown_services"] = lambda: [callback() for callback in shutdown_callbacks]
+    shutdown_callbacks: list[Callable[[], bool | None]] = [endpoint_limiter.close]
+
+    def shutdown_services() -> bool:
+        stopped = True
+        for callback in shutdown_callbacks:
+            stopped = callback() is not False and stopped
+        return stopped
+
+    app.extensions["shutdown_services"] = shutdown_services
     if database_factory is not None:
         app.extensions["database_factory"] = database_factory
     if secret_repository is not None:
@@ -277,8 +297,16 @@ def create_app(
     if worker_runtime is not None:
         app.extensions["worker_runtime"] = worker_runtime
 
-        def stop_workers() -> None:
-            worker_runtime.stop()
+        def stop_workers() -> bool:
+            stopped = worker_runtime.stop(timeout=30.0)
+            if not stopped:
+                log_event(
+                    logging.getLogger(__name__),
+                    logging.ERROR,
+                    "worker_shutdown_timed_out",
+                    concurrency=worker_runtime.running_threads,
+                )
+            return stopped
 
         shutdown_callbacks.insert(0, stop_workers)
 
