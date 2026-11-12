@@ -58,7 +58,10 @@ def test_index_renders_english_page_with_empty_dashboard(app) -> None:
     assert 'href="/golden-sets"' in page
     assert '<link rel="icon" href="/static/app-icon.svg" type="image/svg+xml">' in page
     assert 'class="brand" href="/"' in page
-    assert 'src="/static/app-icon.svg" alt="" width="32" height="32"' in page
+    assert page.count('src="/static/app-icon.svg" alt="" width="32" height="32"') == 2
+    assert '<footer class="site-footer">' in page
+    assert '<strong class="footer-product">Thistlewarden</strong>' in page
+    assert "<span>Local single-user evaluator</span>" in page
 
 
 def test_application_icon_is_served(app) -> None:
@@ -66,7 +69,7 @@ def test_application_icon_is_served(app) -> None:
 
     assert response.status_code == 200
     assert response.content_type.startswith("image/svg+xml")
-    assert b"<title id=\"title\">Thistlewarden</title>" in response.data
+    assert b'<title id="title">Thistlewarden</title>' in response.data
 
 
 def test_numeric_thousands_info_stays_inline(app) -> None:
