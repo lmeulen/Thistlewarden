@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from evaluator import create_app
+from evaluator.database import transaction
 from evaluator.runtime import InstanceLock
 
 pytestmark = pytest.mark.integration
@@ -131,69 +132,71 @@ def test_ten_thousand_results_page_and_aggregate_budget(app) -> None:
     model_json = '{"display_name":"M","model_id":"m"}'
     case_json = '{"case_id":"c","prompt":"p","system_prompt":null,"expected_answer":"x"}'
     try:
-        connection.execute(
-            """INSERT INTO runs(
+        with transaction(connection):
+            connection.execute(
+                """INSERT INTO runs(
                 id,name,golden_set_id,status,created_at,recovery_warning,
                 quality_gates_snapshot_json,gate_status
             ) VALUES(?,?,?,?,?,?,?,?)""",
-            (run_id, "Perf", "g", "completed", now, 0, "{}", "not_evaluated"),
-        )
-        connection.execute(
-            "INSERT INTO run_model_snapshots VALUES(?,?,?,?,?)",
-            (model_id, run_id, "source", "endpoint", model_json),
-        )
-        cases = [
-            (f"3{i:031d}", run_id, f"source-{i}", f"c-{i}", "1", case_json) for i in range(10000)
-        ]
-        connection.executemany("INSERT INTO run_case_snapshots VALUES(?,?,?,?,?,?)", cases)
-        jobs = [
-            (
-                f"5{i:031d}",
-                run_id,
-                f"3{i:031d}",
-                model_id,
-                "completed",
-                1,
-                0,
-                now,
-                now,
+                (run_id, "Perf", "g", "completed", now, 0, "{}", "not_evaluated"),
             )
-            for i in range(10000)
-        ]
-        connection.executemany(
-            """INSERT INTO run_jobs(
+            connection.execute(
+                "INSERT INTO run_model_snapshots VALUES(?,?,?,?,?)",
+                (model_id, run_id, "source", "endpoint", model_json),
+            )
+            cases = [
+                (f"3{i:031d}", run_id, f"source-{i}", f"c-{i}", "1", case_json)
+                for i in range(10000)
+            ]
+            connection.executemany("INSERT INTO run_case_snapshots VALUES(?,?,?,?,?,?)", cases)
+            jobs = [
+                (
+                    f"5{i:031d}",
+                    run_id,
+                    f"3{i:031d}",
+                    model_id,
+                    "completed",
+                    1,
+                    0,
+                    now,
+                    now,
+                )
+                for i in range(10000)
+            ]
+            connection.executemany(
+                """INSERT INTO run_jobs(
                 id,run_id,case_snapshot_id,model_snapshot_id,status,attempt_count,
                 lease_generation,created_at,updated_at
             ) VALUES(?,?,?,?,?,?,?,?,?)""",
-            jobs,
-        )
-        rows = [
-            (
-                f"4{i:031d}",
-                f"5{i:031d}",
-                run_id,
-                model_id,
-                f"3{i:031d}",
-                "passed",
-                "1",
-                "1",
-                '{"passed":true}',
-                "0",
-                "0",
-                "10",
-                "2",
-                "5",
-                1,
-                1,
-                0,
-                0,
-                now,
+                jobs,
             )
-            for i in range(10000)
-        ]
-        connection.executemany(
-            "INSERT INTO run_results VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows
-        )
+            rows = [
+                (
+                    f"4{i:031d}",
+                    f"5{i:031d}",
+                    run_id,
+                    model_id,
+                    f"3{i:031d}",
+                    "passed",
+                    "1",
+                    "1",
+                    '{"passed":true}',
+                    "0",
+                    "0",
+                    "10",
+                    "2",
+                    "5",
+                    1,
+                    1,
+                    0,
+                    0,
+                    now,
+                )
+                for i in range(10000)
+            ]
+            connection.executemany(
+                "INSERT INTO run_results VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows
+            )
     finally:
         connection.close()
     started = time.perf_counter()

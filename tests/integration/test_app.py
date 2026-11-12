@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
 from evaluator import create_app
 from evaluator.config import load_bootstrap_settings
-from evaluator.dashboard import DashboardStatistics
+from evaluator.dashboard import DashboardStatistics, LatestRunStatistics
 
 pytestmark = pytest.mark.integration
 
@@ -53,6 +54,14 @@ def test_index_renders_english_page_with_empty_dashboard(app) -> None:
     assert "<strong>0</strong> total runs" in page
     assert "<strong>0</strong> active model profiles" in page
     assert "<strong>0</strong> enabled test cases" in page
+    assert "Pricing coverage" in page
+    assert ">0%<" in page
+    assert "Active judges" in page
+    assert "Overall pass rate" in page
+    assert "Average weighted score" in page
+    assert page.count(">Unknown<") >= 2
+    assert "LLM judge test cases" in page
+    assert "No completed runs yet." in page
     assert 'href="/runs"' in page
     assert 'href="/endpoints"' in page
     assert 'href="/golden-sets"' in page
@@ -84,7 +93,35 @@ def test_numeric_thousands_info_stays_inline(app) -> None:
 def test_index_renders_all_dashboard_statistics(app) -> None:
     class StubDashboardService:
         def statistics(self) -> DashboardStatistics:
-            return DashboardStatistics(9, 2, 7, 3, 4, 5, 6, 7, 8)
+            return DashboardStatistics(
+                total_runs=9,
+                active_runs=2,
+                finished_runs=7,
+                active_model_profiles=3,
+                active_endpoints=4,
+                total_model_profiles=5,
+                enabled_cases=6,
+                active_golden_sets=7,
+                total_cases=8,
+                priced_model_profiles=2,
+                active_judge_profiles=1,
+                llm_judge_cases=4,
+                overall_pass_rate=Decimal("0.625"),
+                average_weighted_score=Decimal("0.7125"),
+                latest_run=LatestRunStatistics(
+                    id="10000000-0000-0000-0000-000000000001",
+                    name="Release candidate",
+                    status="completed_with_errors",
+                    gate_status="failed",
+                    completed_at="2026-01-02T01:00:00Z",
+                    weighted_score=Decimal("0.75"),
+                    pass_rate=Decimal("0.8"),
+                    error_rate=Decimal("0.1"),
+                    known_total_cost=Decimal("0.1234"),
+                    known_cost_count=9,
+                    total_results=10,
+                ),
+            )
 
     app.extensions["dashboard_service"] = StubDashboardService()
     page = app.test_client().get("/").get_data(as_text=True)
@@ -99,9 +136,25 @@ def test_index_renders_all_dashboard_statistics(app) -> None:
         ("enabled test cases", 6),
         ("Active golden sets", 7),
         ("Total test cases", 8),
+        ("Active judges", 1),
+        ("LLM judge test cases", 4),
     ):
         assert label in page
         assert f">{value}<" in page
+    assert "Pricing coverage" in page
+    assert ">67%<" in page
+    assert "Overall pass rate" in page
+    assert ">62%<" in page
+    assert "Average weighted score" in page
+    assert ">0.71<" in page
+    assert "Latest completed run" in page
+    assert "Release candidate" in page
+    assert ">0.75<" in page
+    assert ">80%<" in page
+    assert ">10%<" in page
+    assert ">0.123<" in page
+    assert "9/10 results known" in page
+    assert 'href="/runs/10000000-0000-0000-0000-000000000001"' in page
 
 
 def test_openapi_uses_product_name(app) -> None:

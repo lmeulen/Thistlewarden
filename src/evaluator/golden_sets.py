@@ -134,8 +134,10 @@ class LlmJudgeConfig(BaseModel):
 
     @model_validator(mode="after")
     def active_replacement_rubric(self) -> LlmJudgeConfig:
-        if self.rubric_mode == "replace" and self.rubric and not any(
-            item.weight > 0 for item in self.rubric
+        if (
+            self.rubric_mode == "replace"
+            and self.rubric
+            and not any(item.weight > 0 for item in self.rubric)
         ):
             raise ValueError("replacement rubric requires a criterion with positive weight")
         return self

@@ -68,9 +68,9 @@ def test_zero_weight_disables_rubric_criterion() -> None:
 
 
 def test_case_threshold_overrides_profile_threshold() -> None:
-    assert _effective_judge_threshold(
-        LlmJudgeConfig(threshold=Decimal("0.85")), "0.7"
-    ) == Decimal("0.85")
+    assert _effective_judge_threshold(LlmJudgeConfig(threshold=Decimal("0.85")), "0.7") == Decimal(
+        "0.85"
+    )
     assert _effective_judge_threshold(LlmJudgeConfig(), "0.7") == Decimal("0.7")
 
 

@@ -384,9 +384,7 @@ class SQLiteEndpointRepository:
                         """,
                         params,
                     )
-                    connection.execute(
-                        "DELETE FROM model_profiles WHERE endpoint_id = ?", params
-                    )
+                    connection.execute("DELETE FROM model_profiles WHERE endpoint_id = ?", params)
                 cursor = connection.execute(
                     "DELETE FROM endpoints WHERE id = ?", (str(endpoint_id),)
                 )

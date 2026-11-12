@@ -230,9 +230,7 @@ def test_bulk_delete_runs_with_select_all_control(app) -> None:
     assert "Permanently delete selected runs?" in text
 
     token = csrf(client, "/runs")
-    empty = client.post(
-        "/runs/verwijderen", data={"csrf_token": token}, follow_redirects=True
-    )
+    empty = client.post("/runs/verwijderen", data={"csrf_token": token}, follow_redirects=True)
     assert "Select one or more valid, completed runs." in empty.get_data(as_text=True)
 
     token = csrf(client, "/runs")
