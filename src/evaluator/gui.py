@@ -1078,6 +1078,20 @@ def configuration_import() -> str | Response:
         return render_template("configuration.html", plan=None, preview_payload=None)
 
 
+@gui.post("/endpoints/<uuid:endpoint_id>/modellen/verwijderen")
+def models_delete(endpoint_id: UUID) -> Response:
+    try:
+        profile_ids = [UUID(value) for value in request.form.getlist("profile_ids")]
+        count = _model_service().delete_many(endpoint_id, profile_ids)
+        flash(
+            f"{count} model profile{'s' if count != 1 else ''} deleted.",
+            "success",
+        )
+    except (ApiError, ValueError) as exc:
+        flash(_error_message(exc), "error")
+    return redirect(url_for("gui.endpoints_page"))
+
+
 @gui.post("/modellen/<uuid:profile_id>/verwijderen")
 def model_delete(profile_id: UUID) -> Response:
     try:

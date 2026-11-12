@@ -1,6 +1,65 @@
-{% extends "base.html" %}{% block title %}Endpoints · Thistlewarden{% endblock %}{% block content %}
-<div class="heading"><div><h1>Endpoints and models</h1><p>Provider connections and test profiles.</p></div><a class="button" href="{{ url_for('gui.endpoint_new') }}">Add endpoint</a></div>
+{% extends "base.html" %}
+{% block title %}Endpoints · Thistlewarden{% endblock %}
+{% block content %}
+<div class="heading">
+  <div><h1>Endpoints and models</h1><p>Provider connections and test profiles.</p></div>
+  <a class="button" href="{{ url_for('gui.endpoint_new') }}">Add endpoint</a>
+</div>
 {% if not endpoints %}<p class="empty">No endpoints configured yet.</p>{% endif %}
-{% for endpoint in endpoints %}<section class="panel"><div class="heading"><div><h2><a href="{{ url_for('gui.endpoint_edit', endpoint_id=endpoint.id) }}">{{ endpoint.data.name }}</a></h2><p><code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p></div><a href="{{ url_for('gui.model_new', endpoint_id=endpoint.id) }}">Add model</a></div>
-{% set models = model_service.list_for_endpoint(endpoint.id) %}{% if models %}<ul class="model-list">{% for model in models %}<li><a href="{{ url_for('gui.model_edit', profile_id=model.id) }}">{{ model.data.display_name }}</a><span><code>{{ model.data.model_id }}</code></span></li>{% endfor %}</ul>{% else %}<p>No model profiles.</p>{% endif %}</section>{% endfor %}
+{% for endpoint in endpoints %}
+<section class="panel">
+  <div class="heading">
+    <div>
+      <h2><a href="{{ url_for('gui.endpoint_edit', endpoint_id=endpoint.id) }}">{{ endpoint.data.name }}</a></h2>
+      <p><code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p>
+    </div>
+    <a href="{{ url_for('gui.model_new', endpoint_id=endpoint.id) }}">Add model</a>
+  </div>
+  {% set models = model_service.list_for_endpoint(endpoint.id) %}
+  {% if models %}
+  <form method="post" action="{{ url_for('gui.models_delete', endpoint_id=endpoint.id) }}" class="bulk-model-delete" data-confirm="Delete selected model profiles from {{ endpoint.data.name }}?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="heading bulk-run-actions">
+      <label class="check"><input type="checkbox" class="select-all-models"> Select all models</label>
+      <button type="submit" class="danger compact">Delete selected models</button>
+    </div>
+    <ul class="model-list">
+      {% for model in models %}
+      <li>
+        <span class="case-select">
+          <input type="checkbox" class="model-select" name="profile_ids" value="{{ model.id }}" aria-label="Select model {{ model.data.display_name }}">
+          <a href="{{ url_for('gui.model_edit', profile_id=model.id) }}">{{ model.data.display_name }}</a>
+        </span>
+        <span><code>{{ model.data.model_id }}</code></span>
+      </li>
+      {% endfor %}
+    </ul>
+  </form>
+  {% else %}<p>No model profiles.</p>{% endif %}
+</section>
+{% endfor %}
+<script nonce="{{ csp_nonce() }}">
+document.querySelectorAll('.bulk-model-delete').forEach(function (form) {
+  const selectAll = form.querySelector('.select-all-models');
+  const checkboxes = Array.from(form.querySelectorAll('.model-select'));
+  function updateSelectAll() {
+    const selected = checkboxes.filter(checkbox => checkbox.checked).length;
+    selectAll.checked = selected === checkboxes.length;
+    selectAll.indeterminate = selected > 0 && selected < checkboxes.length;
+  }
+  selectAll.addEventListener('change', function () {
+    checkboxes.forEach(checkbox => { checkbox.checked = selectAll.checked; });
+    updateSelectAll();
+  });
+  checkboxes.forEach(checkbox => checkbox.addEventListener('change', updateSelectAll));
+  form.addEventListener('submit', function (event) {
+    if (!checkboxes.some(checkbox => checkbox.checked)) {
+      event.preventDefault();
+      window.alert('Select at least one model profile.');
+    } else if (!window.confirm(form.dataset.confirm)) {
+      event.preventDefault();
+    }
+  });
+});
+</script>
 {% endblock %}

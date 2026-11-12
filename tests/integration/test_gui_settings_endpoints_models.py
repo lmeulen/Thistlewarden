@@ -99,9 +99,7 @@ def test_endpoint_delete_requires_matching_name(app) -> None:
         {
             "name": "Judge to delete",
             "model_profile_id": str(model.id),
-            "rubric": [
-                {"id": "quality", "weight": "1", "description": "Overall quality"}
-            ],
+            "rubric": [{"id": "quality", "weight": "1", "description": "Overall quality"}],
         }
     )
     connection = app.extensions["database_factory"].connect()
@@ -159,23 +157,100 @@ def test_endpoint_delete_requires_matching_name(app) -> None:
     assert deleted.status_code == 200
     assert "Endpoint and its model profiles deleted." in deleted.get_data(as_text=True)
     assert all(
-        existing.id != endpoint.id
-        for existing in app.extensions["endpoint_service"].list_all()
+        existing.id != endpoint.id for existing in app.extensions["endpoint_service"].list_all()
     )
     connection = app.extensions["database_factory"].connect()
     try:
-        assert connection.execute(
-            "SELECT COUNT(*) FROM model_profiles WHERE id = ?", (str(model.id),)
-        ).fetchone()[0] == 0
-        assert connection.execute(
-            "SELECT COUNT(*) FROM judge_profiles WHERE id = ?", (str(judge.id),)
-        ).fetchone()[0] == 0
-        assert connection.execute(
-            "SELECT judge_profile_id FROM golden_sets WHERE name = ?",
-            ("Set with judge override",),
-        ).fetchone()[0] is None
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM model_profiles WHERE id = ?", (str(model.id),)
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM judge_profiles WHERE id = ?", (str(judge.id),)
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                "SELECT judge_profile_id FROM golden_sets WHERE name = ?",
+                ("Set with judge override",),
+            ).fetchone()[0]
+            is None
+        )
     finally:
         connection.close()
+
+
+def test_endpoint_page_bulk_deletes_selected_models_only(app) -> None:
+    endpoint = app.extensions["endpoint_service"].create(
+        {"name": "Bulk provider", "completions_url": "https://provider.example/v1/chat"}
+    )
+    models = [
+        app.extensions["model_profile_service"].create(
+            endpoint.id, {"model_id": f"model-{index}", "display_name": f"Model {index}"}
+        )
+        for index in range(3)
+    ]
+    client = app.test_client()
+    page = client.get("/endpoints")
+    text = page.get_data(as_text=True)
+    assert 'class="bulk-model-delete"' in text
+    assert "Select all models" in text
+    assert "Delete selected models" in text
+    assert all(f'value="{model.id}"' in text for model in models)
+
+    response = client.post(
+        f"/endpoints/{endpoint.id}/modellen/verwijderen",
+        data={
+            "csrf_token": _csrf(client, "/endpoints"),
+            "profile_ids": [str(models[0].id), str(models[2].id)],
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "2 model profiles deleted." in response.get_data(as_text=True)
+    remaining = app.extensions["model_profile_service"].list_for_endpoint(endpoint.id)
+    assert [model.id for model in remaining] == [models[1].id]
+
+
+def test_bulk_model_delete_rejects_empty_or_cross_endpoint_selection(app) -> None:
+    endpoints = [
+        app.extensions["endpoint_service"].create(
+            {
+                "name": f"Provider {index}",
+                "completions_url": f"https://provider-{index}.example/v1/chat",
+            }
+        )
+        for index in range(2)
+    ]
+    models = [
+        app.extensions["model_profile_service"].create(
+            endpoint.id, {"model_id": "model", "display_name": "Model"}
+        )
+        for endpoint in endpoints
+    ]
+    client = app.test_client()
+    token = _csrf(client, "/endpoints")
+
+    empty = client.post(
+        f"/endpoints/{endpoints[0].id}/modellen/verwijderen",
+        data={"csrf_token": token},
+        follow_redirects=True,
+    )
+    assert "Select at least one model profile." in empty.get_data(as_text=True)
+
+    cross_endpoint = client.post(
+        f"/endpoints/{endpoints[0].id}/modellen/verwijderen",
+        data={"csrf_token": token, "profile_ids": str(models[1].id)},
+        follow_redirects=True,
+    )
+    assert "Selection contains a model profile from another endpoint." in cross_endpoint.get_data(
+        as_text=True
+    )
+    assert all(app.extensions["model_profile_service"].get(model.id) for model in models)
 
 
 def test_new_model_can_copy_profile_and_select_discovered_model(app, monkeypatch) -> None:

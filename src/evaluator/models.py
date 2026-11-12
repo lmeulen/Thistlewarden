@@ -410,6 +410,21 @@ class SQLiteModelProfileRepository:
         finally:
             connection.close()
 
+    def delete_many(self, endpoint_id: UUID, profile_ids: list[UUID]) -> int:
+        if not profile_ids:
+            return 0
+        placeholders = ",".join("?" for _ in profile_ids)
+        connection = self._factory.connect()
+        try:
+            with transaction(connection):
+                cursor = connection.execute(
+                    f"DELETE FROM model_profiles WHERE endpoint_id = ? AND id IN ({placeholders})",
+                    (str(endpoint_id), *(str(profile_id) for profile_id in profile_ids)),
+                )
+            return cursor.rowcount
+        finally:
+            connection.close()
+
 
 class ModelProfileService:
     def __init__(self, repository: SQLiteModelProfileRepository, endpoint_repository: Any) -> None:
@@ -491,6 +506,28 @@ class ModelProfileService:
             object_id=profile_id,
             endpoint_id=existing.endpoint_id,
         )
+
+    def delete_many(self, endpoint_id: UUID, profile_ids: list[UUID]) -> int:
+        unique_ids = list(dict.fromkeys(profile_ids))
+        if not unique_ids:
+            raise ValidationApiError("Select at least one model profile.")
+        available_ids = {record.id for record in self.list_for_endpoint(endpoint_id)}
+        if any(profile_id not in available_ids for profile_id in unique_ids):
+            raise ValidationApiError("Selection contains a model profile from another endpoint.")
+        try:
+            deleted = self._repository.delete_many(endpoint_id, unique_ids)
+        except sqlite3.IntegrityError as exc:
+            raise ConflictError("One or more model profiles have historical references.") from exc
+        if deleted != len(unique_ids):
+            raise ConflictError("Model profiles changed while deletion was in progress.")
+        for profile_id in unique_ids:
+            log_semantic_event(
+                _LOG,
+                "model_profile_deleted",
+                object_id=profile_id,
+                endpoint_id=endpoint_id,
+            )
+        return deleted
 
 
 def profile_to_dict(record: ModelProfileRecord) -> dict[str, Any]:
