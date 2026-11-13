@@ -116,7 +116,7 @@ Offline Docker E2E uses `compose.e2e.yaml`, `evaluator.mock_provider`, `examples
 
 ## Documentatie
 
-- [User manual](docs/manual.md) — application workflows and reference
-- `docs/configuration.md` — settings and schedules
-- `docs/release.md` — release gate, Docker E2E and rollback
-- `SECURITY.md` — threat model and security policy
+- [User manual](docs/manual/README.md) — application workflows and reference
+- [Configuration](docs/configuration.md) — settings and schedules
+- [Release guide](docs/release.md) — release gate, Docker E2E and rollback
+- [Security policy](SECURITY.md) — threat model and security policy

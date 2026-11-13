@@ -27,6 +27,7 @@ exports/
 Thumbs.db
 
 # Project-specific files
+docs/archive/
 reviews/
 scripts/*
 !scripts/e2e_release.py

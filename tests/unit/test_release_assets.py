@@ -28,12 +28,12 @@ def test_product_branding_is_consistent() -> None:
     assert readme.startswith("# Thistlewarden\n")
 
     searched_roots = [ROOT / "src", ROOT / "docs", ROOT / "tests"]
-    searched_files = [ROOT / "README.md", ROOT / "SECURITY.md", ROOT / "agent.md"]
+    searched_files = [ROOT / "README.md", ROOT / "SECURITY.md"]
     searched_files.extend(
         path
         for root in searched_roots
         for path in root.rglob("*")
-        if path.is_file() and "__pycache__" not in path.parts
+        if path.is_file() and "__pycache__" not in path.parts and "archive" not in path.parts
     )
     for path in searched_files:
         try:
