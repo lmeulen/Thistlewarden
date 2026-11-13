@@ -34,7 +34,7 @@ from evaluator.endpoints import EndpointService, HeaderInput
 from evaluator.errors import ConfigurationError
 from evaluator.evaluation_preview import EvaluationPreviewService
 from evaluator.gates import QualityGateService
-from evaluator.golden_sets import GoldenSetService, evaluator_config_examples
+from evaluator.golden_sets import JUDGE_PRESETS, GoldenSetService, evaluator_config_examples
 from evaluator.judges import JudgeProfileService
 from evaluator.logging_config import log_event
 from evaluator.models import ModelProfileService
@@ -225,7 +225,6 @@ def _item_payload() -> dict[str, Any]:
     config = _json_field("evaluator_config")
     expected_answer = request.form.get("expected_answer") or None
     if method in {"exact_match", "llm_judge"}:
-        # Legacy API/import compatibility only; both methods now keep values in config.
         expected_answer = None
     return {
         "case_id": request.form.get("case_id", ""),
@@ -241,29 +240,12 @@ def _item_payload() -> dict[str, Any]:
     }
 
 
-def _rubric() -> list[dict[str, Any]]:
-    result = []
-    for line in request.form.get("rubric", "").splitlines():
-        if not line.strip():
-            continue
-        parts = line.split("|", 2)
-        if len(parts) != 3:
-            raise ValueError("Rubric line requires id|weight|description")
-        result.append(
-            {"id": parts[0].strip(), "weight": parts[1].strip(), "description": parts[2].strip()}
-        )
-    return result
-
-
 def _judge_payload() -> dict[str, Any]:
     return {
         "name": request.form.get("name", ""),
         "model_profile_id": request.form.get("model_profile_id", ""),
-        "prompt_template": request.form.get("prompt_template", "judge-v1"),
-        "template_version": request.form.get("template_version", "1.0"),
-        "threshold": _decimal("threshold", "0.7"),
-        "rubric": _rubric(),
-        "temperature": _decimal("temperature", "0"),
+        "temperature": _decimal("temperature"),
+        "reasoning_value": _optional("reasoning_value"),
         "max_output_tokens": _integer("max_output_tokens"),
         "is_global_default": "is_global_default" in request.form,
         "active": "active" in request.form,
@@ -615,6 +597,27 @@ def golden_set_edit(set_id: UUID) -> str | Response:
     )
 
 
+@gui.post("/golden-sets/<uuid:set_id>/verwijderen")
+def golden_set_delete(set_id: UUID) -> Response:
+    service = _golden_service()
+    golden_set = service.get_set(set_id)
+    if request.form.get("confirmation_name", "") != golden_set.data.name:
+        flash("Type the exact golden set name to confirm deletion.", "error")
+        return redirect(url_for("gui.golden_set_edit", set_id=set_id))
+    try:
+        deleted = service.delete_set(set_id)
+        flash(
+            "Golden set deleted."
+            if deleted
+            else "Golden set archived because run history still references it.",
+            "success",
+        )
+    except ApiError as exc:
+        flash(_error_message(exc), "error")
+        return redirect(url_for("gui.golden_set_edit", set_id=set_id))
+    return redirect(url_for("gui.golden_sets_page"))
+
+
 @gui.post("/golden-sets/<uuid:set_id>/judge")
 def golden_set_judge_update(set_id: UUID) -> Response:
     raw = request.form.get("judge_profile_id", "")
@@ -652,6 +655,8 @@ def _render_golden_item_form(*, item: Any, golden_set: Any) -> str:
         item=item,
         golden_set=golden_set,
         evaluator_examples=evaluator_config_examples(),
+        judge_presets=JUDGE_PRESETS,
+        judge_presets_json=[preset.model_dump(mode="json") for preset in JUDGE_PRESETS],
     )
 
 
@@ -799,6 +804,19 @@ def judge_edit(profile_id: UUID) -> str | Response:
     return render_template("judge_form.html", judge=judge, models=_all_models())
 
 
+@gui.post("/judges/<uuid:profile_id>/verwijderen")
+def judge_delete(profile_id: UUID) -> Response:
+    if "confirm" not in request.form:
+        flash("Explicitly confirm permanent deletion.", "error")
+        return redirect(url_for("gui.judges_page"))
+    try:
+        _judge_service().delete(profile_id)
+        flash("Judge profile deleted.", "success")
+    except ApiError as exc:
+        flash(_error_message(exc), "error")
+    return redirect(url_for("gui.judges_page"))
+
+
 @gui.get("/runs")
 def runs_page() -> str:
     return render_template("runs.html", runs=_run_views().list_runs())
@@ -859,44 +877,76 @@ def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
         for item in aggregates
         if item["known_total_cost"] is not None and item["weighted_score"] is not None
     ]
-    plotted_scores = [min(Decimal(1), max(Decimal(0), item["weighted_score"])) for item in eligible]
-    lowest_score = min(plotted_scores, default=Decimal(0))
+    scores = [min(Decimal(1), max(Decimal(0), item["weighted_score"])) for item in eligible]
+    costs = [max(Decimal(0), item["known_total_cost"]) for item in eligible]
+
+    def bounds(
+        values: list[Decimal], *, floor: Decimal, ceiling: Decimal | None = None
+    ) -> tuple[Decimal, Decimal]:
+        if not values:
+            return floor, ceiling if ceiling is not None else floor + Decimal(1)
+        low, high = min(values), max(values)
+        if low == high:
+            padding = max(
+                abs(low) * Decimal("0.1"), Decimal("0.05") if ceiling else Decimal("0.000001")
+            )
+        else:
+            padding = (high - low) * Decimal("0.1")
+        lower = max(floor, low - padding)
+        upper = high + padding
+        if ceiling is not None:
+            upper = min(ceiling, upper)
+        if lower == upper:
+            lower = max(floor, lower - padding)
+            upper = min(ceiling, upper + padding) if ceiling is not None else upper + padding
+        return lower, upper
+
+    _, x_max = bounds(costs, floor=Decimal(0))
+    x_min = Decimal(0)
+    y_max = Decimal(1)
+    lowest_score = min(scores, default=Decimal(0))
     y_min = max(
-        (
-            candidate
-            for candidate in map(Decimal, ("0", "0.5", "0.8", "0.9"))
-            if candidate <= lowest_score
-        ),
-        default=Decimal(0),
+        Decimal(0),
+        (lowest_score * Decimal(10)).to_integral_value(rounding="ROUND_FLOOR") / Decimal(10),
     )
-    y_range = Decimal(1) - y_min
-    y_ticks = [
+    if y_min == y_max:
+        y_min = Decimal("0.9")
+    x_range = x_max
+    y_range = y_max - y_min
+    x_ticks = [
         {
-            "value": Decimal(1) - y_range * Decimal(index) / Decimal(4),
-            "y": plot_top + plot_height * Decimal(index) / Decimal(4),
+            "value": x_min + x_range * Decimal(index) / Decimal(4),
+            "x": plot_left + plot_width * Decimal(index) / Decimal(4),
         }
         for index in range(5)
     ]
-    max_cost = max((item["known_total_cost"] for item in eligible), default=Decimal(0))
+    y_tick_count = int(y_range / Decimal("0.1"))
+    y_ticks = [
+        {
+            "value": y_max - Decimal(index) / Decimal(10),
+            "y": plot_top + plot_height * Decimal(index) / Decimal(y_tick_count),
+        }
+        for index in range(y_tick_count + 1)
+    ]
     points = []
-    for item, score in zip(eligible, plotted_scores, strict=True):
-        cost = item["known_total_cost"]
-        x_ratio = cost / max_cost if max_cost else Decimal(0)
-        y_ratio = (Decimal(1) - score) / y_range
+    for item, cost, score in zip(eligible, costs, scores, strict=True):
         points.append(
             {
                 "model": item["model"],
-                "cost": cost,
+                "cost": item["known_total_cost"],
                 "score": item["weighted_score"],
-                "x": plot_left + x_ratio * plot_width,
-                "y": plot_top + y_ratio * plot_height,
+                "x": plot_left + (cost - x_min) / x_range * plot_width,
+                "y": plot_top + (y_max - score) / y_range * plot_height,
             }
         )
     return {
         "points": points,
-        "max_cost": max_cost,
         "omitted": len(aggregates) - len(points),
+        "x_min": x_min,
+        "x_max": x_max,
+        "x_ticks": x_ticks,
         "y_min": y_min,
+        "y_max": y_max,
         "y_ticks": y_ticks,
     }
 

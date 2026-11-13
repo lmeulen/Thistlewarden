@@ -624,7 +624,24 @@ class RunQueue:
             row = connection.execute(
                 "SELECT * FROM judge_profiles WHERE id=? AND active=1", (str(profile_id),)
             ).fetchone()
-        return (None, None) if row is None else (row["id"], {key: row[key] for key in row.keys()})
+        if row is None:
+            return None, None
+        return row["id"], {
+            key: row[key]
+            for key in (
+                "id",
+                "name",
+                "model_profile_id",
+                "temperature",
+                "temperature_enabled",
+                "reasoning_value",
+                "max_output_tokens",
+                "is_global_default",
+                "active",
+                "created_at",
+                "updated_at",
+            )
+        }
 
     def get_run(self, run_id: UUID) -> dict[str, Any]:
         connection = self._factory.connect()

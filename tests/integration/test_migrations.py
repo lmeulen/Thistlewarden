@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from pathlib import Path
@@ -65,9 +66,39 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (10, "create_quality_gates"),
             (11, "add_run_query_indexes"),
             (12, "add_model_parameter_bindings"),
+            (13, "drop_legacy_llm_judge_test_cases"),
+            (14, "add_judge_inference_overrides"),
         ]
     finally:
         connection.close()
+
+
+def test_migration_14_preserves_legacy_temperature_and_active_snapshots(tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "app.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:13]).migrate()
+    connection = factory.connect()
+    try:
+        connection.execute(
+            "INSERT INTO runs(id,name,golden_set_id,status,created_at,recovery_warning,"
+            "judge_snapshot_json) VALUES (?,?,?,?,?,?,?)",
+            ("r", "Run", "s", "running", "2026-01-01T00:00:00Z", 0, '{"temperature":"0.3"}'),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert MigrationManager(factory).migrate() == 14
+    connection = factory.connect()
+    try:
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(judge_profiles)")}
+        snapshot = json.loads(
+            connection.execute("SELECT judge_snapshot_json FROM runs WHERE id='r'").fetchone()[0]
+        )
+    finally:
+        connection.close()
+    assert {"temperature_enabled", "reasoning_value"} <= columns
+    assert snapshot["temperature_enabled"] == 1
+    assert snapshot["reasoning_value"] is None
 
 
 def test_version_one_to_two_preserves_existing_data(tmp_path: Path) -> None:
@@ -254,6 +285,78 @@ def test_version_five_to_six_preserves_model_profiles_and_adds_cost_table(
             ).fetchone()[0]
             == 1
         )
+    finally:
+        connection.close()
+
+
+def test_migration_13_removes_legacy_llm_judge_cases_and_cancels_active_runs(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "app.db"
+    factory = SQLiteConnectionFactory(database)
+    MigrationManager(factory, migrations=MIGRATIONS[:12]).migrate()
+    connection = factory.connect()
+    try:
+        timestamp = "2026-01-01T00:00:00Z"
+        set_id = "40000000-0000-4000-8000-000000000001"
+        item_id = "50000000-0000-4000-8000-000000000001"
+        run_id = "60000000-0000-4000-8000-000000000001"
+        snapshot_id = "70000000-0000-4000-8000-000000000001"
+        connection.execute(
+            """INSERT INTO golden_sets(
+                id,name,description,version,tags_json,active,created_at,updated_at,judge_profile_id
+            ) VALUES (?,?,?,?,?,?,?,?,?)""",
+            (set_id, "Legacy", None, "1.0", "[]", 1, timestamp, timestamp, None),
+        )
+        connection.execute(
+            "INSERT INTO golden_set_items VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                item_id,
+                set_id,
+                "legacy-judge",
+                "Prompt",
+                None,
+                "Legacy reference",
+                "llm_judge",
+                '{"rubric":[{"id":"custom","description":"Custom"}],"threshold":"0.5"}',
+                None,
+                "[]",
+                "1",
+                1,
+                0,
+                timestamp,
+                timestamp,
+            ),
+        )
+        connection.execute(
+            """INSERT INTO runs(
+                id,name,golden_set_id,status,created_at,started_at,recovery_warning
+            ) VALUES (?,?,?,?,?,?,?)""",
+            (run_id, "Legacy run", set_id, "running", timestamp, timestamp, 0),
+        )
+        connection.execute(
+            "INSERT INTO run_case_snapshots VALUES (?,?,?,?,?,?)",
+            (
+                snapshot_id,
+                run_id,
+                item_id,
+                "legacy-judge",
+                "1",
+                '{"evaluation_method":"llm_judge","evaluator_config_json":"{}"}',
+            ),
+        )
+    finally:
+        connection.close()
+
+    assert MigrationManager(factory).migrate() == LATEST_SCHEMA_VERSION
+    connection = factory.connect()
+    try:
+        assert connection.execute("SELECT COUNT(*) FROM golden_set_items").fetchone()[0] == 0
+        run = connection.execute(
+            "SELECT status,cancelled_at FROM runs WHERE id=?", (run_id,)
+        ).fetchone()
+        assert tuple(run) == ("cancelled", timestamp)
+        assert connection.execute("SELECT COUNT(*) FROM run_case_snapshots").fetchone()[0] == 1
     finally:
         connection.close()
 

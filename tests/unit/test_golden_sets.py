@@ -6,8 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from evaluator.golden_sets import (
+    JUDGE_PRESETS,
     GoldenSetItemInput,
     evaluator_config_examples,
+    get_judge_preset,
     validate_evaluator_config,
 )
 
@@ -57,7 +59,7 @@ def test_prompt_is_required_and_only_one_optional_system_prompt_exists() -> None
         ("regex", {"pattern": "^ok$"}),
         ("numeric", {"expected_value": "1.25"}),
         ("json_schema", {"schema": {"type": "object"}}),
-        ("llm_judge", {"threshold": "0.7"}),
+        ("llm_judge", {"preset_id": "general-quality", "preset_version": "1.0"}),
     ],
 )
 def test_each_evaluator_method_selects_its_schema(method: str, config: dict[str, object]) -> None:
@@ -95,8 +97,8 @@ def test_invalid_method_specific_configuration_fails() -> None:
         validate_evaluator_config("numeric", {"expected_value": "not-a-number"})
 
 
-def test_judge_requires_config_expected_value_or_rubric_and_migrates_legacy_value() -> None:
-    with pytest.raises(ValidationError, match="rubric"):
+def test_judge_requires_known_preset_and_rejects_case_defined_contract() -> None:
+    with pytest.raises(ValidationError, match="preset_id"):
         GoldenSetItemInput.model_validate(
             _item(evaluation_method="llm_judge", evaluator_config={}, expected_answer=None)
         )
@@ -104,27 +106,60 @@ def test_judge_requires_config_expected_value_or_rubric_and_migrates_legacy_valu
         _item(
             evaluation_method="llm_judge",
             expected_answer=None,
-            evaluator_config={"expected_value": "Configured reference"},
-        )
-    )
-    assert configured.evaluator_config["expected_value"] == "Configured reference"
-    legacy = GoldenSetItemInput.model_validate(
-        _item(
-            evaluation_method="llm_judge",
-            evaluator_config={},
-            expected_answer="Legacy reference",
-        )
-    )
-    assert legacy.evaluator_config["expected_value"] == "Legacy reference"
-    assert legacy.expected_answer is None
-    rubric_only = GoldenSetItemInput.model_validate(
-        _item(
-            evaluation_method="llm_judge",
-            expected_answer=None,
             evaluator_config={
-                "rubric": [{"id": "accuracy", "description": "Correct?", "weight": "1"}]
+                "preset_id": "reference-correctness",
+                "preset_version": "1.0",
+                "expected_value": "Configured reference",
             },
         )
     )
-    assert rubric_only.expected_answer is None
-    assert "expected_value" not in rubric_only.evaluator_config
+    assert configured.evaluator_config["expected_value"] == "Configured reference"
+    with pytest.raises(ValidationError, match="requires expected_value"):
+        GoldenSetItemInput.model_validate(
+            _item(
+                evaluation_method="llm_judge",
+                expected_answer="legacy reference must be ignored",
+                evaluator_config={
+                    "preset_id": "reference-correctness",
+                    "preset_version": "1.0",
+                },
+            )
+        )
+    with pytest.raises(ValidationError, match="unknown judge preset"):
+        GoldenSetItemInput.model_validate(
+            _item(
+                evaluation_method="llm_judge",
+                expected_answer=None,
+                evaluator_config={"preset_id": "custom", "preset_version": "1.0"},
+            )
+        )
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        GoldenSetItemInput.model_validate(
+            _item(
+                evaluation_method="llm_judge",
+                expected_answer=None,
+                evaluator_config={
+                    "preset_id": "general-quality",
+                    "preset_version": "1.0",
+                    "rubric": [{"id": "accuracy", "description": "Correct?"}],
+                },
+            )
+        )
+
+
+def test_judge_preset_catalog_is_unique_versioned_and_resolvable() -> None:
+    keys = [(preset.id, preset.version) for preset in JUDGE_PRESETS]
+    assert len(keys) == len(set(keys)) == 6
+    assert all(preset.rubric and preset.threshold > 0 for preset in JUDGE_PRESETS)
+    assert get_judge_preset("general-quality", "1.0").name == "General response quality"
+
+
+def test_judge_preset_enforces_required_inputs() -> None:
+    with pytest.raises(ValidationError, match="requires context"):
+        GoldenSetItemInput.model_validate(
+            _item(
+                evaluation_method="llm_judge",
+                expected_answer=None,
+                evaluator_config={"preset_id": "grounded-answer", "preset_version": "1.0"},
+            )
+        )

@@ -44,6 +44,8 @@ def test_regex_modes_and_flags(config: dict[str, object], candidate: str, passed
     result = RegexEvaluator().evaluate(_item("regex", config), candidate)
     assert result.passed is passed
     assert result.score == Decimal(1 if passed else 0)
+    assert result.metadata["expression"] == config["pattern"]
+    assert result.metadata["actual"] == candidate
 
 
 def test_catastrophic_regex_times_out_and_next_case_still_runs() -> None:
@@ -52,6 +54,8 @@ def test_catastrophic_regex_times_out_and_next_case_still_runs() -> None:
     normal = evaluator.evaluate(_item("regex", {"pattern": "ok"}), "ok")
     assert timed_out.passed is False
     assert timed_out.metadata["timed_out"] is True
+    assert timed_out.metadata["expression"] == "(a+)+$"
+    assert timed_out.metadata["actual"] == "a" * 20000 + "!"
     assert normal.passed is True
 
 
@@ -76,6 +80,8 @@ def test_catastrophic_regex_times_out_and_next_case_still_runs() -> None:
 def test_numeric_parsing(config: dict[str, object], candidate: str, actual: str) -> None:
     result = NumericEvaluator().evaluate(_item("numeric", config), candidate)
     assert result.passed is True
+    assert result.metadata["actual"] == candidate
+    assert result.metadata["expected_value"] == str(config["expected_value"])
     assert result.metadata["actual_value"] == actual
 
 
@@ -86,6 +92,10 @@ def test_numeric_entire_answer_rejects_text_multiple_values_and_bad_grouping() -
             _item("numeric", {"expected_value": "12", "allow_thousands_separator": True}), candidate
         )
         assert result.passed is False
+        assert result.metadata["actual"] == candidate
+        assert result.metadata["expected_value"] == "12"
+        assert result.metadata["absolute_tolerance"] is None
+        assert result.metadata["relative_tolerance_percent"] is None
         assert result.metadata["parse_status"] == "numeric_value_not_found_or_ambiguous"
 
 

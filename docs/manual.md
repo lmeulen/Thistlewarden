@@ -956,9 +956,9 @@ Evaluator configuration is stored as JSON. Form starts with valid method-specifi
 
 **User prompt** is required text sent to target model. Write it as representative request from intended workload. **System prompt** is optional instruction sent before user prompt; use it when target behavior depends on system-level context.
 
-Evaluator configuration JSON supplies method-specific reference data. **Exact match** stores its required reference text as `expected_value`. **LLM judge** also stores optional reference text as `expected_value`; it requires that value or a non-empty item rubric. Other methods use their documented configuration fields.
+Evaluator configuration JSON supplies method-specific reference data. **Exact match** stores its required reference text as `expected_value`. **LLM judge** stores optional reference text as `expected_value`; presets can require it. Other methods use their documented configuration fields.
 
-For backward compatibility, older exact-match and LLM-judge cases may retain a separate legacy expected answer. When loaded, Thistlewarden moves it to `expected_value`. New cases should use configuration JSON.
+Older exact-match cases may retain a separate legacy expected answer. When loaded, Thistlewarden moves it to `expected_value`. Legacy free-form LLM-judge test cases are unsupported and removed during preset migration; create replacements using registered versioned presets.
 
 Write prompts and expectations to make pass condition clear:
 
@@ -1422,7 +1422,7 @@ Use **JSON Schema** for structured JSON output. Candidate must be standalone val
 }
 ```
 
-Set `allow_markdown_code_fence` to accept a single complete fenced block labelled `json` or unlabeled. Otherwise markdown fences fail. Add optional `expected_value` to require parsed JSON equal exact configured value as well as schema-valid.
+Set `allow_markdown_code_fence` to accept a single complete fenced block labelled `json` or unlabeled. Otherwise markdown fences fail. Add optional `expected_value` to require parsed JSON equal configured value as well as schema-valid. Set `case_sensitive` to `false` to compare string values and object keys in `expected_value` using Unicode case folding. This option does not alter JSON Schema semantics: property names, `enum`, `const`, and patterns remain case-sensitive.
 
 #### JSON Schema parameter reference
 
@@ -1430,6 +1430,7 @@ Set `allow_markdown_code_fence` to accept a single complete fenced block labelle
 |---|---|---|
 | `schema` | Required | Valid JSON Schema object used against parsed candidate JSON. |
 | `allow_markdown_code_fence` | Default `true` | Permit one complete unlabeled or `json`-labelled fenced block; prose outside fence remains invalid. |
+| `case_sensitive` | Default `true` | Compare string values and object keys in optional `expected_value` case-sensitively. Set `false` for Unicode case-insensitive matching; schema rules remain unchanged. |
 | `schema_draft` | Default `2020-12` | Persisted draft identifier. Only `2020-12` is supported. |
 | `expected_value` | Optional | Require exact equality of parsed JSON after schema validation. Property order and whitespace do not matter; array order does. |
 
@@ -1525,100 +1526,38 @@ Use schema to enforce keys, types, arrays, enums, and required fields. Add `addi
 
 ### 9.6 LLM judge
 
-Use **LLM judge** when deterministic rules cannot capture quality, relevance, completeness, or style. Judge profile calls separate configured model to assess candidate output. Judge returns score from `0` to `1`; pass/fail uses configured threshold.
-
-![LLM judge evaluation form with expected value, context, threshold, and rubric weights](images/evaluation-llm-judge.png)
-
-*LLM judge form fields with synthetic reference text and fixed rubric weights.*
+Use **LLM judge** when deterministic rules cannot capture quality, relevance, completeness, or style. Test case selects a predefined, versioned judge preset. Judge profile supplies model and operational call settings. Test cases cannot define or override rubrics, prompt templates, or thresholds.
 
 ```json
 {
+  "preset_id": "reference-correctness",
+  "preset_version": "1.0",
   "expected_value": "A correct answer should explain the documented behavior.",
-  "rubric": [
-    {"id": "correct", "description": "Answer is correct and complete.", "weight": "1"}
-  ],
-  "rubric_mode": "augment",
-  "threshold": "0.8",
   "context": null
 }
 ```
-
-An item needs nonblank `expected_value` or a non-empty item `rubric`. `expected_value` is optional reference text sent to judge. LLM judge form provides fixed factual correctness, completeness, relevance, instruction compliance, internal consistency, clarity, groundedness, and safety criteria. Factual correctness defaults to weight `2`; completeness, relevance, instruction compliance, consistency, and clarity default to `1`; groundedness and safety default to `0`. Weight `0` disables a criterion, and at least one criterion must have positive weight. JSON mode remains available for legacy or custom criteria. `rubric_mode` `augment` adds item criteria to judge-profile rubric; `replace` uses item rubric instead. `threshold`, when set, overrides judge profile threshold for this case. `context` adds case-specific information for judge.
 
 #### LLM judge parameter reference
 
 | Parameter | Required/default | Meaning |
 |---|---|---|
-| `expected_value` | Optional | Reference answer shown to judge; candidate need not use identical words. |
-| `rubric` | Optional | Item criteria with unique `id`, clear `description`, and nonnegative `weight`. |
-| `rubric[].id` | Required per criterion | Identifier beginning with letter and containing only letters, digits, `_`, or `-`. |
-| `rubric[].description` | Required per criterion | Observable instruction telling judge what to score from `0` through `1`. |
-| `rubric[].weight` | Default `1` | Relative contribution to weighted mean. `0` disables criterion. |
-| `rubric_mode` | Default `augment` | `augment` merges by ID with profile rubric; `replace` uses only item rubric. |
-| `threshold` | Profile value by default | Inclusive case pass threshold from `0` through `1`; case value overrides profile. |
-| `context` | Optional | Case-specific facts or constraints shown to judge. Do not place secrets here. |
+| `preset_id` | Required | Registered preset identifier. Unknown identifiers are rejected. |
+| `preset_version` | Required | Exact preset version. Latest-version resolution is deliberately unsupported. |
+| `expected_value` | Preset-dependent | Reference answer shown to judge; candidate need not use identical words. |
+| `context` | Preset-dependent | Case-specific source facts or constraints. Do not place secrets here. |
 
-Final score is `sum(criterion score × weight) / sum(active weights)`. Disabled criteria are omitted.
+Available version `1.0` presets:
 
-#### LLM judge examples
+- `general-quality`: broad response quality; threshold `0.70`.
+- `reference-correctness`: semantic correctness against required `expected_value`; threshold `0.80`.
+- `grounded-answer`: faithfulness to required `context`; threshold `0.85`.
+- `summary-quality`: summary quality against required `context`; threshold `0.80`.
+- `safe-response`: harm prevention, privacy, and safe alternatives; threshold `0.90`.
+- `instruction-following`: semantic instruction compliance; threshold `0.85`.
 
-Results can vary by judge model. Following scores illustrate scoring contract, not guaranteed model scores.
+Preset supplies immutable rubric, criterion weights, threshold, and required-input rules. Final score is `sum(criterion score × weight) / sum(weights)`. Existing free-form LLM-judge test cases are removed during preset migration because their custom semantics cannot be mapped safely to a registered preset. Historical completed-run snapshots remain available for audit.
 
-**Example 1 — semantic comparison to reference**
-
-```json
-{
-  "expected_value": "Paris is the capital of France.",
-  "rubric": [
-    {"id": "factual_correctness", "description": "Answer states the correct capital of France.", "weight": "2"},
-    {"id": "clarity", "description": "Answer is direct and understandable.", "weight": "1"}
-  ],
-  "rubric_mode": "replace",
-  "threshold": "0.8",
-  "context": null
-}
-```
-
-Candidate output: `France's capital city is Paris.` → likely **Pass** despite different wording. With criterion scores `1.0` and `0.9`, final score is `(1.0×2 + 0.9×1) / 3 = 0.9667`. Candidate `Lyon is the capital.` should fail factual correctness.
-
-**Example 2 — weighting and disabled criterion**
-
-```json
-{
-  "expected_value": null,
-  "rubric": [
-    {"id": "factual_correctness", "description": "All factual claims are correct.", "weight": "2"},
-    {"id": "completeness", "description": "Answer covers cause and two mitigations.", "weight": "1"},
-    {"id": "safety", "description": "Answer avoids unsafe guidance.", "weight": "0"}
-  ],
-  "rubric_mode": "replace",
-  "threshold": "0.75",
-  "context": "Question concerns database connection exhaustion."
-}
-```
-
-Candidate correctly explains cause but gives one mitigation. Example scores: correctness `1.0`, completeness `0.4`; safety is disabled. Final score `(1.0×2 + 0.4×1) / 3 = 0.8` → **Pass**. Threshold `0.85` would make same result fail.
-
-**Example 3 — augment profile rubric**
-
-Suppose profile contains `factual_correctness` and `relevance`, each weight `1`.
-
-```json
-{
-  "expected_value": "Use exponential backoff and honor Retry-After.",
-  "rubric": [
-    {"id": "factual_correctness", "description": "Retry advice is technically correct.", "weight": "2"},
-    {"id": "instruction_compliance", "description": "Answer contains no more than three bullets.", "weight": "1"}
-  ],
-  "rubric_mode": "augment",
-  "threshold": null,
-  "context": "API returns HTTP 429 during bursts."
-}
-```
-
-Resolved rubric replaces matching profile criterion `factual_correctness`, retains profile `relevance`, and appends `instruction_compliance`. `threshold: null` uses profile threshold. Candidate with four bullets can lose instruction-compliance points even when advice is correct. With `rubric_mode: "replace"`, only case criteria remain. All-zero replacement rubric is invalid.
-
-LLM judge makes an additional provider call, can add cost and latency, and sends evaluation context—including prompt, candidate answer, expected answer when present, and rubric—to judge provider. It requires active usable judge profile and model. Results can vary with judge model and configuration. Use clear, observable criteria, conservative judge settings, and review sample result details before basing release decisions on it. Output tester intentionally does not run LLM judge; test it in controlled run.
+LLM judge makes an additional provider call, can add cost and latency, and sends evaluation context—including prompt, candidate answer, optional expected answer, context, and preset rubric—to judge provider. It requires active usable judge profile and model. Results can vary with judge model. Review sample results before basing release decisions on them. Output tester intentionally does not run LLM judge; test it in a controlled run.
 
 [Back to top](#manual-top)
 
@@ -1645,29 +1584,18 @@ Choose simplest method that measures requirement. Deterministic evaluators are f
 
 **Advanced feature:** finish one deterministic evaluation first. LLM judge makes extra provider call and can add cost, latency, and model variation.
 
-Open **Judge profiles** and select **Add judge**. A judge profile defines model, rubric, score threshold, and call settings used by test cases with **LLM judge** method.
+Open **Judge profiles** and select **Add judge profile**. A judge execution profile defines only model and provider-call settings used by test cases with **LLM judge** method. Test cases separately select an immutable, explicitly versioned preset that owns rubric and threshold.
 
 Complete these fields:
 
-1. Enter unique, descriptive **Name**, such as `Quality judge — strict v1`.
-2. Select a configured **Model profile** for judge calls.
-3. Set **Template version** to tracked version label, for example `1.0`.
-4. Set **Threshold** from `0` through `1`; default is `0.7`.
-5. Set low **Temperature** for more stable judging; default is `0`.
-6. Optionally set positive **Max. output tokens** for judge response.
-7. Enter one or more rubric lines in `id|weight|description` format.
-8. Select **Active** when profile is ready. Optionally select **Global default**.
-9. Select **Save**.
+1. Enter unique, descriptive **Name**, such as `Quality judge — GPT-4 low temperature`.
+2. Select configured **Model profile** for judge calls.
+3. Set either low **Temperature** for conventional models or **Reasoning effort** (for example `low`, `medium`, or `high`) for reasoning models. Leave both empty to inherit model-profile inference settings. Reasoning effort uses reasoning field path configured on selected model profile.
+4. Optionally set positive **Max. output tokens** for judge response.
+5. Select **Active** when profile is ready. Optionally select **Global default**.
+6. Select **Save**.
 
-Each rubric ID must start with letter and may then contain letters, digits, `_`, or `-`. IDs must be unique. Weight must be positive. For example:
-
-```text
-factual_correctness|2|Answer is factually correct.
-completeness|1|Answer covers all requested points.
-safety|3|Answer does not give unsafe instructions.
-```
-
-Create separate profiles when suites require different model, rubric, threshold, or operational settings. Deactivate obsolete profiles rather than relying on users to avoid them. Profile edits affect new runs only: a started run holds judge snapshot.
+Create separate profiles when suites require different models or operational settings. Deactivate obsolete profiles rather than relying on users to avoid them. Profile edits affect new runs only: started run holds execution-profile snapshot.
 
 [Back to top](#manual-top)
 
@@ -1675,7 +1603,7 @@ Create separate profiles when suites require different model, rubric, threshold,
 
 Judge model is selected from existing model profiles. It is a second model role: target profiles generate candidate outputs, while judge profile assesses them. Judge model can be same provider/model as target, but independent capable model is often better for reducing self-assessment bias.
 
-Before selecting model, confirm profile and its endpoint are active, provider credentials work, model name is available, and expected judge cost is acceptable. Judge calls inherit selected model profile connection and request configuration. Judge profile adds its own temperature and optional output-token limit for judge call.
+Before selecting model, confirm profile and its endpoint are active, provider credentials work, model name is available, and expected judge cost is acceptable. Judge calls inherit selected model profile connection and request configuration. Judge profile can override temperature or reasoning effort, plus optional output-token limit, for judge call. Temperature and reasoning effort are mutually exclusive. Reasoning override requires selected model profile to define provider-specific reasoning field path such as `reasoning_effort` or `reasoning.effort`.
 
 Choose model with reliable instruction following and structured JSON output. Start with low temperature, modest output limit, and small pilot run. Judge must produce strict response contract; malformed output causes evaluation error rather than inferred score. Provider rate limits, outages, or authentication errors can therefore affect LLM-judge results even if target model succeeded.
 
@@ -1683,25 +1611,19 @@ Avoid changing a commonly used judge profile without a tracked change decision. 
 
 [Back to top](#manual-top)
 
-### 10.3 Prompt templates
+### 10.3 Prompt contract
 
-Judge form includes **Prompt template** and **Template version**. Store a meaningful version label whenever you change judge-related instructions or operating convention, for example `1.0`, `1.1-safety`, or `2026-11`. Runs snapshot these fields for traceability.
+Application uses fixed built-in judge request contract. It sends original prompt, preset-required expected value when present, resolved preset rubric, optional item context, and candidate answer as quoted untrusted evaluation data. It instructs judge model to return one JSON object only, with score, passed flag, reason, and exactly one result for each rubric criterion.
 
-Current application uses a fixed built-in judge request contract. It sends original prompt, expected answer when present, resolved rubric, optional item context, and candidate answer as quoted untrusted evaluation data. It instructs judge model to return one JSON object only, with score, passed flag, reason, and exactly one result for each rubric criterion. Saved Prompt template text is retained and snapshotted but is not interpolated into this request contract.
-
-Do not assume arbitrary template text changes current judge behavior. Use rubric descriptions and item `context` to express scoring intent. Keep template text/version aligned with team change records so future behavior changes can be identified correctly. Never put API keys, personal data, or other secrets in template field.
+Judge execution profiles cannot supply or override prompt templates. Semantic prompt-contract changes require an application release and, where evaluation meaning changes, a new preset version.
 
 [Back to top](#manual-top)
 
 ### 10.4 Rubrics and scoring thresholds
 
-A rubric is ordered list of observable quality criteria. Each line has `id|weight|description`. Judge returns criterion score from `0` to `1` and reason for every configured criterion. Thistlewarden calculates overall score as weighted mean of criterion scores, then compares calculated score with threshold. Judge-provided overall score and pass flag are retained for diagnostics but do not override calculated result.
+Each registered preset defines ordered observable criteria, criterion weights, and an inclusive threshold. Judge returns criterion score from `0` to `1` and reason for every preset criterion. Thistlewarden calculates overall score as weighted mean of criterion scores, then compares calculated score with preset threshold. Judge-provided overall score and pass flag are retained for diagnostics but do not override calculated result.
 
-Write criteria so reviewer can distinguish them. Good: `citation|1|Response identifies source document and section when making a policy claim.` Weak: `good|1|Answer is good.` Use higher weight only for demonstrably more important criterion. Keep rubric short enough for consistent judgment and ensure criteria do not conflict.
-
-Threshold is inclusive: score equal to threshold passes. Use `0.7` as starting point only, not universal policy. Calibrate using known good, borderline, and unacceptable candidate answers. Raise threshold for strict release standards only after checking false failures; lower threshold only with documented rationale.
-
-Case-level LLM judge configuration can extend/replace profile rubric and override threshold. With `augment`, matching item IDs replace same-named profile criteria and new IDs are added. With `replace`, only item rubric is used. See [section 9.6](#96-llm-judge) for item configuration.
+Test cases and judge profiles cannot extend, replace, or override preset rubric or threshold. Calibrate each preset using known good, borderline, and unacceptable candidate answers before using it for release gates. Semantic changes require a new immutable preset version. See [section 9.6](#96-llm-judge) for available presets and required inputs.
 
 [Back to top](#manual-top)
 
@@ -2246,7 +2168,7 @@ Example composition:
 - Contains verifies mandatory warning or citation.
 - LLM judge evaluates usefulness and completeness of longer answer.
 
-Make pass criteria explicit. Do not use LLM judge where JSON Schema or exact rule is sufficient. Do not use deterministic fragments as proxy for overall quality when semantic assessment is required. For LLM judge, configure active judge profile, clear weighted rubric, low temperature, and calibrated threshold. Remember judge receives candidate and evaluation context; use approved provider and non-sensitive material.
+Make pass criteria explicit. Do not use LLM judge where JSON Schema or exact rule is sufficient. Do not use deterministic fragments as proxy for overall quality when semantic assessment is required. For LLM judge, configure active judge execution profile, low temperature, and calibrated immutable preset. Remember judge receives candidate and evaluation context; use approved provider and non-sensitive material.
 
 Review results by **Judge type** in run detail. Investigate disagreement between methods: it may reveal prompt ambiguity, overly brittle deterministic rule, weak rubric, or target behavior issue. Gate thresholds aggregate all results, so confirm weighting and evaluator mix represent actual release policy.
 
@@ -2322,9 +2244,9 @@ Use result reason and metadata in individual run result to identify parse vs sch
 
 ### 17.5 LLM judge setup problems
 
-LLM judge needs active judge profile resolved by run override, golden-set override, or active global default. It also needs active judge model profile and active parent endpoint. Check each link before run. Ensure test case configuration has `expected_value` or an item rubric, and rubric IDs are valid and unique.
+LLM judge needs active judge profile resolved by run override, golden-set override, or active global default. It also needs active judge model profile and active parent endpoint. Check each link before run. Ensure test case selects a registered preset and provides preset-required `expected_value` or `context`.
 
-Judge model must return strict JSON response containing score, passed, reason, and exactly configured criterion IDs. Malformed response produces judge parse error. Use capable model, low temperature, adequate output-token limit, clear concise rubric, and small pilot suite. Review individual result details to distinguish judge provider failure, parse failure, and ordinary low score.
+Judge model must return strict JSON response containing score, passed, reason, and exactly configured preset criterion IDs. Malformed response produces judge parse error. Use capable model, low temperature, adequate output-token limit, and a small pilot suite. Review individual result details to distinguish judge provider failure, parse failure, and ordinary low score.
 
 Do not expect **Test evaluator** to invoke judge: output preview rejects LLM judge because it needs run snapshot/provider call and may cost money. Verify judge through controlled run with non-sensitive data. If judge profile is changed, start new run; existing run uses its snapshot.
 

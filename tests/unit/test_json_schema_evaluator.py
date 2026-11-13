@@ -50,13 +50,20 @@ def test_nested_object_arrays_required_and_types() -> None:
     invalid = JsonSchemaEvaluator().evaluate(item, '{"user":{"age":"42"},"roles":[]}')
     assert valid.passed is True and valid.score == Decimal("1")
     assert invalid.passed is False
+    assert invalid.metadata["actual"] == '{"user":{"age":"42"},"roles":[]}'
+    assert invalid.metadata["schema"] == item.data.evaluator_config["schema"]
     assert invalid.metadata["schema_valid"] is False
+    assert invalid.metadata["validation_errors"][0]["path"] == "$[user][age]"
+    assert invalid.metadata["validation_errors"][0]["rule"] == "type"
     assert invalid.metadata["first_error_path"] == "$[user][age]"
 
 
 def test_invalid_candidate_json_fails_without_system_error() -> None:
     result = JsonSchemaEvaluator().evaluate(_item({"schema": {"type": "object"}}), "{bad")
     assert result.passed is False
+    assert result.metadata["actual"] == "{bad"
+    assert result.metadata["schema"] == {"type": "object"}
+    assert result.metadata["expected_value_configured"] is False
     assert result.metadata["parse_status"] == "invalid_json"
 
 
@@ -87,7 +94,48 @@ def test_deep_equality_ignores_object_key_order_but_not_array_order() -> None:
     wrong_array = JsonSchemaEvaluator().evaluate(item, '{"a":1,"nested":{"b":[2,1]}}')
     assert reordered.passed is True
     assert wrong_array.passed is False
+    assert wrong_array.metadata["expected_value_configured"] is True
+    assert wrong_array.metadata["expected_value"] == {"a": 1, "nested": {"b": [1, 2]}}
     assert wrong_array.metadata["expected_value_matches"] is False
+
+
+def test_expected_value_can_match_strings_and_object_keys_case_insensitively() -> None:
+    item = _item(
+        {
+            "schema": {"type": "object"},
+            "expected_value": {"Status": "Straße", "Nested": ["OK", 1]},
+            "case_sensitive": False,
+        }
+    )
+
+    result = JsonSchemaEvaluator().evaluate(item, '{"status":"STRASSE","nested":["ok",1]}')
+
+    assert result.passed is True
+    assert result.metadata["case_sensitive"] is False
+
+
+def test_expected_value_is_case_sensitive_by_default() -> None:
+    item = _item({"schema": {"type": "string"}, "expected_value": "OK"})
+
+    result = JsonSchemaEvaluator().evaluate(item, '"ok"')
+
+    assert result.passed is False
+    assert result.metadata["case_sensitive"] is True
+
+
+def test_case_insensitive_expected_value_does_not_change_schema_semantics() -> None:
+    item = _item(
+        {
+            "schema": {"type": "object", "required": ["Status"]},
+            "expected_value": {"status": "ok"},
+            "case_sensitive": False,
+        }
+    )
+
+    result = JsonSchemaEvaluator().evaluate(item, '{"status":"OK"}')
+
+    assert result.passed is False
+    assert result.metadata["schema_valid"] is False
 
 
 def test_explicit_null_expected_value_differs_from_absent() -> None:

@@ -57,11 +57,49 @@ def _create_set(client) -> str:
     return response.headers["Location"].rsplit("/", 1)[-1]
 
 
+def test_judge_page_can_delete_profile_with_confirmation(app) -> None:
+    client = app.test_client()
+    endpoint = client.post(
+        "/api/v1/endpoints",
+        json={"name": "Judge provider", "completions_url": "https://example.test/chat"},
+    ).get_json()["endpoint"]
+    model = client.post(
+        f"/api/v1/endpoints/{endpoint['id']}/models",
+        json={"model_id": "judge", "display_name": "Judge model"},
+    ).get_json()["model"]
+    judge = client.post(
+        "/api/v1/judge-profiles",
+        json={"name": "Disposable judge", "model_profile_id": model["id"]},
+    ).get_json()["judge_profile"]
+
+    page = client.get("/judges").get_data(as_text=True)
+    assert "delete-judge-form" in page
+    assert f"/judges/{judge['id']}/verwijderen" in page
+
+    token = _csrf(client, "/judges")
+    denied = client.post(
+        f"/judges/{judge['id']}/verwijderen",
+        data={"csrf_token": token},
+        follow_redirects=True,
+    )
+    assert "Explicitly confirm permanent deletion" in denied.get_data(as_text=True)
+    assert client.get(f"/api/v1/judge-profiles/{judge['id']}").status_code == 200
+
+    token = _csrf(client, "/judges")
+    deleted = client.post(
+        f"/judges/{judge['id']}/verwijderen",
+        data={"csrf_token": token, "confirm": "on"},
+        follow_redirects=True,
+    )
+    assert "Judge profile deleted" in deleted.get_data(as_text=True)
+    assert client.get(f"/api/v1/judge-profiles/{judge['id']}").status_code == 404
+
+
 def test_step27_empty_pages_render_and_navigation(app) -> None:
     client = app.test_client()
     for path, text in (
         ("/golden-sets", "Golden sets"),
-        ("/judges", "Judge profiles"),
+        ("/judges", "Judge execution profiles"),
         ("/configuratie", "Configuration exchange"),
     ):
         response = client.get(path)
@@ -131,6 +169,7 @@ def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
     assert 'id="json-schema-schema"' in page
     assert 'id="json-schema-draft"' in page
     assert 'id="json-schema-code-fence"' in page
+    assert 'id="json-schema-case-sensitive"' in page
     assert 'id="json-schema-use-expected"' in page
     assert 'id="json-schema-expected"' in page
     assert "configToJsonSchemaFields" in page
@@ -141,12 +180,16 @@ def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
     assert 'id="show-llm-json"' in page
     assert 'id="llm-expected-value"' in page
     assert 'id="llm-context"' in page
-    assert 'id="llm-threshold"' in page
-    assert page.count('class="llm-rubric-weight"') == 8
-    assert 'id="llm-rubric-factual_correctness"' in page
-    assert 'data-default-weight="2"' in page
-    assert page.count('class="info-button"') == 37
-    assert page.count('role="tooltip" hidden') == 37
+    assert 'id="llm-preset"' in page
+    assert "General response quality" in page
+    assert "Grounded answer / RAG faithfulness" in page
+    assert 'class="help llm-preset-description"' in page
+    assert 'class="content llm-preset-details"' in page
+    assert 'class="help llm-preset-help"' in page
+    assert 'class="llm-rubric-weight"' not in page
+    assert 'id="llm-threshold"' not in page
+    assert page.count('class="info-button"') == 28
+    assert page.count('role="tooltip" hidden') == 28
     assert "configToLlmFields" in page
     assert "llmFieldsToConfig" in page
     assert "configToNumericFields" in page
@@ -287,7 +330,9 @@ def test_output_tester_rejects_invalid_config_and_llm_judge(app) -> None:
         data={
             **base,
             "evaluation_method": "llm_judge",
-            "evaluator_config": json.dumps({}),
+            "evaluator_config": json.dumps(
+                {"preset_id": "general-quality", "preset_version": "1.0"}
+            ),
         },
     )
     assert judge.status_code == 400
@@ -306,8 +351,9 @@ def test_output_tester_rejects_invalid_config_and_llm_judge(app) -> None:
             "llm_judge",
             None,
             {
+                "preset_id": "reference-correctness",
+                "preset_version": "1.0",
                 "expected_value": "ja",
-                "rubric": [{"id": "correct", "description": "Juist", "weight": "1"}],
             },
         ),
     ],
@@ -334,6 +380,47 @@ def test_gui_saves_every_evaluator_method(
     )
     assert response.status_code == 200
     assert "Test case created" in response.get_data(as_text=True)
+
+
+def test_golden_set_delete_requires_name_and_removes_items(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    token = _csrf(client, f"/golden-sets/{set_id}")
+    client.post(
+        f"/golden-sets/{set_id}/items/nieuw",
+        data={
+            "csrf_token": token,
+            "case_id": "delete-me",
+            "prompt": "Prompt",
+            "evaluation_method": "exact_match",
+            "expected_answer": "Answer",
+            "evaluator_config": "{}",
+            "weight": "1",
+            "enabled": "on",
+        },
+    )
+
+    page = client.get(f"/golden-sets/{set_id}").get_data(as_text=True)
+    assert "Delete golden set" in page
+    assert "Type <strong>GUI set</strong> to confirm" in page
+
+    token = _csrf(client, f"/golden-sets/{set_id}")
+    denied = client.post(
+        f"/golden-sets/{set_id}/verwijderen",
+        data={"csrf_token": token, "confirmation_name": "wrong"},
+        follow_redirects=True,
+    )
+    assert "Type the exact golden set name" in denied.get_data(as_text=True)
+    assert client.get(f"/api/v1/golden-sets/{set_id}").status_code == 200
+
+    token = _csrf(client, f"/golden-sets/{set_id}")
+    deleted = client.post(
+        f"/golden-sets/{set_id}/verwijderen",
+        data={"csrf_token": token, "confirmation_name": "GUI set"},
+        follow_redirects=True,
+    )
+    assert "Golden set deleted" in deleted.get_data(as_text=True)
+    assert client.get(f"/api/v1/golden-sets/{set_id}").status_code == 404
 
 
 def test_duplicate_set_and_quick_delete_item(app) -> None:
@@ -446,23 +533,66 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
             "csrf_token": token,
             "name": "Hoofdjudge",
             "model_profile_id": model["id"],
-            "prompt_template": "judge-v1",
-            "template_version": "1.0",
-            "threshold": "0.7",
-            "temperature": "0",
-            "rubric": "correct|1|Juist antwoord",
+            "reasoning_value": "high",
             "is_global_default": "on",
             "active": "on",
         },
         follow_redirects=True,
     )
     assert judge.status_code == 200 and "Judge profile created" in judge.get_data(as_text=True)
+    connection = app.extensions["database_factory"].connect()
+    try:
+        stored_semantics = connection.execute(
+            "SELECT prompt_template,template_version,threshold,rubric_json "
+            "FROM judge_profiles WHERE name=?",
+            ("Hoofdjudge",),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert tuple(stored_semantics) == ("preset-v1", "1.0", "0", "[]")
+    profile = bundle_profile = client.get("/api/v1/judge-profiles").get_json()["judge_profiles"][0]
+    assert profile["temperature"] is None
+    assert profile["reasoning_value"] == "high"
+    form = client.get("/judges").get_data(as_text=True)
+    assert "Judge execution profiles" in form
+    assert "Rubrics, thresholds, and prompt templates" not in form
 
     exported = client.get("/configuratie/export")
     assert exported.status_code == 200
     assert b"never-export-this" not in exported.data
     bundle = json.loads(exported.data)
     assert bundle["schema_version"] == "1.0"
+    exported_judge = bundle["judge_profiles"][0]["data"]
+    assert exported_judge == {
+        key: bundle_profile[key]
+        for key in (
+            "name",
+            "model_profile_id",
+            "temperature",
+            "reasoning_value",
+            "max_output_tokens",
+            "is_global_default",
+            "active",
+        )
+    }
+    assert (
+        not {
+            "prompt_template",
+            "template_version",
+            "threshold",
+            "rubric",
+        }
+        & exported_judge.keys()
+    )
+    rejected = client.post(
+        "/api/v1/judge-profiles",
+        json={
+            "name": "Legacy semantics",
+            "model_profile_id": model["id"],
+            "threshold": "0.9",
+        },
+    )
+    assert rejected.status_code == 400
     token = _csrf(client, "/configuratie")
     preview = client.post(
         "/configuratie/import",

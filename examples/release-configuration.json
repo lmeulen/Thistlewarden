@@ -85,11 +85,8 @@
       "data": {
         "name": "Offline judge",
         "model_profile_id": "20000000-0000-4000-8000-000000000002",
-        "prompt_template": "judge-v1",
-        "template_version": "1.0",
-        "threshold": "0.7",
-        "rubric": [{"id": "correct", "description": "Antwoord is correct.", "weight": "1"}],
         "temperature": "0",
+        "reasoning_value": null,
         "max_output_tokens": 256,
         "is_global_default": true,
         "active": true
@@ -103,19 +100,166 @@
         "name": "Offline release golden set",
         "description": "Alle zes evaluatiemethoden zonder extern netwerk.",
         "version": "1.0",
-        "tags": ["release", "offline"],
+        "tags": [
+          "release",
+          "offline"
+        ],
         "active": true,
         "judge_profile_id": "30000000-0000-4000-8000-000000000001",
-        "quality_gates": {"min_pass_rate": "1", "max_error_rate": "0"}
+        "quality_gates": {
+          "min_pass_rate": "1",
+          "max_error_rate": "0"
+        }
       }
     }
   ],
   "golden_set_items": [
-    {"id":"50000000-0000-4000-8000-000000000001","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"exact","prompt":"[EXACT] Geef exact antwoord.","system_prompt":null,"expected_answer":"exact antwoord","evaluation_method":"exact_match","evaluator_config":{},"category":"deterministisch","tags":["exact"],"weight":"1","enabled":true,"sort_order":0}},
-    {"id":"50000000-0000-4000-8000-000000000002","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"contains","prompt":"[CONTAINS] Noem alpha en beta.","system_prompt":null,"expected_answer":null,"evaluation_method":"contains","evaluator_config":{"expected_fragments":["alpha","beta"]},"category":"deterministisch","tags":["contains"],"weight":"1","enabled":true,"sort_order":1}},
-    {"id":"50000000-0000-4000-8000-000000000003","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"regex","prompt":"[REGEX] Geef code.","system_prompt":null,"expected_answer":null,"evaluation_method":"regex","evaluator_config":{"pattern":"^[A-Z]{3}-[0-9]{3}$","full_match":true},"category":"deterministisch","tags":["regex"],"weight":"1","enabled":true,"sort_order":2}},
-    {"id":"50000000-0000-4000-8000-000000000004","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"numeric","prompt":"[NUMERIC] Geef 42.","system_prompt":null,"expected_answer":null,"evaluation_method":"numeric","evaluator_config":{"expected_value":"42","absolute_tolerance":"0.01"},"category":"deterministisch","tags":["numeric"],"weight":"1","enabled":true,"sort_order":3}},
-    {"id":"50000000-0000-4000-8000-000000000005","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"json","prompt":"[JSON] Geef JSON.","system_prompt":null,"expected_answer":null,"evaluation_method":"json_schema","evaluator_config":{"schema":{"type":"object","required":["ok","model"],"properties":{"ok":{"const":true},"model":{"type":"string"}},"additionalProperties":false}},"category":"deterministisch","tags":["json"],"weight":"1","enabled":true,"sort_order":4}},
-    {"id":"50000000-0000-4000-8000-000000000006","data":{"golden_set_id":"40000000-0000-4000-8000-000000000001","case_id":"judge","prompt":"[JUDGE] Geef correct antwoord.","system_prompt":null,"expected_answer":"Een correct en volledig antwoord.","evaluation_method":"llm_judge","evaluator_config":{"rubric":[{"id":"correct","description":"Antwoord is correct.","weight":"1"}],"rubric_mode":"replace","threshold":"0.7"},"category":"judge","tags":["judge"],"weight":"1","enabled":true,"sort_order":5}}
+    {
+      "id": "50000000-0000-4000-8000-000000000001",
+      "data": {
+        "golden_set_id": "40000000-0000-4000-8000-000000000001",
+        "case_id": "exact",
+        "prompt": "[EXACT] Geef exact antwoord.",
+        "system_prompt": null,
+        "expected_answer": "exact antwoord",
+        "evaluation_method": "exact_match",
+        "evaluator_config": {},
+        "category": "deterministisch",
+        "tags": [
+          "exact"
+        ],
+        "weight": "1",
+        "enabled": true,
+        "sort_order": 0
+      }
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000002",
+      "data": {
+        "golden_set_id": "40000000-0000-4000-8000-000000000001",
+        "case_id": "contains",
+        "prompt": "[CONTAINS] Noem alpha en beta.",
+        "system_prompt": null,
+        "expected_answer": null,
+        "evaluation_method": "contains",
+        "evaluator_config": {
+          "expected_fragments": [
+            "alpha",
+            "beta"
+          ]
+        },
+        "category": "deterministisch",
+        "tags": [
+          "contains"
+        ],
+        "weight": "1",
+        "enabled": true,
+        "sort_order": 1
+      }
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000003",
+      "data": {
+        "golden_set_id": "40000000-0000-4000-8000-000000000001",
+        "case_id": "regex",
+        "prompt": "[REGEX] Geef code.",
+        "system_prompt": null,
+        "expected_answer": null,
+        "evaluation_method": "regex",
+        "evaluator_config": {
+          "pattern": "^[A-Z]{3}-[0-9]{3}$",
+          "full_match": true
+        },
+        "category": "deterministisch",
+        "tags": [
+          "regex"
+        ],
+        "weight": "1",
+        "enabled": true,
+        "sort_order": 2
+      }
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000004",
+      "data": {
+        "golden_set_id": "40000000-0000-4000-8000-000000000001",
+        "case_id": "numeric",
+        "prompt": "[NUMERIC] Geef 42.",
+        "system_prompt": null,
+        "expected_answer": null,
+        "evaluation_method": "numeric",
+        "evaluator_config": {
+          "expected_value": "42",
+          "absolute_tolerance": "0.01"
+        },
+        "category": "deterministisch",
+        "tags": [
+          "numeric"
+        ],
+        "weight": "1",
+        "enabled": true,
+        "sort_order": 3
+      }
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000005",
+      "data": {
+        "golden_set_id": "40000000-0000-4000-8000-000000000001",
+        "case_id": "json",
+        "prompt": "[JSON] Geef JSON.",
+        "system_prompt": null,
+        "expected_answer": null,
+        "evaluation_method": "json_schema",
+        "evaluator_config": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "ok",
+              "model"
+            ],
+            "properties": {
+              "ok": {
+                "const": true
+              },
+              "model": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "category": "deterministisch",
+        "tags": [
+          "json"
+        ],
+        "weight": "1",
+        "enabled": true,
+        "sort_order": 4
+      }
+    },
+    {
+      "id": "50000000-0000-4000-8000-000000000006",
+      "data": {
+        "golden_set_id": "40000000-0000-4000-8000-000000000001",
+        "case_id": "judge",
+        "prompt": "[JUDGE] Geef correct antwoord.",
+        "system_prompt": null,
+        "expected_answer": "Een correct en volledig antwoord.",
+        "evaluation_method": "llm_judge",
+        "evaluator_config": {
+          "preset_id": "reference-correctness",
+          "preset_version": "1.0",
+          "expected_value": "Een correct en volledig antwoord.",
+          "context": null
+        },
+        "category": "judge",
+        "tags": [
+          "judge"
+        ],
+        "weight": "1",
+        "enabled": true,
+        "sort_order": 5
+      }
+    }
   ]
 }

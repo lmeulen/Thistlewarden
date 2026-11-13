@@ -133,10 +133,21 @@ class ConfigurationExchangeService:
                 BundleObject(id=r["id"], data={**_plain(r), "endpoint_id": r["endpoint_id"]})
                 for r in c.execute("SELECT * FROM model_profiles ORDER BY id")
             ]
-            judges = [
-                BundleObject(id=r["id"], data=_plain(r))
-                for r in c.execute("SELECT * FROM judge_profiles ORDER BY id")
-            ]
+            judges = []
+            for row in c.execute("SELECT * FROM judge_profiles ORDER BY id"):
+                data = _plain(
+                    row,
+                    {
+                        "prompt_template",
+                        "template_version",
+                        "threshold",
+                        "rubric_json",
+                        "temperature_enabled",
+                    },
+                )
+                if not row["temperature_enabled"]:
+                    data["temperature"] = None
+                judges.append(BundleObject(id=row["id"], data=data))
             sets = [
                 BundleObject(id=r["id"], data=_plain(r))
                 for r in c.execute("SELECT * FROM golden_sets ORDER BY id")
@@ -371,21 +382,23 @@ class ConfigurationExchangeService:
         for x in b.judge_profiles:
             d = x.data
             c.execute(
-                f"{verb} INTO judge_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                f"{verb} INTO judge_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     rid(x.id),
                     d["name"],
                     rid(d["model_profile_id"]),
-                    d["prompt_template"],
-                    d["template_version"],
-                    str(d["threshold"]),
-                    json.dumps(d["rubric"], separators=(",", ":")),
-                    str(d["temperature"]),
+                    "preset-v1",
+                    "1.0",
+                    "0",
+                    "[]",
+                    str(d.get("temperature") or "0"),
                     d.get("max_output_tokens"),
                     int(d.get("is_global_default", False)),
                     int(d.get("active", True)),
                     now,
                     now,
+                    int(d.get("temperature") is not None),
+                    d.get("reasoning_value"),
                 ),
             )
         for x in b.golden_sets:

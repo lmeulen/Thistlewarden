@@ -344,6 +344,47 @@ def _migration_12(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_13(connection: sqlite3.Connection) -> None:
+    """Remove legacy free-form LLM-judge cases instead of guessing preset semantics."""
+
+    legacy_run_ids = connection.execute(
+        """SELECT DISTINCT r.id
+        FROM runs r
+        JOIN run_case_snapshots s ON s.run_id=r.id
+        WHERE r.status IN ('pending','running')
+          AND json_extract(s.snapshot_json,'$.evaluation_method')='llm_judge'"""
+    ).fetchall()
+    run_ids = [row["id"] for row in legacy_run_ids]
+    if run_ids:
+        placeholders = ",".join("?" for _ in run_ids)
+        connection.execute(
+            f"UPDATE run_jobs SET status='cancelled',lease_owner=NULL,lease_expires_at=NULL "
+            f"WHERE run_id IN ({placeholders}) AND status IN ('pending','running')",
+            run_ids,
+        )
+        connection.execute(
+            f"UPDATE runs SET status='cancelled',cancelled_at=COALESCE(cancelled_at,created_at) "
+            f"WHERE id IN ({placeholders})",
+            run_ids,
+        )
+    connection.execute("DELETE FROM golden_set_items WHERE evaluation_method='llm_judge'")
+
+
+def _migration_14(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "ALTER TABLE judge_profiles ADD COLUMN temperature_enabled INTEGER NOT NULL DEFAULT 1 "
+        "CHECK(temperature_enabled IN (0,1))"
+    )
+    connection.execute("ALTER TABLE judge_profiles ADD COLUMN reasoning_value TEXT")
+    connection.execute(
+        """UPDATE runs
+        SET judge_snapshot_json=json_set(
+            judge_snapshot_json,'$.temperature_enabled',1,'$.reasoning_value',NULL
+        )
+        WHERE status IN ('pending','running') AND judge_snapshot_json IS NOT NULL"""
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "create_settings", _migration_1),
     Migration(2, "add_settings_updated_at", _migration_2),
@@ -357,6 +398,8 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(10, "create_quality_gates", _migration_10),
     Migration(11, "add_run_query_indexes", _migration_11),
     Migration(12, "add_model_parameter_bindings", _migration_12),
+    Migration(13, "drop_legacy_llm_judge_test_cases", _migration_13),
+    Migration(14, "add_judge_inference_overrides", _migration_14),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

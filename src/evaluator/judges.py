@@ -12,45 +12,34 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from evaluator.api.errors import ConflictError, JudgeParseError, NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.evaluators.core import EvaluationResult
-from evaluator.golden_sets import LlmJudgeConfig, RubricCriterion
+from evaluator.golden_sets import LlmJudgeConfig, RubricCriterion, get_judge_preset
 from evaluator.logging_config import log_semantic_event
 from evaluator.time import from_utc_iso, to_utc_iso, utc_now
 
 _LOG = logging.getLogger(__name__)
 
-DEFAULT_CRITERIA = (
-    RubricCriterion(id="factual_correctness", description="Factual correctness."),
-    RubricCriterion(id="completeness", description="Completeness."),
-    RubricCriterion(id="relevance", description="Relevance."),
-    RubricCriterion(
-        id="instruction_compliance", description="Compliance with explicit instructions."
-    ),
-    RubricCriterion(id="consistency", description="No contradictions with the answer or rubric."),
-)
-DEFAULT_TEMPLATE = "judge-v1"
+_STORAGE_TEMPLATE = "preset-v1"
+_STORAGE_TEMPLATE_VERSION = "1.0"
+_STORAGE_THRESHOLD = Decimal("0")
+_STORAGE_RUBRIC = "[]"
 
 
 class JudgeProfileInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=200)
     model_profile_id: UUID
-    prompt_template: str = Field(default=DEFAULT_TEMPLATE, min_length=1, max_length=50_000)
-    template_version: str = Field(default="1.0", min_length=1, max_length=100)
-    threshold: Decimal = Field(default=Decimal("0.7"), ge=0, le=1)
-    rubric: list[RubricCriterion] = Field(
-        default_factory=lambda: list(DEFAULT_CRITERIA), min_length=1
-    )
-    temperature: Decimal = Field(default=Decimal("0"), ge=0)
+    temperature: Decimal | None = Field(default=None, ge=0, le=2)
+    reasoning_value: str | None = Field(default=None, min_length=1, max_length=500)
     max_output_tokens: int | None = Field(default=None, gt=0)
     is_global_default: bool = False
     active: bool = True
 
-    @field_validator("name", "template_version")
+    @field_validator("name")
     @classmethod
     def strip_nonblank(cls, value: str) -> str:
         value = value.strip()
@@ -58,23 +47,24 @@ class JudgeProfileInput(BaseModel):
             raise ValueError("must not be blank")
         return value
 
-    @field_validator("rubric")
+    @field_validator("reasoning_value")
     @classmethod
-    def unique_rubric(cls, value: list[RubricCriterion]) -> list[RubricCriterion]:
-        if len({item.id for item in value}) != len(value):
-            raise ValueError("rubric criterion IDs must be unique")
-        return value
+    def strip_reasoning_value(cls, value: str | None) -> str | None:
+        return None if value is None else value.strip()
+
+    @model_validator(mode="after")
+    def one_inference_override(self) -> JudgeProfileInput:
+        if self.temperature is not None and self.reasoning_value is not None:
+            raise ValueError("temperature and reasoning_value cannot both be configured")
+        return self
 
 
 class JudgeProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=200)
     model_profile_id: UUID | None = None
-    prompt_template: str | None = Field(default=None, min_length=1, max_length=50_000)
-    template_version: str | None = Field(default=None, min_length=1, max_length=100)
-    threshold: Decimal | None = Field(default=None, ge=0, le=1)
-    rubric: list[RubricCriterion] | None = Field(default=None, min_length=1)
-    temperature: Decimal | None = Field(default=None, ge=0)
+    temperature: Decimal | None = Field(default=None, ge=0, le=2)
+    reasoning_value: str | None = Field(default=None, min_length=1, max_length=500)
     max_output_tokens: int | None = Field(default=None, gt=0)
     is_global_default: bool | None = None
     active: bool | None = None
@@ -106,23 +96,10 @@ class JudgeWireOutput(BaseModel):
 _FENCE = re.compile(r"\A\s*```(?:json)?\s*\n(?P<body>.*?)\n```\s*\Z", re.DOTALL | re.IGNORECASE)
 
 
-def resolve_rubric(profile: JudgeProfileInput, item: LlmJudgeConfig) -> list[RubricCriterion]:
-    if item.rubric is None:
-        result = list(profile.rubric)
-    elif item.rubric_mode == "replace":
-        result = list(item.rubric)
-    else:
-        result = list(profile.rubric)
-        positions = {criterion.id: index for index, criterion in enumerate(result)}
-        for criterion in item.rubric:
-            if criterion.id in positions:
-                result[positions[criterion.id]] = criterion
-            else:
-                result.append(criterion)
-    active = [criterion for criterion in result if criterion.weight > 0]
-    if not active:
-        raise ValueError("rubric must contain at least one criterion with positive weight")
-    return active
+def resolve_rubric(item: LlmJudgeConfig) -> list[RubricCriterion]:
+    """Resolve rubric solely from selected immutable preset."""
+
+    return list(get_judge_preset(item.preset_id, item.preset_version).rubric)
 
 
 def build_judge_prompt(
@@ -198,6 +175,7 @@ def parse_judge_output(
             "criteria": [
                 {
                     "id": item.id,
+                    "description": item.description,
                     "score": str(by_id[item.id].score),
                     "reason": by_id[item.id].reason,
                     "weight": str(item.weight),
@@ -279,29 +257,32 @@ class SQLiteJudgeProfileRepository:
                         (str(record.id),),
                     )
                 connection.execute(
-                    """INSERT INTO judge_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """INSERT INTO judge_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(id) DO UPDATE SET name=excluded.name,
                     model_profile_id=excluded.model_profile_id,
-                    prompt_template=excluded.prompt_template,template_version=excluded.template_version,
-                    threshold=excluded.threshold,rubric_json=excluded.rubric_json,temperature=excluded.temperature,
+                    prompt_template=excluded.prompt_template,
+                    template_version=excluded.template_version,threshold=excluded.threshold,
+                    rubric_json=excluded.rubric_json,temperature=excluded.temperature,
                     max_output_tokens=excluded.max_output_tokens,is_global_default=excluded.is_global_default,
+                    temperature_enabled=excluded.temperature_enabled,
+                    reasoning_value=excluded.reasoning_value,
                     active=excluded.active,updated_at=excluded.updated_at""",
                     (
                         str(record.id),
                         d.name,
                         str(d.model_profile_id),
-                        d.prompt_template,
-                        d.template_version,
-                        str(d.threshold),
-                        json.dumps(
-                            [x.model_dump(mode="json") for x in d.rubric], separators=(",", ":")
-                        ),
+                        _STORAGE_TEMPLATE,
+                        _STORAGE_TEMPLATE_VERSION,
+                        str(_STORAGE_THRESHOLD),
+                        _STORAGE_RUBRIC,
                         str(d.temperature),
                         d.max_output_tokens,
                         int(d.is_global_default),
                         int(d.active),
                         to_utc_iso(record.created_at),
                         to_utc_iso(record.updated_at),
+                        int(d.temperature is not None),
+                        d.reasoning_value,
                     ),
                 )
         finally:
@@ -325,11 +306,8 @@ class SQLiteJudgeProfileRepository:
             data=JudgeProfileInput(
                 name=row["name"],
                 model_profile_id=UUID(row["model_profile_id"]),
-                prompt_template=row["prompt_template"],
-                template_version=row["template_version"],
-                threshold=Decimal(row["threshold"]),
-                rubric=json.loads(row["rubric_json"], parse_float=Decimal),
-                temperature=Decimal(row["temperature"]),
+                temperature=Decimal(row["temperature"]) if row["temperature_enabled"] else None,
+                reasoning_value=row["reasoning_value"],
                 max_output_tokens=row["max_output_tokens"],
                 is_global_default=bool(row["is_global_default"]),
                 active=bool(row["active"]),

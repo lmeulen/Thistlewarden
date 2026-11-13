@@ -1,1 +1,35 @@
-{% extends "base.html" %}{% block title %}Judges · Thistlewarden{% endblock %}{% block content %}<div class="heading"><div><h1>Judge profiles</h1><p>Rubrics, thresholds, and prompt templates.</p></div><a class="button" href="{{ url_for('gui.judge_new') }}">Add judge</a></div>{% for judge in judges %}<section class="panel"><h2><a href="{{ url_for('gui.judge_edit', profile_id=judge.id) }}">{{ judge.data.name }}</a></h2><p>Threshold {{ judge.data.threshold }} · {{ 'Global default' if judge.data.is_global_default else 'Not default' }}</p></section>{% else %}<p class="empty">No judge profiles yet.</p>{% endfor %}{% endblock %}
+{% extends "base.html" %}
+{% block title %}Judges · Thistlewarden{% endblock %}
+{% block content %}
+<div class="heading">
+  <div>
+    <h1>Judge execution profiles</h1>
+    <p>Judge models and provider-call settings. Test cases select versioned evaluation presets.</p>
+  </div>
+  <a class="button" href="{{ url_for('gui.judge_new') }}">Add judge profile</a>
+</div>
+{% for judge in judges %}
+<section class="panel">
+  <div class="heading">
+    <h2><a href="{{ url_for('gui.judge_edit', profile_id=judge.id) }}">{{ judge.data.name }}</a></h2>
+    <form method="post" action="{{ url_for('gui.judge_delete', profile_id=judge.id) }}" class="delete-judge-form" data-judge-name="{{ judge.data.name }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm" value="on">
+      <button class="danger compact">Delete</button>
+    </form>
+  </div>
+  <p>{% if judge.data.reasoning_value %}Reasoning {{ judge.data.reasoning_value }}{% elif judge.data.temperature is not none %}Temperature {{ judge.data.temperature }}{% else %}Model inference defaults{% endif %} · {{ judge.data.max_output_tokens or 'Model default' }} max. output tokens · {{ 'Global default' if judge.data.is_global_default else 'Not default' }} · {{ 'Active' if judge.data.active else 'Inactive' }}</p>
+</section>
+{% else %}
+<p class="empty">No judge execution profiles yet.</p>
+{% endfor %}
+<script nonce="{{ csp_nonce() }}">
+document.querySelectorAll('.delete-judge-form').forEach(function (form) {
+  form.addEventListener('submit', function (event) {
+    if (!window.confirm(`Permanently delete judge profile ${form.dataset.judgeName}?`)) {
+      event.preventDefault();
+    }
+  });
+});
+</script>
+{% endblock %}

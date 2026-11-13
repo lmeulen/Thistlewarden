@@ -6,7 +6,7 @@ Local single-user web app for reproducible evaluation of OpenAI-compatible langu
 
 ## Status
 
-MVP implementation: golden sets, evaluators, multiple model profiles, streaming metrics, exact costs, sustainable queue/recovery, LLM judging, quality gates, configuration exchange, exports, retention, English GUI and security/performance hardening.
+MVP implementation: golden sets, evaluators, multiple model profiles, streaming metrics, exact costs, LLM judging, quality gates, configuration exchange, exports, retention, English GUI and security/performance hardening.
 
 ## Requirements
 
@@ -67,7 +67,6 @@ Production server is Waitress with one process and four worker threads. Worker t
 ## URLs
 
 - App: <http://127.0.0.1:5000>
-- OpenAPI 3.1: <http://127.0.0.1:5000/api/v1/openapi.json>
 
 ## Configuration
 

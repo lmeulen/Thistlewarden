@@ -51,10 +51,17 @@ class RegexEvaluator:
                 score=Decimal(0),
                 passed=False,
                 reason="Regular-expression evaluation timed out.",
-                metadata={"timed_out": True, "full_match": config.full_match},
+                metadata={
+                    "expression": config.pattern,
+                    "actual": candidate,
+                    "timed_out": True,
+                    "full_match": config.full_match,
+                },
             )
         passed = match is not None
         metadata: dict[str, object] = {
+            "expression": config.pattern,
+            "actual": candidate,
             "timed_out": False,
             "full_match": config.full_match,
             "matched": passed,
@@ -114,13 +121,28 @@ class NumericEvaluator:
             validate_evaluator_config(self.method, item.data.evaluator_config),
         )
         actual, status = _parse_numeric(candidate, config)
+        context = {
+            "actual": candidate,
+            "expected_value": str(config.expected_value),
+            "extraction": config.extraction,
+            "absolute_tolerance": (
+                str(config.absolute_tolerance) if config.absolute_tolerance is not None else None
+            ),
+            "relative_tolerance_percent": (
+                str(config.relative_tolerance_percent)
+                if config.relative_tolerance_percent is not None
+                else None
+            ),
+            "decimal_separator": config.decimal_separator,
+            "allow_thousands_separator": config.allow_thousands_separator,
+        }
         if actual is None:
             return EvaluationResult(
                 method=self.method,
                 score=Decimal(0),
                 passed=False,
                 reason="Candidate does not contain one unambiguous numeric value.",
-                metadata={"parse_status": status, "extraction": config.extraction},
+                metadata={**context, "parse_status": status},
             )
         difference = abs(actual - config.expected_value)
         checks: dict[str, bool] = {}
@@ -138,9 +160,8 @@ class NumericEvaluator:
             if passed
             else "Numeric value is outside tolerance.",
             metadata={
+                **context,
                 "parse_status": "ok",
-                "extraction": config.extraction,
-                "expected_value": str(config.expected_value),
                 "actual_value": str(actual),
                 "absolute_difference": str(difference),
                 "tolerance_checks": checks,

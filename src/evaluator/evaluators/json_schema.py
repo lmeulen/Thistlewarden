@@ -40,6 +40,16 @@ def _path_text(path: Any) -> str:
     return "$" if not values else "$[" + "][".join(values) + "]"
 
 
+def _casefold_json(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.casefold()
+    if isinstance(value, list):
+        return [_casefold_json(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key).casefold(): _casefold_json(item) for key, item in value.items()}
+    return value
+
+
 def _bounded_reason(prefix: str, detail: str) -> str:
     available = _MAX_REASON_CHARS - len(prefix)
     if len(detail) > available:
@@ -56,13 +66,26 @@ class JsonSchemaEvaluator:
             validate_evaluator_config(self.method, item.data.evaluator_config),
         )
         parsed, fenced, parse_error = _candidate_json(candidate, config.allow_markdown_code_fence)
+        expected_configured = "expected_value" in item.data.evaluator_config
+        context = {
+            "actual": candidate,
+            "schema": config.schema_,
+            "allow_markdown_code_fence": config.allow_markdown_code_fence,
+            "case_sensitive": config.case_sensitive,
+            "expected_value_configured": expected_configured,
+            "expected_value": config.expected_value if expected_configured else None,
+        }
         if parse_error is not None:
             return EvaluationResult(
                 method=self.method,
                 score=Decimal(0),
                 passed=False,
                 reason="Candidate is not valid standalone JSON.",
-                metadata={"parse_status": parse_error, "code_fence_removed": fenced},
+                metadata={
+                    **context,
+                    "parse_status": parse_error,
+                    "code_fence_removed": fenced,
+                },
             )
 
         validator = Draft202012Validator(config.schema_)
@@ -80,17 +103,31 @@ class JsonSchemaEvaluator:
                 passed=False,
                 reason=reason,
                 metadata={
+                    **context,
                     "parse_status": "ok",
                     "code_fence_removed": fenced,
                     "schema_valid": False,
                     "error_count": len(errors),
+                    "validation_errors": [
+                        {
+                            "path": _path_text(validation_error.absolute_path),
+                            "rule": str(validation_error.validator),
+                            "message": validation_error.message,
+                        }
+                        for validation_error in errors
+                    ],
                     "first_error_path": path,
                     "parsed_value": parsed,
                 },
             )
 
-        expected_configured = "expected_value" in item.data.evaluator_config
-        value_matches = not expected_configured or parsed == config.expected_value
+        comparable_actual = parsed if config.case_sensitive else _casefold_json(parsed)
+        comparable_expected = (
+            config.expected_value
+            if config.case_sensitive
+            else _casefold_json(config.expected_value)
+        )
+        value_matches = not expected_configured or comparable_actual == comparable_expected
         if not value_matches:
             return EvaluationResult(
                 method=self.method,
@@ -98,6 +135,7 @@ class JsonSchemaEvaluator:
                 passed=False,
                 reason="JSON matches schema but differs from expected value.",
                 metadata={
+                    **context,
                     "parse_status": "ok",
                     "code_fence_removed": fenced,
                     "schema_valid": True,
@@ -111,6 +149,7 @@ class JsonSchemaEvaluator:
             passed=True,
             reason="JSON matches configured schema and expected value constraints.",
             metadata={
+                **context,
                 "parse_status": "ok",
                 "code_fence_removed": fenced,
                 "schema_valid": True,

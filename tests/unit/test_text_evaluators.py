@@ -61,6 +61,14 @@ def test_exact_match_pass_and_fail_include_normalized_metadata_not_content_in_re
     failed = ExactMatchEvaluator().evaluate(item, "secret-candidate")
 
     assert (passed.score, passed.passed) == (Decimal("1"), True)
+    assert passed.metadata["expected"] == " STRASSE\r\nOK "
+    assert passed.metadata["actual"] == "straße  OK"
+    assert passed.metadata["normalization"] == {
+        "normalize_newlines": True,
+        "trim": True,
+        "collapse_whitespace": True,
+        "case_sensitive": False,
+    }
     assert passed.metadata["normalized_expected"] == "strasse ok"
     assert passed.metadata["normalized_candidate"] == "strasse ok"
     assert (failed.score, failed.passed) == (Decimal("0"), False)
@@ -86,6 +94,9 @@ def test_contains_all_any_overlap_and_unicode() -> None:
     )
     all_result = ContainsEvaluator().evaluate(all_item, "bananana und Straße")
     assert all_result.passed is True
+    assert all_result.metadata["expected_fragments"] == ["ANA", "STRASSE"]
+    assert all_result.metadata["actual"] == "bananana und Straße"
+    assert all_result.metadata["normalization"]["case_sensitive"] is False
     assert all_result.metadata["fragment_matches"] == [True, True]
 
     any_item = _record("contains", {"expected_fragments": ["missing", "nana"], "match_mode": "any"})

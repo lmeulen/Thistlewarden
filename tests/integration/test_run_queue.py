@@ -79,6 +79,17 @@ def test_judge_only_model_is_excluded_from_target_aggregates(tmp_path: Path) -> 
 
     aggregates = app.extensions["aggregate_service"].for_run(run_id)
     models = app.extensions["run_view_service"].models(run_id)
+    judge_snapshot = app.extensions["run_queue"].judge_snapshot(run_id)
+    assert judge_snapshot is not None
+    assert (
+        not {
+            "prompt_template",
+            "template_version",
+            "threshold",
+            "rubric_json",
+        }
+        & judge_snapshot.keys()
+    )
     assert len(aggregates) == 1
     assert len(models) == 1
     assert models[0]["display_name"] == "M"

@@ -1,1 +1,66 @@
-{% extends "base.html" %}{% block title %}{{ result.case_id }} · {{ run.name }}{% endblock %}{% block content %}<div class="heading"><div><h1>Result {{ result.case_id }}</h1><p>{{ result.model.display_name }} · <span class="badge status-{{ result.status }}">{{ status_label(result.status) }}</span></p></div><a href="{{ url_for('gui.run_detail', run_id=run.id) }}">Back to run</a></div><div class="cards"><section><h2>Metrics</h2><dl><dt>Score</dt><dd>{{ display_metric(result.score, places=4) }}</dd><dt>Latency</dt><dd>{{ display_metric(result.target_latency_ms, suffix=' ms') }}</dd><dt>TTFT</dt><dd>{{ display_metric(result.ttft_ms, suffix=' ms') }}</dd><dt>TPS</dt><dd>{{ display_metric(result.tps) }}</dd><dt>Input/output tokens</dt><dd>{{ result.input_tokens if result.input_tokens is not none else 'Unknown' }} / {{ result.output_tokens if result.output_tokens is not none else 'Unknown' }}</dd><dt>Cached/reasoning tokens</dt><dd>{{ result.cached_input_tokens if result.cached_input_tokens is not none else 'Unknown' }} / {{ result.reasoning_tokens if result.reasoning_tokens is not none else 'Unknown' }}</dd><dt>Target cost</dt><dd>{{ display_money(result.target_cost) }}</dd></dl></section><section><h2>Evaluation</h2><pre class="data">{{ result.evaluation|tojson(indent=2) }}</pre></section></div><section class="panel"><h2>Prompt</h2>{% if result.case.system_prompt %}<h3>System</h3><pre class="content">{{ result.case.system_prompt }}</pre>{% endif %}<h3>User</h3><pre class="content">{{ result.case.prompt }}</pre><h3>Expected</h3><pre class="content">{{ result.case.expected_value or 'Not set' }}</pre><h3>Candidate answer</h3><pre class="content">{{ result.evaluation.candidate if result.evaluation.candidate is defined else 'Not available for older run.' }}</pre></section>{% endblock %}
+{% extends "base.html" %}
+{% macro evaluation_value(value) -%}
+  {% if value is mapping %}
+    <dl class="evaluation-details">
+      {% for key, item in value.items() %}
+        <dt>{{ key|replace('_', ' ')|title }}</dt><dd>{{ evaluation_value(item) }}</dd>
+      {% endfor %}
+    </dl>
+  {% elif value is sequence and value is not string %}
+    {% if value %}<ol class="evaluation-list">{% for item in value %}<li>{{ evaluation_value(item) }}</li>{% endfor %}</ol>{% else %}<span class="muted">None</span>{% endif %}
+  {% elif value is sameas true %}
+    <span class="badge status-passed">Yes</span>
+  {% elif value is sameas false %}
+    <span class="badge status-failed">No</span>
+  {% elif value is none %}
+    <span class="muted">Unknown</span>
+  {% else %}
+    <span class="evaluation-value">{{ value }}</span>
+  {% endif %}
+{%- endmacro %}
+{% block title %}{{ result.case_id }} · {{ run.name }}{% endblock %}
+{% block content %}
+<div class="heading">
+  <div><h1>Result {{ result.case_id }}</h1><p>{{ result.model.display_name }} · <span class="badge status-{{ result.status }}">{{ status_label(result.status) }}</span></p></div>
+  <a href="{{ url_for('gui.run_detail', run_id=run.id) }}#run-results">Back to run</a>
+</div>
+<div class="cards result-summary-cards">
+  <section>
+    <h2>Metrics</h2>
+    <dl><dt>Score</dt><dd>{{ display_metric(result.score, places=4) }}</dd><dt>Latency</dt><dd>{{ display_metric(result.target_latency_ms, suffix=' ms') }}</dd><dt>TTFT</dt><dd>{{ display_metric(result.ttft_ms, suffix=' ms') }}</dd><dt>TPS</dt><dd>{{ display_metric(result.tps) }}</dd><dt>Input/output tokens</dt><dd>{{ result.input_tokens if result.input_tokens is not none else 'Unknown' }} / {{ result.output_tokens if result.output_tokens is not none else 'Unknown' }}</dd><dt>Cached/reasoning tokens</dt><dd>{{ result.cached_input_tokens if result.cached_input_tokens is not none else 'Unknown' }} / {{ result.reasoning_tokens if result.reasoning_tokens is not none else 'Unknown' }}</dd><dt>Target cost</dt><dd>{{ display_money(result.target_cost) }}</dd></dl>
+  </section>
+  <section class="evaluation-panel">
+    <h2>Evaluation</h2>
+    <div class="evaluation-body">
+    <dl class="evaluation-summary">
+      {% if result.evaluation.method is defined %}<dt>Method</dt><dd>{{ result.evaluation.method|replace('_', ' ')|title }}</dd>{% endif %}
+      {% if result.evaluation.passed is defined %}<dt>Outcome</dt><dd><span class="badge status-{{ 'passed' if result.evaluation.passed else 'failed' }}">{{ 'Passed' if result.evaluation.passed else 'Failed' }}</span></dd>{% endif %}
+      {% if result.evaluation.score is defined %}<dt>Evaluation score</dt><dd>{{ display_metric(result.evaluation.score, places=4) }}</dd>{% endif %}
+      {% if result.evaluation.reason is defined %}<dt>Reason</dt><dd>{{ result.evaluation.reason }}</dd>{% endif %}
+    </dl>
+    {% set criteria = result.evaluation.criteria if result.evaluation.criteria is defined else result.evaluation.metadata.criteria if result.evaluation.metadata is defined and result.evaluation.metadata.criteria is defined else [] %}
+    {% if criteria %}
+      <h3>Criteria</h3>
+      <div class="evaluation-criteria">
+        {% for criterion in criteria %}<article><strong>{{ criterion.id|replace('_', ' ')|title }}</strong>{% if criterion.score is defined %}<span>Score {{ display_metric(criterion.score, places=3) }}</span>{% endif %}{% if criterion.reason is defined %}<p>{{ criterion.reason }}</p>{% endif %}</article>{% endfor %}
+      </div>
+    {% endif %}
+    {% if result.evaluation.metadata is defined and result.evaluation.metadata %}
+      <h3>Details</h3>
+      {{ evaluation_value(result.evaluation.metadata) }}
+    {% elif result.evaluation.method is not defined and result.evaluation %}
+      <h3>Details</h3>
+      {{ evaluation_value(result.evaluation) }}
+    {% endif %}
+    <details class="raw-evaluation"><summary>Raw evaluation JSON</summary><pre class="data">{{ result.evaluation|tojson(indent=2) }}</pre></details>
+    </div>
+  </section>
+</div>
+<section class="panel">
+  <h2>Prompt</h2>
+  {% if result.case.system_prompt %}<h3>System</h3><pre class="content">{{ result.case.system_prompt }}</pre>{% endif %}
+  <h3>User</h3><pre class="content">{{ result.case.prompt }}</pre>
+  <h3>Expected</h3><pre class="content">{{ result.case.expected_value or 'Not set' }}</pre>
+  <h3>Candidate answer</h3><pre class="content">{{ result.evaluation.candidate if result.evaluation.candidate is defined else 'Not available for older run.' }}</pre>
+</section>
+{% endblock %}

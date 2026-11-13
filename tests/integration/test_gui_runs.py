@@ -134,6 +134,8 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         and "21 ms" in text
         and ">10</td>" in text
         and "<td>Model M</td><td>1.00</td><td>0.80</td>" in text
+        and 'id="run-results"' in text
+        and f'action="/runs/{run_id}#run-results"' in text
         and 'class="filter-grid result-filter-grid"' in text
         and 'name="judge_type"' in text
         and 'value="exact_match" selected' in text
@@ -159,9 +161,12 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     assert "Cost versus score" in model_table
     assert 'class="scatter-chart"' in model_table
     assert 'class="scatter-point"' in model_table
-    assert "Model M: cost 0.000, score 1.00" in model_table
-    assert "weighted score from 0.90 to 1.00 on Y-axis" in model_table
-    assert ">0.90</text>" in model_table
+    assert "Model M: cost 0.000001, score 1.000" in model_table
+    assert (
+        "total known cost from 0.000000 to 0.000002 on X-axis and weighted score from "
+        "0.900 to 1.000 on Y-axis"
+    ) in model_table
+    assert ">0.900</text>" in model_table
     assert "0.000<br><small>1/1 known</small>" in text
     assert (
         text.index("Run overview")
@@ -179,6 +184,11 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         connection.close()
     detail = client.get(f"/runs/{run_id}/resultaten/{result_id}").get_data(as_text=True)
     assert "secret prompt" in detail and "Candidate answer" in detail and "yes" in detail
+    assert 'class="evaluation-panel"' in detail
+    assert 'class="evaluation-body"' in detail
+    assert "<dt>Outcome</dt>" in detail and ">Passed</span>" in detail
+    assert "<h3>Criteria</h3>" in detail and "Correct" in detail
+    assert "Raw evaluation JSON" in detail
     assert "api_key_secret_id" not in detail
 
     overview = client.get("/runs").get_data(as_text=True)

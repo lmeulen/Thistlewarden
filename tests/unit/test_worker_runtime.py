@@ -7,9 +7,11 @@ from decimal import Decimal
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+
 from evaluator.endpoints import EndpointInput, EndpointRecord
 from evaluator.models import ModelProfileInput, ModelProfileRecord
-from evaluator.worker_runtime import ModelProfileTester, WorkerRuntime
+from evaluator.worker_runtime import ModelProfileTester, WorkerRuntime, _apply_judge_overrides
 
 
 class ImmediateExecutor:
@@ -100,6 +102,40 @@ def test_model_tester_uses_complete_persisted_specification() -> None:
         "system_prompt": ModelProfileTester.TEST_SYSTEM_PROMPT,
         "diagnostic_mode": True,
     }
+
+
+def test_judge_reasoning_override_replaces_temperature() -> None:
+    profile = ModelProfileInput(
+        model_id="reasoner",
+        display_name="Reasoner",
+        temperature=Decimal("0.4"),
+        reasoning_field_path="reasoning.effort",
+        reasoning_value="low",
+        max_tokens=100,
+    )
+
+    overridden = _apply_judge_overrides(
+        profile,
+        {
+            "temperature_enabled": 0,
+            "reasoning_value": "high",
+            "max_output_tokens": 250,
+        },
+    )
+
+    assert overridden.temperature is None
+    assert overridden.reasoning_value == "high"
+    assert overridden.max_tokens == 250
+
+
+def test_judge_reasoning_override_requires_model_binding() -> None:
+    profile = ModelProfileInput(model_id="m", display_name="M")
+
+    with pytest.raises(RuntimeError, match="no reasoning field path"):
+        _apply_judge_overrides(
+            profile,
+            {"temperature_enabled": 0, "reasoning_value": "high"},
+        )
 
 
 def test_worker_runtime_is_bounded_and_stops_idle_threads() -> None:

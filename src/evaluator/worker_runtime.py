@@ -16,13 +16,8 @@ from uuid import UUID, uuid4
 from evaluator.costs import PricingSnapshot, TokenUsage, calculate_cost
 from evaluator.endpoints import SQLiteEndpointRepository
 from evaluator.evaluators import EvaluationResult
-from evaluator.golden_sets import LlmJudgeConfig
-from evaluator.judges import (
-    JudgeProfileInput,
-    build_judge_prompt,
-    parse_judge_output,
-    resolve_rubric,
-)
+from evaluator.golden_sets import LlmJudgeConfig, get_judge_preset
+from evaluator.judges import build_judge_prompt, parse_judge_output, resolve_rubric
 from evaluator.logging_config import log_event
 from evaluator.models import ModelProfileInput, ModelProfileRecord, PricingInput
 from evaluator.provider import OpenAIProviderClient
@@ -32,11 +27,6 @@ from evaluator.streaming import OpenAIStreamingClient, StreamingCompletionResult
 from evaluator.workers import TargetOutcome, WorkerPipeline
 
 _LOG = logging.getLogger(__name__)
-
-
-def _effective_judge_threshold(config: LlmJudgeConfig, profile_threshold: Any) -> Decimal:
-    """Prefer a case-specific threshold and otherwise use the snapshotted judge profile."""
-    return config.threshold if config.threshold is not None else Decimal(str(profile_threshold))
 
 
 def _profile_from_snapshot(model: dict[str, Any]) -> ModelProfileInput:
@@ -72,6 +62,23 @@ def _profile_from_snapshot(model: dict[str, Any]) -> ModelProfileInput:
         pricing=PricingInput.model_validate(pricing_values),
         active=bool(model.get("active", True)),
     )
+
+
+def _apply_judge_overrides(
+    profile: ModelProfileInput, snapshot: dict[str, Any]
+) -> ModelProfileInput:
+    updates: dict[str, Any] = {}
+    if snapshot.get("temperature_enabled"):
+        updates["temperature"] = Decimal(str(snapshot["temperature"]))
+        updates["reasoning_value"] = None
+    elif snapshot.get("reasoning_value") is not None:
+        if profile.reasoning_field_path is None:
+            raise RuntimeError("judge model has no reasoning field path configured")
+        updates["temperature"] = None
+        updates["reasoning_value"] = snapshot["reasoning_value"]
+    if snapshot.get("max_output_tokens") is not None:
+        updates["max_tokens"] = snapshot["max_output_tokens"]
+    return profile.model_copy(update=updates)
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,42 +265,18 @@ class JudgeCaller:
         endpoint = self._endpoints.get(UUID(model["endpoint_id"]))
         if endpoint is None or not endpoint.data.active:
             raise RuntimeError("judge endpoint unavailable")
-        profile = _profile_from_snapshot(model).model_copy(
-            update={
-                "temperature": Decimal(str(snapshot["temperature"])),
-                "max_tokens": snapshot.get("max_output_tokens"),
-            }
-        )
+        profile = _apply_judge_overrides(_profile_from_snapshot(model), snapshot)
         config = LlmJudgeConfig.model_validate(json.loads(case["evaluator_config_json"]))
-        rubric = resolve_rubric(
-            JudgeProfileInput.model_validate(
-                {
-                    "name": snapshot["name"],
-                    "model_profile_id": snapshot["model_profile_id"],
-                    "prompt_template": snapshot["prompt_template"],
-                    "template_version": snapshot["template_version"],
-                    "threshold": snapshot["threshold"],
-                    "rubric": json.loads(snapshot["rubric_json"]),
-                    "temperature": snapshot["temperature"],
-                    "max_output_tokens": snapshot["max_output_tokens"],
-                    "is_global_default": bool(snapshot["is_global_default"]),
-                    "active": bool(snapshot["active"]),
-                }
-            ),
-            config,
-        )
+        preset = get_judge_preset(config.preset_id, config.preset_version)
+        rubric = resolve_rubric(config)
         prompt = build_judge_prompt(
             prompt=case["prompt"],
-            expected_answer=(
-                config.expected_value
-                if config.expected_value is not None
-                else case.get("expected_answer")
-            ),
+            expected_answer=config.expected_value,
             rubric=rubric,
             context=config.context,
             candidate=candidate,
         )
-        threshold = _effective_judge_threshold(config, snapshot["threshold"])
+        threshold = preset.threshold
         for attempt in range(2):
             output = self._executor.execute(
                 endpoint,
@@ -302,7 +285,21 @@ class JudgeCaller:
                 cancelled=self._cancelled,
             )
             try:
-                return parse_judge_output(output, rubric, threshold)
+                result = parse_judge_output(output, rubric, threshold)
+                return result.model_copy(
+                    update={
+                        "metadata": {
+                            **result.metadata,
+                            "preset_id": preset.id,
+                            "preset_version": preset.version,
+                            "preset_name": preset.name,
+                            "preset_description": preset.description,
+                            "expected_value": config.expected_value,
+                            "context": config.context,
+                            "actual": candidate,
+                        }
+                    }
+                )
             except Exception:
                 if attempt == 1:
                     raise

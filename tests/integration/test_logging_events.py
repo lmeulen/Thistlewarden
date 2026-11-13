@@ -129,8 +129,7 @@ def test_judge_and_gate_events_are_post_commit_and_content_free(app, caplog) -> 
             json={
                 "name": "Main judge",
                 "model_profile_id": model["id"],
-                "prompt_template": "forbidden-template-content",
-                "rubric": [{"id": "correct", "description": "forbidden-rubric-content"}],
+                "temperature": "0",
             },
         )
     assert judge_response.status_code == 201

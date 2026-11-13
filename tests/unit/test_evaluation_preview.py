@@ -77,7 +77,7 @@ def test_preview_rejects_llm_judge_without_calling_provider() -> None:
     with pytest.raises(ValidationApiError, match="requires a run"):
         EvaluationPreviewService(max_candidate_chars=100).evaluate(
             method="llm_judge",
-            config={"rubric": [{"id": "correct", "description": "Correct"}]},
+            config={"preset_id": "general-quality", "preset_version": "1.0"},
             expected_answer=None,
             candidate="candidate",
         )

@@ -43,6 +43,16 @@ def test_product_branding_is_consistent() -> None:
         assert "LLMEvaluator" + " Evaluator" not in text, path
 
 
+def test_quality_gate_table_separates_model_groups() -> None:
+    template = (ROOT / "src/evaluator/templates/run_detail.html").read_text(encoding="utf-8")
+    css = (ROOT / "src/evaluator/static/app.css").read_text(encoding="utf-8")
+
+    assert 'class="quality-gates-table"' in template
+    assert "gate.model_snapshot_id != loop.previtem.model_snapshot_id" in template
+    assert 'class="gate-model-separator"' in template
+    assert ".quality-gates-table tr.gate-model-separator>td{border-top:3px solid #526573}" in css
+
+
 def test_release_configuration_validates_against_application_schema() -> None:
     payload = json.loads((ROOT / "examples/release-configuration.json").read_text(encoding="utf-8"))
     bundle = ConfigurationBundle.model_validate(payload)

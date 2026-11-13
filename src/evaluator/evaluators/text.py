@@ -40,6 +40,9 @@ class ExactMatchEvaluator:
             passed=passed,
             reason="Normalized values match." if passed else "Normalized values do not match.",
             metadata={
+                "expected": expected,
+                "actual": candidate,
+                "normalization": options,
                 "normalized_expected": normalized_expected,
                 "normalized_candidate": normalized_candidate,
             },
@@ -77,6 +80,9 @@ class ContainsEvaluator:
                 else "Required fragment condition did not match."
             ),
             metadata={
+                "expected_fragments": config.expected_fragments,
+                "actual": candidate,
+                "normalization": options,
                 "match_mode": config.match_mode,
                 "normalized_candidate": normalized_candidate,
                 "normalized_fragments": normalized_fragments,

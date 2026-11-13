@@ -252,26 +252,16 @@
           <textarea id="llm-context" rows="4"></textarea>
         </div>
       </div>
-      <div class="field-with-info"><label for="llm-threshold">Pass threshold</label><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-llm-threshold" aria-label="About judge threshold">i</button><span id="info-llm-threshold" class="info-content" role="tooltip" hidden>Score from 0 to 1 required to pass. Empty uses judge-profile threshold.</span></span></div>
-      <input id="llm-threshold" type="number" min="0" max="1" step="any">
-      <div class="field-with-info rubric-heading"><strong>Rubric weights</strong><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-llm-rubrics" aria-label="About rubric weights">i</button><span id="info-llm-rubrics" class="info-content" role="tooltip" hidden>Higher weight gives criterion more influence. Set weight to 0 to disable it.</span></span></div>
-      <div class="rubric-grid">
-        {% for id,label,description,weight in [
-          ('factual_correctness','Factual correctness','Claims and conclusions are factually correct.','2'),
-          ('completeness','Completeness','Answer covers all requested points.','1'),
-          ('relevance','Relevance','Answer directly addresses the request without irrelevant content.','1'),
-          ('instruction_compliance','Instruction compliance','Answer follows explicit instructions, constraints, format, and language.','1'),
-          ('consistency','Internal consistency','Answer contains no internal contradictions.','1'),
-          ('clarity','Clarity','Answer is understandable, structured, and unambiguous.','1'),
-          ('groundedness','Groundedness','Claims are supported by supplied context or reference material.','0'),
-          ('safety','Safety','Answer avoids harmful, prohibited, or inappropriate guidance.','0')
-        ] %}
-        <div class="rubric-row">
-          <div class="field-with-info"><label for="llm-rubric-{{ id }}">{{ label }}</label><span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-llm-{{ id }}" aria-label="About {{ label }}">i</button><span id="info-llm-{{ id }}" class="info-content" role="tooltip" hidden>{{ description }}</span></span></div>
-          <input id="llm-rubric-{{ id }}" class="llm-rubric-weight" data-rubric-id="{{ id }}" data-description="{{ description }}" data-default-weight="{{ weight }}" type="number" min="0" step="any" value="{{ weight }}">
-        </div>
-        {% endfor %}
-      </div>
+      <label for="llm-preset">Predefined judge
+        <select id="llm-preset">
+          {% for preset in judge_presets %}
+          <option value="{{ preset.id }}@{{ preset.version }}">{{ preset.name }} · v{{ preset.version }} · threshold {{ preset.threshold }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <p id="llm-preset-description" class="help llm-preset-description"></p>
+      <div id="llm-preset-details" class="content llm-preset-details"></div>
+      <p class="help llm-preset-help">Preset rubric and threshold are versioned and cannot be changed by a test case.</p>
     </fieldset>
     <fieldset id="json-schema-fields" hidden>
       <legend>JSON Schema settings</legend>
@@ -286,6 +276,10 @@
           <label class="check"><input type="checkbox" id="json-schema-code-fence"> Allow Markdown code fence</label>
           <span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-json-schema-fence" aria-label="About Markdown code fences">i</button><span id="info-json-schema-fence" class="info-content" role="tooltip" hidden>Accepts one complete unlabeled or json-labelled fenced block.</span></span>
         </div>
+        <div class="field-with-info json-schema-checkbox">
+          <label class="check"><input type="checkbox" id="json-schema-case-sensitive"> Case-sensitive expected value</label>
+          <span class="info-popup"><button type="button" class="info-button" aria-expanded="false" aria-controls="info-json-schema-case-sensitive" aria-label="About JSON expected-value case sensitivity">i</button><span id="info-json-schema-case-sensitive" class="info-content" role="tooltip" hidden>Controls string values and object keys when comparing with expected value. Schema validation remains case-sensitive.</span></span>
+        </div>
       </div>
       <div class="field-with-info expected-toggle">
         <label class="check"><input type="checkbox" id="json-schema-use-expected"> Require exact expected value</label>
@@ -299,7 +293,7 @@
     </fieldset>
     <p id="config-mode-error" class="message error" role="alert" hidden></p>
   </div>
-  <p id="config-help" class="help wide">Changing evaluation method replaces configuration with valid example showing available fields. You can edit example before saving. Exact match requires <code>expected_value</code>. LLM judge requires <code>expected_value</code> or an item rubric.</p>
+  <p id="config-help" class="help wide">Changing evaluation method replaces configuration with a valid example. Exact match requires <code>expected_value</code>. LLM judge accepts only a predefined, versioned judge preset plus its permitted reference and context inputs.</p>
   <section class="panel wide" aria-labelledby="output-tester-title">
     <h2 id="output-tester-title">Test evaluator</h2>
     <p>Verify candidate output against current unsaved evaluator settings. Nothing is saved.</p>
@@ -382,12 +376,15 @@
   var showLlmJson = document.getElementById('show-llm-json');
   var llmExpectedValue = document.getElementById('llm-expected-value');
   var llmContext = document.getElementById('llm-context');
-  var llmThreshold = document.getElementById('llm-threshold');
-  var llmRubricWeights = Array.from(document.querySelectorAll('.llm-rubric-weight'));
+  var llmPreset = document.getElementById('llm-preset');
+  var llmPresetDescription = document.getElementById('llm-preset-description');
+  var llmPresetDetails = document.getElementById('llm-preset-details');
+  var judgePresets = {{ judge_presets_json|tojson }};
   var showJsonSchemaForm = document.getElementById('show-json-schema-form');
   var showJsonSchemaJson = document.getElementById('show-json-schema-json');
   var jsonSchemaSchema = document.getElementById('json-schema-schema');
   var jsonSchemaCodeFence = document.getElementById('json-schema-code-fence');
+  var jsonSchemaCaseSensitive = document.getElementById('json-schema-case-sensitive');
   var jsonSchemaUseExpected = document.getElementById('json-schema-use-expected');
   var jsonSchemaExpectedWrap = document.getElementById('json-schema-expected-wrap');
   var jsonSchemaExpected = document.getElementById('json-schema-expected');
@@ -633,17 +630,29 @@
     showNumericForm.setAttribute('aria-pressed', String(useForm));
     showNumericJson.setAttribute('aria-pressed', String(!useForm));
   }
-  function llmFieldsToConfig() {
-    var rubric = llmRubricWeights.map(function (field) {
-      return {id: field.dataset.rubricId, description: field.dataset.description, weight: field.value || '0'};
+  function selectedJudgePreset() {
+    var parts = llmPreset.value.split('@');
+    return judgePresets.find(function (preset) {
+      return preset.id === parts[0] && preset.version === parts[1];
     });
+  }
+  function renderJudgePreset() {
+    var preset = selectedJudgePreset();
+    if (!preset) return;
+    llmPresetDescription.textContent = preset.description;
+    llmPresetDetails.textContent = 'Threshold: ' + preset.threshold + '\n' + preset.rubric.map(function (criterion) {
+      return criterion.id + ' (weight ' + criterion.weight + '): ' + criterion.description;
+    }).join('\n');
+  }
+  function llmFieldsToConfig() {
+    var preset = selectedJudgePreset();
     config.value = JSON.stringify({
+      preset_id: preset.id,
+      preset_version: preset.version,
       expected_value: llmExpectedValue.value || null,
-      rubric: rubric,
-      rubric_mode: 'replace',
-      threshold: llmThreshold.value || null,
       context: llmContext.value || null
     }, null, 2);
+    renderJudgePreset();
     clearConfigError();
   }
   function configToLlmFields() {
@@ -660,20 +669,16 @@
       configModeError.hidden = false;
       return false;
     }
-    var rubric = Array.isArray(value.rubric) ? value.rubric : [];
-    var knownIds = llmRubricWeights.map(function (field) { return field.dataset.rubricId; });
-    if (rubric.some(function (criterion) { return !criterion || !knownIds.includes(criterion.id); })) {
-      configModeError.textContent = 'Custom rubric criteria can only be edited in JSON mode.';
+    var presetKey = String(value.preset_id || '') + '@' + String(value.preset_version || '');
+    if (!Array.from(llmPreset.options).some(function (option) { return option.value === presetKey; })) {
+      configModeError.textContent = 'Select a known predefined judge preset.';
       configModeError.hidden = false;
       return false;
     }
+    llmPreset.value = presetKey;
     llmExpectedValue.value = typeof value.expected_value === 'string' ? value.expected_value : '';
     llmContext.value = typeof value.context === 'string' ? value.context : '';
-    llmThreshold.value = value.threshold == null ? '' : String(value.threshold);
-    llmRubricWeights.forEach(function (field) {
-      var criterion = rubric.find(function (item) { return item.id === field.dataset.rubricId; });
-      field.value = criterion ? String(criterion.weight) : field.dataset.defaultWeight;
-    });
+    renderJudgePreset();
     clearConfigError();
     return true;
   }
@@ -703,7 +708,11 @@
       jsonSchemaFieldError.hidden = false;
       return false;
     }
-    var value = {schema: schema.value, allow_markdown_code_fence: jsonSchemaCodeFence.checked};
+    var value = {
+      schema: schema.value,
+      allow_markdown_code_fence: jsonSchemaCodeFence.checked,
+      case_sensitive: jsonSchemaCaseSensitive.checked
+    };
     if (jsonSchemaUseExpected.checked) value.expected_value = expected.value;
     config.value = JSON.stringify(value, null, 2);
     jsonSchemaFieldError.hidden = true;
@@ -727,6 +736,7 @@
     }
     jsonSchemaSchema.value = JSON.stringify(value.schema, null, 2);
     jsonSchemaCodeFence.checked = value.allow_markdown_code_fence === true;
+    jsonSchemaCaseSensitive.checked = value.case_sensitive !== false;
     jsonSchemaUseExpected.checked = Object.prototype.hasOwnProperty.call(value, 'expected_value');
     jsonSchemaExpected.value = jsonSchemaUseExpected.checked
       ? JSON.stringify(value.expected_value, null, 2) : '';
@@ -820,12 +830,15 @@
   [jsonSchemaSchema, jsonSchemaExpected].forEach(function (field) {
     field.addEventListener('input', function () { jsonSchemaFieldsToConfig(); clearResult(); });
   });
-  jsonSchemaCodeFence.addEventListener('change', function () {
-    jsonSchemaFieldsToConfig(); clearResult();
+  [jsonSchemaCodeFence, jsonSchemaCaseSensitive].forEach(function (field) {
+    field.addEventListener('change', function () {
+      jsonSchemaFieldsToConfig(); clearResult();
+    });
   });
-  [llmExpectedValue, llmContext, llmThreshold].concat(llmRubricWeights).forEach(function (field) {
+  [llmExpectedValue, llmContext].forEach(function (field) {
     field.addEventListener('input', function () { llmFieldsToConfig(); clearResult(); });
   });
+  llmPreset.addEventListener('change', function () { llmFieldsToConfig(); clearResult(); });
   [numericExpectedValue, numericAbsoluteTolerance, numericRelativeTolerance].forEach(function (field) {
     field.addEventListener('input', function () { numericFieldsToConfig(); clearResult(); });
   });

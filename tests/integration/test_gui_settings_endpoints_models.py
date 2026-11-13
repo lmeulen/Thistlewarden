@@ -134,7 +134,6 @@ def test_endpoint_delete_requires_matching_name(app) -> None:
         {
             "name": "Judge to delete",
             "model_profile_id": str(model.id),
-            "rubric": [{"id": "quality", "weight": "1", "description": "Overall quality"}],
         }
     )
     connection = app.extensions["database_factory"].connect()
