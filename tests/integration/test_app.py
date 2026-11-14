@@ -78,17 +78,20 @@ def test_index_renders_english_page_with_empty_dashboard(app) -> None:
 def test_header_links_open_github_and_manual_in_new_tabs(app) -> None:
     page = app.test_client().get("/").get_data(as_text=True)
     github = (
-        '<a href="https://github.com/lmeulen/Thistlewarden" target="_blank" '
-        'rel="noopener noreferrer">GitHub'
+        '<a class="header-icon" href="https://github.com/lmeulen/Thistlewarden" '
+        'target="_blank" rel="noopener noreferrer" title="GitHub project">'
     )
     manual = (
-        '<a href="https://github.com/lmeulen/Thistlewarden/blob/master/docs/manual/README.md" '
-        'target="_blank" rel="noopener noreferrer">Manual'
+        '<a class="header-icon" href="https://github.com/lmeulen/Thistlewarden/blob/'
+        'master/docs/manual/README.md" target="_blank" rel="noopener noreferrer" '
+        'title="User manual">'
     )
 
     assert github in page
     assert manual in page
-    assert page.count("(opens in a new tab)") == 2
+    assert "GitHub project (opens in a new tab)" in page
+    assert "User manual (opens in a new tab)" in page
+    assert page.count('<svg viewBox="0 0 24 24" aria-hidden="true">') == 2
     assert page.index(github) < page.index(manual) < page.index('id="theme-toggle"')
 
 
@@ -96,7 +99,10 @@ def test_dark_theme_controls_and_persistence_hooks_render(app) -> None:
     page = app.test_client().get("/").get_data(as_text=True)
 
     assert 'id="theme-toggle" type="button" aria-pressed="false"' in page
-    assert '<span id="theme-label">Dark theme</span>' in page
+    assert '<svg class="theme-sun"' in page
+    assert '<svg class="theme-moon"' in page
+    assert '<span class="sr-only" id="theme-label">Dark theme</span>' in page
+    assert "button.setAttribute('aria-label',dark?'Use light theme':'Use dark theme')" in page
     assert "localStorage.getItem('thistlewarden-theme')" in page
     assert "localStorage.setItem('thistlewarden-theme',theme)" in page
     assert "prefers-color-scheme: dark" in page
