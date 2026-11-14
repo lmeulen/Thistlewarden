@@ -43,10 +43,10 @@ def test_offline_release_flow_all_evaluators_two_models_and_exports(tmp_path: Pa
             (ROOT / "examples/release-configuration.json").read_text(encoding="utf-8")
         )
         endpoint = bundle["endpoints"][0]["data"]
-        endpoint["completions_url"] = f"http://localhost:{server.server_port}/v1/chat/completions"
-        endpoint["models_url"] = f"http://localhost:{server.server_port}/v1/models"
-        endpoint["trusted_internal_http"] = False
-        endpoint["security_warning_confirmed"] = False
+        # Match the IPv4-only server. Windows resolves localhost to ::1 first, adding a slow
+        # failed connection attempt to every provider call before falling back to 127.0.0.1.
+        endpoint["completions_url"] = f"http://127.0.0.1:{server.server_port}/v1/chat/completions"
+        endpoint["models_url"] = f"http://127.0.0.1:{server.server_port}/v1/models"
         exchange = ConfigurationExchangeService(app.extensions["database_factory"])
         exchange.import_bundle(bundle, "merge", preview=False)
         queue = app.extensions["run_queue"]
