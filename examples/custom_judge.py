@@ -30,13 +30,9 @@ class ConciseJudge:
     api_version: ClassVar[str] = JUDGE_EXTENSION_API_VERSION
     configuration_model: ClassVar[type[BaseModel]] = ConciseJudgeConfiguration
 
-    def evaluate(
-        self, request: JudgeEvaluationRequest, provider: JudgeProvider
-    ) -> JudgeDecision:
+    def evaluate(self, request: JudgeEvaluationRequest, provider: JudgeProvider) -> JudgeDecision:
         config = ConciseJudgeConfiguration.model_validate(request.configuration)
-        criteria = "\n".join(
-            f"- {item.id}: {item.description}" for item in request.preset.rubric
-        )
+        criteria = "\n".join(f"- {item.id}: {item.description}" for item in request.preset.rubric)
         completion = provider.complete(
             system_prompt=config.instruction,
             prompt=(
