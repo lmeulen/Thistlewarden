@@ -261,6 +261,9 @@ def _judge_payload() -> dict[str, Any]:
     return {
         "name": request.form.get("name", ""),
         "model_profile_id": request.form.get("model_profile_id", ""),
+        "implementation_id": request.form.get("implementation_id", "openai-compatible"),
+        "implementation_version": request.form.get("implementation_version", "1.0"),
+        "implementation_config": _json_field("implementation_config"),
         "temperature": _decimal("temperature"),
         "reasoning_value": _optional("reasoning_value"),
         "max_output_tokens": _integer("max_output_tokens"),
@@ -835,7 +838,12 @@ def judge_new() -> str | Response:
             return redirect(url_for("gui.judge_edit", profile_id=record.id))
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
-    return render_template("judge_form.html", judge=None, models=_all_models())
+    return render_template(
+        "judge_form.html",
+        judge=None,
+        models=_all_models(),
+        implementations=current_app.extensions["judge_implementation_registry"].identities(),
+    )
 
 
 @gui.route("/judges/<uuid:profile_id>", methods=["GET", "POST"])
@@ -849,7 +857,12 @@ def judge_edit(profile_id: UUID) -> str | Response:
             return redirect(url_for("gui.judge_edit", profile_id=profile_id))
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
-    return render_template("judge_form.html", judge=judge, models=_all_models())
+    return render_template(
+        "judge_form.html",
+        judge=judge,
+        models=_all_models(),
+        implementations=current_app.extensions["judge_implementation_registry"].identities(),
+    )
 
 
 @gui.post("/judges/<uuid:profile_id>/verwijderen")

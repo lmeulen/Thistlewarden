@@ -68,6 +68,7 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (12, "add_model_parameter_bindings"),
             (13, "drop_legacy_llm_judge_test_cases"),
             (14, "add_judge_inference_overrides"),
+            (15, "add_versioned_judge_implementations"),
         ]
     finally:
         connection.close()
@@ -87,7 +88,7 @@ def test_migration_14_preserves_legacy_temperature_and_active_snapshots(tmp_path
     finally:
         connection.close()
 
-    assert MigrationManager(factory).migrate() == 14
+    assert MigrationManager(factory, migrations=MIGRATIONS[:14]).migrate() == 14
     connection = factory.connect()
     try:
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(judge_profiles)")}
@@ -99,6 +100,39 @@ def test_migration_14_preserves_legacy_temperature_and_active_snapshots(tmp_path
     assert {"temperature_enabled", "reasoning_value"} <= columns
     assert snapshot["temperature_enabled"] == 1
     assert snapshot["reasoning_value"] is None
+
+
+def test_migration_15_versions_profiles_and_historical_snapshots(tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "app.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:14]).migrate()
+    connection = factory.connect()
+    try:
+        connection.execute(
+            "INSERT INTO runs(id,name,golden_set_id,status,created_at,recovery_warning,"
+            "judge_snapshot_json) VALUES (?,?,?,?,?,?,?)",
+            ("r", "Run", "s", "completed", "2026-01-01T00:00:00Z", 0, '{"name":"J"}'),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert MigrationManager(factory).migrate() == 15
+    connection = factory.connect()
+    try:
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(judge_profiles)")}
+        snapshot = json.loads(
+            connection.execute("SELECT judge_snapshot_json FROM runs WHERE id='r'").fetchone()[0]
+        )
+    finally:
+        connection.close()
+    assert {
+        "implementation_id",
+        "implementation_version",
+        "implementation_config_json",
+    } <= columns
+    assert snapshot["implementation_id"] == "openai-compatible"
+    assert snapshot["implementation_version"] == "1.0"
+    assert snapshot["implementation_config"] == {}
 
 
 def test_version_one_to_two_preserves_existing_data(tmp_path: Path) -> None:

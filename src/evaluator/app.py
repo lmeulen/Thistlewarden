@@ -25,7 +25,12 @@ from evaluator.evaluation_preview import EvaluationPreviewService
 from evaluator.gates import QualityGateService
 from evaluator.golden_sets import GoldenSetLimits, GoldenSetService, SQLiteGoldenSetRepository
 from evaluator.gui import csrf_token, gui
-from evaluator.judges import JudgeProfileService, SQLiteJudgeProfileRepository
+from evaluator.judge_extensions import JudgeImplementationRegistry, RegistryHook
+from evaluator.judges import (
+    JudgeProfileService,
+    SQLiteJudgeProfileRepository,
+    register_builtin_judge,
+)
 from evaluator.logging_config import configure_logging, log_event
 from evaluator.migrations import MigrationManager
 from evaluator.models import ModelProfileService, SQLiteModelProfileRepository
@@ -68,6 +73,7 @@ def create_app(
     settings_repository: SettingsRepository | None = None,
     settings_environment: Mapping[str, str] | None = None,
     initialize_database: bool | None = None,
+    register_judges: RegistryHook | None = None,
 ) -> Flask:
     """Create the web application without touching runtime data paths."""
 
@@ -107,6 +113,11 @@ def create_app(
     evaluation_preview_service = EvaluationPreviewService(
         max_candidate_chars=resolved_settings.values.max_model_answer_chars
     )
+    judge_registry = JudgeImplementationRegistry()
+    register_builtin_judge(judge_registry)
+    if register_judges is not None:
+        register_judges(judge_registry)
+    judge_registry.freeze()
     endpoint_limiter = CentralEndpointLimiter()
     provider_call_executor = ProviderCallExecutor(endpoint_limiter, RetryPolicy())
     secret_repository: SQLiteSecretRepository | None = None
@@ -148,14 +159,21 @@ def create_app(
         )
         cost_service = CostService(SQLiteCostRepository(database_factory), model_profile_repository)
         dashboard_service = DashboardService(database_factory)
-        judge_profile_service = JudgeProfileService(SQLiteJudgeProfileRepository(database_factory))
-        run_queue = RunQueue(
-            database_factory, max_profiles=resolved_settings.values.max_model_profiles_per_run
+        judge_profile_service = JudgeProfileService(
+            SQLiteJudgeProfileRepository(database_factory), judge_registry
         )
-        # UTC lease recovery runs before any worker can start.
+        run_queue = RunQueue(
+            database_factory,
+            max_profiles=resolved_settings.values.max_model_profiles_per_run,
+            judge_registry=judge_registry,
+        )
+        # Recovery and extension compatibility checks run before any worker can start.
+        run_queue.cancel_runs_with_unavailable_judges()
         run_queue.recover_expired()
         aggregate_service = AggregateService(database_factory)
-        configuration_exchange_service = ConfigurationExchangeService(database_factory)
+        configuration_exchange_service = ConfigurationExchangeService(
+            database_factory, judge_registry
+        )
         run_export_service = RunExportService(database_factory)
         run_view_service = RunViewService(database_factory)
         quality_gate_service = QualityGateService(database_factory, aggregate_service)
@@ -198,6 +216,7 @@ def create_app(
             judge_client,
             provider_call_executor,
             worker_cancelled,
+            judge_registry,
         )
 
         def cancel_provider_calls() -> None:
@@ -250,6 +269,7 @@ def create_app(
     app.extensions["settings"] = resolved_settings
     app.extensions["settings_service"] = settings_service
     app.extensions["evaluation_preview_service"] = evaluation_preview_service
+    app.extensions["judge_implementation_registry"] = judge_registry
     app.extensions["endpoint_limiter"] = endpoint_limiter
     app.extensions["provider_call_executor"] = provider_call_executor
     app.extensions["target_call_executor"] = provider_call_executor

@@ -385,6 +385,31 @@ def _migration_14(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_15(connection: sqlite3.Connection) -> None:
+    """Version judge implementations and preserve complete semantic configuration."""
+
+    connection.execute(
+        "ALTER TABLE judge_profiles ADD COLUMN implementation_id "
+        "TEXT NOT NULL DEFAULT 'openai-compatible'"
+    )
+    connection.execute(
+        "ALTER TABLE judge_profiles ADD COLUMN implementation_version TEXT NOT NULL DEFAULT '1.0'"
+    )
+    connection.execute(
+        "ALTER TABLE judge_profiles ADD COLUMN implementation_config_json "
+        "TEXT NOT NULL DEFAULT '{}'"
+    )
+    connection.execute(
+        """UPDATE runs SET judge_snapshot_json=json_set(
+            judge_snapshot_json,
+            '$.implementation_id','openai-compatible',
+            '$.implementation_version','1.0',
+            '$.implementation_config',json('{}')
+        ) WHERE judge_snapshot_json IS NOT NULL
+        AND json_extract(judge_snapshot_json,'$.implementation_id') IS NULL"""
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "create_settings", _migration_1),
     Migration(2, "add_settings_updated_at", _migration_2),
@@ -400,6 +425,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(12, "add_model_parameter_bindings", _migration_12),
     Migration(13, "drop_legacy_llm_judge_test_cases", _migration_13),
     Migration(14, "add_judge_inference_overrides", _migration_14),
+    Migration(15, "add_versioned_judge_implementations", _migration_15),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

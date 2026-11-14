@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 from evaluator.evaluators import EvaluationResult, EvaluatorRegistry
 from evaluator.gates import QualityGateService
 from evaluator.golden_sets import GoldenSetItemInput, GoldenSetItemRecord
+from evaluator.judge_extensions import JudgeExtensionError
 from evaluator.logging_config import log_context, log_event
 from evaluator.runs import JobLease, LeaseLost, RunQueue
 from evaluator.time import utc_now
@@ -124,13 +125,16 @@ class WorkerPipeline:
                     evaluator_method=case["evaluation_method"],
                 )
                 result = self._evaluate(lease.run_id, case, outcome.content)
+                metrics = dict(outcome.metrics)
+                if case["evaluation_method"] == "llm_judge":
+                    metrics["judge_cost"] = result.metadata.get("judge_cost")
                 self._queue.complete(
                     lease,
                     status="passed" if result.passed else "failed",
                     score=str(result.score),
                     weight=str(case["weight"]),
                     result={**result.model_dump(mode="json"), "candidate": outcome.content},
-                    metrics=outcome.metrics,
+                    metrics=metrics,
                 )
                 log_event(
                     _LOG,
@@ -146,6 +150,24 @@ class WorkerPipeline:
         except LeaseLost:
             log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
             return True
+        except JudgeExtensionError as exc:
+            log_event(
+                _LOG,
+                logging.ERROR,
+                "judge_extension_failed",
+                job_id=lease.job_id,
+                error_code="judge_extension_error",
+                exception_type=type(exc).__name__,
+                evaluator_method=case["evaluation_method"],
+            )
+            try:
+                self._queue.fail(
+                    lease,
+                    "judge_extension_error",
+                    {"error_type": type(exc).__name__},
+                )
+            except LeaseLost:
+                log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
         except Exception as exc:
             log_event(
                 _LOG,

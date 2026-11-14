@@ -35,6 +35,7 @@ Use this manual to connect models, build evaluations, run comparisons, and under
 - [Protect security and privacy](security-and-privacy.md) — Handle credentials, prompts, answers, exports, and local access safely.
 - [Configuration reference](../configuration.md) — Review environment variables, runtime limits, and schedules.
 - [Release guide](../release.md) — Run release checks and offline end-to-end verification.
+- [Develop custom LLM judges](../judge-extensions.md) — Implement, register, configure, test, and version trusted local judge extensions.
 
 ## Get help
 

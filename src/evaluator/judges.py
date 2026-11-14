@@ -9,7 +9,7 @@ import sqlite3
 from collections.abc import Callable
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -18,6 +18,19 @@ from evaluator.api.errors import ConflictError, JudgeParseError, NotFoundError, 
 from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.evaluators.core import EvaluationResult
 from evaluator.golden_sets import LlmJudgeConfig, RubricCriterion, get_judge_preset
+from evaluator.judge_extensions import (
+    BUILTIN_JUDGE_ID,
+    BUILTIN_JUDGE_VERSION,
+    JUDGE_EXTENSION_API_VERSION,
+    EmptyJudgeConfiguration,
+    JudgeCriterionDecision,
+    JudgeDecision,
+    JudgeEvaluationRequest,
+    JudgeImplementation,
+    JudgeImplementationRegistry,
+    JudgeProvider,
+    JudgeRegistrationError,
+)
 from evaluator.logging_config import log_semantic_event
 from evaluator.time import from_utc_iso, to_utc_iso, utc_now
 
@@ -33,6 +46,9 @@ class JudgeProfileInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=200)
     model_profile_id: UUID
+    implementation_id: str = BUILTIN_JUDGE_ID
+    implementation_version: str = BUILTIN_JUDGE_VERSION
+    implementation_config: dict[str, Any] = Field(default_factory=dict)
     temperature: Decimal | None = Field(default=None, ge=0, le=2)
     reasoning_value: str | None = Field(default=None, min_length=1, max_length=500)
     max_output_tokens: int | None = Field(default=None, gt=0)
@@ -63,6 +79,9 @@ class JudgeProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = Field(default=None, min_length=1, max_length=200)
     model_profile_id: UUID | None = None
+    implementation_id: str | None = None
+    implementation_version: str | None = None
+    implementation_config: dict[str, Any] | None = None
     temperature: Decimal | None = Field(default=None, ge=0, le=2)
     reasoning_value: str | None = Field(default=None, min_length=1, max_length=500)
     max_output_tokens: int | None = Field(default=None, gt=0)
@@ -192,6 +211,64 @@ def parse_judge_output(
     )
 
 
+class OpenAICompatibleJudge:
+    """Built-in implementation preserving v0.1 prompt and parsing semantics."""
+
+    implementation_id = BUILTIN_JUDGE_ID
+    implementation_version = BUILTIN_JUDGE_VERSION
+    api_version = JUDGE_EXTENSION_API_VERSION
+    configuration_model = EmptyJudgeConfiguration
+
+    def evaluate(self, request: JudgeEvaluationRequest, provider: JudgeProvider) -> JudgeDecision:
+        original_prompt = next(
+            (message.content for message in reversed(request.messages) if message.role == "user"),
+            "",
+        )
+        rubric = [
+            RubricCriterion(id=item.id, description=item.description, weight=item.weight)
+            for item in request.preset.rubric
+        ]
+        prompt = build_judge_prompt(
+            prompt=original_prompt,
+            expected_answer=request.expected_result,
+            rubric=rubric,
+            context=request.context,
+            candidate=request.actual_result,
+        )
+        result: EvaluationResult | None = None
+        for attempt in range(2):
+            try:
+                completion = provider.complete(prompt=prompt)
+                result = parse_judge_output(completion.content, rubric, request.preset.threshold)
+                break
+            except JudgeParseError:
+                if attempt == 1:
+                    raise
+        if result is None:
+            raise AssertionError
+        criteria = tuple(
+            JudgeCriterionDecision(
+                id=item["id"], score=Decimal(item["score"]), reason=item["reason"]
+            )
+            for item in result.metadata["criteria"]
+        )
+        metadata = {
+            key: value
+            for key, value in result.metadata.items()
+            if key not in {"criteria", "threshold"}
+        }
+        return JudgeDecision(
+            score=result.score,
+            reason=result.reason,
+            criteria=criteria,
+            metadata=metadata,
+        )
+
+
+def register_builtin_judge(registry: JudgeImplementationRegistry) -> None:
+    registry.register(cast(JudgeImplementation, OpenAICompatibleJudge()))
+
+
 class SQLiteJudgeProfileRepository:
     def __init__(self, factory: SQLiteConnectionFactory) -> None:
         self._factory = factory
@@ -257,7 +334,11 @@ class SQLiteJudgeProfileRepository:
                         (str(record.id),),
                     )
                 connection.execute(
-                    """INSERT INTO judge_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """INSERT INTO judge_profiles(
+                    id,name,model_profile_id,prompt_template,template_version,threshold,rubric_json,
+                    temperature,max_output_tokens,is_global_default,active,created_at,updated_at,
+                    temperature_enabled,reasoning_value,implementation_id,implementation_version,
+                    implementation_config_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(id) DO UPDATE SET name=excluded.name,
                     model_profile_id=excluded.model_profile_id,
                     prompt_template=excluded.prompt_template,
@@ -266,6 +347,9 @@ class SQLiteJudgeProfileRepository:
                     max_output_tokens=excluded.max_output_tokens,is_global_default=excluded.is_global_default,
                     temperature_enabled=excluded.temperature_enabled,
                     reasoning_value=excluded.reasoning_value,
+                    implementation_id=excluded.implementation_id,
+                    implementation_version=excluded.implementation_version,
+                    implementation_config_json=excluded.implementation_config_json,
                     active=excluded.active,updated_at=excluded.updated_at""",
                     (
                         str(record.id),
@@ -283,6 +367,9 @@ class SQLiteJudgeProfileRepository:
                         to_utc_iso(record.updated_at),
                         int(d.temperature is not None),
                         d.reasoning_value,
+                        d.implementation_id,
+                        d.implementation_version,
+                        json.dumps(d.implementation_config, separators=(",", ":"), sort_keys=True),
                     ),
                 )
         finally:
@@ -306,6 +393,9 @@ class SQLiteJudgeProfileRepository:
             data=JudgeProfileInput(
                 name=row["name"],
                 model_profile_id=UUID(row["model_profile_id"]),
+                implementation_id=row["implementation_id"],
+                implementation_version=row["implementation_version"],
+                implementation_config=json.loads(row["implementation_config_json"]),
                 temperature=Decimal(row["temperature"]) if row["temperature_enabled"] else None,
                 reasoning_value=row["reasoning_value"],
                 max_output_tokens=row["max_output_tokens"],
@@ -318,8 +408,13 @@ class SQLiteJudgeProfileRepository:
 
 
 class JudgeProfileService:
-    def __init__(self, repository: SQLiteJudgeProfileRepository) -> None:
+    def __init__(
+        self,
+        repository: SQLiteJudgeProfileRepository,
+        registry: JudgeImplementationRegistry,
+    ) -> None:
         self._repo = repository
+        self._registry = registry
 
     def list_all(self) -> list[JudgeProfileRecord]:
         return self._repo.list_all()
@@ -396,7 +491,19 @@ class JudgeProfileService:
 
     def _save(self, record: JudgeProfileRecord) -> None:
         try:
+            configuration = self._registry.validate_configuration(
+                record.data.implementation_id,
+                record.data.implementation_version,
+                record.data.implementation_config,
+            )
+            record = record.model_copy(
+                update={
+                    "data": record.data.model_copy(update={"implementation_config": configuration})
+                }
+            )
             self._repo.save(record)
+        except JudgeRegistrationError as exc:
+            raise ValidationApiError(str(exc)) from exc
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Judge profile conflicts with existing data.") from exc
 

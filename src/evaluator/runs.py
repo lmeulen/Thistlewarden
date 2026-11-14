@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.gates import QualityGates
+from evaluator.judge_extensions import JudgeImplementationRegistry, JudgeImplementationUnavailable
 from evaluator.logging_config import log_semantic_event
 from evaluator.time import Clock, SystemClock, to_utc_iso
 
@@ -55,9 +56,11 @@ class RunQueue:
         clock: Clock | None = None,
         lease_seconds: int = 60,
         max_profiles: int = 20,
+        judge_registry: JudgeImplementationRegistry | None = None,
     ) -> None:
         self._factory, self._clock = factory, clock or SystemClock()
         self._lease_seconds, self._max_profiles = lease_seconds, max_profiles
+        self._judge_registry = judge_registry
 
     def create_run(self, payload: Any) -> UUID:
         try:
@@ -99,6 +102,20 @@ class RunQueue:
                 judge_snapshot = self._judge_snapshot(
                     connection, data.judge_profile_id or set_row["judge_profile_id"]
                 )
+                if judge_snapshot[1] is not None and self._judge_registry is not None:
+                    try:
+                        implementation_id = judge_snapshot[1]["implementation_id"]
+                        implementation_version = judge_snapshot[1]["implementation_version"]
+                        validated_config = self._judge_registry.validate_configuration(
+                            implementation_id,
+                            implementation_version,
+                            judge_snapshot[1]["implementation_config"],
+                        )
+                    except JudgeImplementationUnavailable as exc:
+                        raise ValidationApiError(
+                            "Selected judge implementation is unavailable."
+                        ) from exc
+                    judge_snapshot[1]["implementation_config"] = validated_config
                 if judge_snapshot[1] is not None and all(
                     str(row["id"]) != judge_snapshot[1]["model_profile_id"] for row in models
                 ):
@@ -524,6 +541,56 @@ class RunQueue:
         finally:
             connection.close()
 
+    def cancel_runs_with_unavailable_judges(self) -> int:
+        """Terminally cancel active work whose snapshotted implementation is absent."""
+
+        if self._judge_registry is None:
+            return 0
+        available = set(self._judge_registry.identities())
+        now = to_utc_iso(self._clock.now_utc())
+        connection = self._factory.connect()
+        try:
+            with transaction(connection, mode="IMMEDIATE"):
+                rows = connection.execute(
+                    """SELECT id,judge_snapshot_json FROM runs
+                    WHERE status IN ('pending','running') AND judge_snapshot_json IS NOT NULL"""
+                ).fetchall()
+                run_ids = []
+                for row in rows:
+                    snapshot = json.loads(row["judge_snapshot_json"])
+                    identity = (
+                        snapshot.get("implementation_id", "openai-compatible"),
+                        snapshot.get("implementation_version", "1.0"),
+                    )
+                    if identity not in available:
+                        run_ids.append(row["id"])
+                if run_ids:
+                    placeholders = ",".join("?" for _ in run_ids)
+                    connection.execute(
+                        f"UPDATE run_jobs SET status='cancelled',lease_owner=NULL,"
+                        f"lease_expires_at=NULL,updated_at=? WHERE run_id IN ({placeholders}) "
+                        "AND status IN ('pending','running')",
+                        (now, *run_ids),
+                    )
+                    connection.execute(
+                        f"UPDATE runs SET status='cancelled',cancelled_at=?,"
+                        f"note=COALESCE(note||'\n','')||? WHERE id IN ({placeholders})",
+                        (
+                            now,
+                            "Cancelled: snapshotted judge implementation is unavailable.",
+                            *run_ids,
+                        ),
+                    )
+        finally:
+            connection.close()
+        for run_id in run_ids:
+            log_semantic_event(
+                _LOG,
+                "run_cancelled_missing_judge_implementation",
+                object_id=run_id,
+            )
+        return len(run_ids)
+
     def rerun_failures(self, run_id: UUID, name: str) -> UUID:
         connection = self._factory.connect()
         try:
@@ -636,12 +703,14 @@ class RunQueue:
                 "temperature_enabled",
                 "reasoning_value",
                 "max_output_tokens",
+                "implementation_id",
+                "implementation_version",
                 "is_global_default",
                 "active",
                 "created_at",
                 "updated_at",
             )
-        }
+        } | {"implementation_config": json.loads(row["implementation_config_json"])}
 
     def get_run(self, run_id: UUID) -> dict[str, Any]:
         connection = self._factory.connect()
