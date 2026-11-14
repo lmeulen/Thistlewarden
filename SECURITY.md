@@ -1,5 +1,14 @@
 # Security policy and deployment boundary
 
+## Supported versions
+
+| Version | Supported |
+| --- | --- |
+| 0.1.x beta | Yes |
+| Earlier versions | No |
+
+Security fixes are provided for the latest 0.1.x beta release only.
+
 ## Supported boundary
 
 Thistlewarden is a local, single-user application. Supported deployment is one process on one host, listening only on loopback from host perspective, with SQLite and exports on a local filesystem. Docker Compose publishes container port only on `127.0.0.1`.
@@ -36,6 +45,10 @@ python -m evaluator.cli restore ./backups/manual.db ./data/restored.db
 
 Back up `.env` separately using OS secret storage. Restore always targets a new path. Validate with `migrate`, point `DATABASE_PATH` to restored file, then start app. Roll back by stopping app and restoring pre-upgrade backup to a new local path.
 
-## Reporting
+## Reporting a vulnerability
 
-Report vulnerabilities privately to repository owner. Include affected version, reproduction without real secrets, impact and suggested mitigation. Never attach production databases, exports, prompts or provider credentials.
+Do not open a public issue for a suspected vulnerability. Use GitHub's private **Security → Report a vulnerability** form for this repository. If private vulnerability reporting is temporarily unavailable, contact the repository owner through the private contact method shown on their GitHub profile and ask for a secure reporting channel before sharing details.
+
+Include the affected version, a reproduction that uses no real secrets, the impact, and any suggested mitigation. Never attach production databases, exports, prompts, model answers, or provider credentials.
+
+You should receive an acknowledgement within seven days. The maintainer will validate the report, coordinate remediation and disclosure, and credit the reporter unless anonymity is requested.

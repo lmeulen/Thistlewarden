@@ -2,14 +2,20 @@
 
 ## Local quality gate
 
+Install [Gitleaks](https://github.com/gitleaks/gitleaks), then run the quality and full-history secret gates:
+
 ```bash
+gitleaks git . --redact --config .gitleaks.toml
 python -m pip install -r requirements.txt
 python -m pip install -e .
 python -m ruff check .
 python -m ruff format --check .
 python -m mypy src
 python -m pytest -q tests/unit tests/integration
+python -m pip wheel --no-deps --wheel-dir dist .
 ```
+
+Review every secret-scanner finding. `.gitleaks.toml` allows only one exact synthetic fixture used by redaction tests; do not broaden it to paths or commits.
 
 ## Docker release gate
 
@@ -34,7 +40,8 @@ Manual release addition: restart evaluator during second E2E run and verify `rec
 - Python package version and Compose image tag must match.
 - Runtime dependencies are exact pins in `pyproject.toml`; `requirements.txt` mirrors runtime and dev gates.
 - Never publish `.env`, database, WAL, exports, backups or compose logs containing user content.
-- Tag only after Python and Docker jobs pass.
+- Tag only after Python and Docker jobs pass on the exact release commit.
+- Version `0.1.0` is published as a beta; release notes must preserve that maturity label.
 
 ## Upgrade proof
 

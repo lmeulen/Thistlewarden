@@ -2,7 +2,7 @@
 
 Thistlewarden monitors the quality and reliability of language models.
 
-Local single-user web app for reproducible evaluation of OpenAI-compatible language models. Dutch GUI; English code, API fields, logs and technical documentation.
+Local single-user web application for reproducible evaluation of OpenAI-compatible language models. The GUI, API fields, logs, and documentation are in English.
 
 ![Thistlewarden dashboard showing evaluation, configuration, and test-material summaries](docs/manual/images/dashboard.png)
 
@@ -10,7 +10,16 @@ Local single-user web app for reproducible evaluation of OpenAI-compatible langu
 
 ## Status
 
-MVP implementation: golden sets, evaluators, multiple model profiles, streaming metrics, exact costs, LLM judging, quality gates, configuration exchange, exports, retention, English GUI and security/performance hardening.
+**Version 0.1.0 is a beta release.** It supports golden sets, deterministic and LLM-based evaluation, multiple model profiles, streaming metrics, exact configured costs, quality gates, configuration exchange, exports, retention, and security and performance hardening.
+
+Thistlewarden is designed for one trusted user on one computer. It has no user authentication or tenant isolation. Keep it bound to loopback; do not expose it directly to a LAN or the internet. See the [security policy](SECURITY.md) for the supported deployment boundary.
+
+## Known limitations
+
+- Golden-set and test-case lists are limited to 100 displayed records until [issue #19](https://github.com/lmeulen/Thistlewarden/issues/19) is resolved.
+- Large run exports are assembled in memory until [issue #20](https://github.com/lmeulen/Thistlewarden/issues/20) is resolved.
+- Export SQL identifiers still need an explicit allowlist; see [issue #21](https://github.com/lmeulen/Thistlewarden/issues/21).
+- This beta supports local, single-user deployment only. Network deployment and untrusted users are outside the threat model.
 
 ## Requirements
 
@@ -23,7 +32,7 @@ MVP implementation: golden sets, evaluators, multiple model profiles, streaming 
 cp .env.example .env
 python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
 python -c "import secrets; print(secrets.token_urlsafe(48))"
-# plaats uitvoer als ENCRYPTION_KEY en SECRET_KEY in .env
+# Put the generated values in .env as ENCRYPTION_KEY and SECRET_KEY
 docker compose build
 docker compose up -d --wait
 ```
@@ -34,13 +43,13 @@ Open <http://127.0.0.1:5000>. Compose publishes host loopback only, uses one non
 
 ```bash
 docker compose logs -f evaluator
-docker compose down                 # data blijft bestaan
-docker compose down -v              # VERWIJDERT ALLE DATA; alleen bewust uitvoeren
+docker compose down                 # data remains available
+docker compose down -v              # DELETES ALL DATA; run only intentionally
 ```
 
 Bind mounts are only supported when demonstrably local filesystem. SMB/NFS/CIFS/WSL network paths are not supported.
 
-## Native installatie — POSIX
+## Native installation — POSIX
 
 ```bash
 python3.12 -m venv .venv
@@ -49,11 +58,11 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
 cp .env.example .env
-# genereer/vervang SECRET_KEY en ENCRYPTION_KEY
+# Generate and replace SECRET_KEY and ENCRYPTION_KEY
 python -m evaluator
 ```
 
-## Native installatie — PowerShell
+## Native installation — PowerShell
 
 ```powershell
 py -3.12 -m venv venv
@@ -62,7 +71,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
 Copy-Item .env.example .env
-# genereer/vervang SECRET_KEY en ENCRYPTION_KEY
+# Generate and replace SECRET_KEY and ENCRYPTION_KEY
 python -m evaluator
 ```
 
@@ -93,11 +102,11 @@ Most important fields:
 
 All limits are in `.env.example`. `CONTAINER_MODE=true` is for container entry point only and allows `HOST=0.0.0.0` internally; Compose still binds `127.0.0.1` externally.
 
-## Secrets en gevoelige inhoud
+## Secrets and sensitive content
 
 `ENCRYPTION_KEY` is URL-safe base64 of exactly 32 random bytes. Endpoint secrets use AES-256-GCM. Regular exports, API responses and logs never contain secret values. Prompts and answers remain plaintext in local SQLite and run exports according to MVP: protect database, backups and downloads.
 
-## Databasebeheer
+## Database management
 
 ```bash
 python -m evaluator.cli migrate
@@ -107,7 +116,7 @@ python -m evaluator.cli restore ./backups/manual.db ./data/restored.db
 
 Restore rejects existing target. Normal startup holds process-lifetime instance lock, migrates, restores expired leases, starts workers and then opens HTTP server. Existing schema upgrade creates consistent backup first.
 
-## Testen en release
+## Testing and release
 
 ```bash
 python -m ruff check .
@@ -118,9 +127,15 @@ python -m pytest -q tests/unit tests/integration
 
 Offline Docker E2E uses `compose.e2e.yaml`, `evaluator.mock_provider`, `examples/release-configuration.json` and `scripts/e2e_release.py`. See `docs/release.md`.
 
-## Documentatie
+## Documentation
 
 - [User manual](docs/manual/README.md) — application workflows and reference
 - [Configuration](docs/configuration.md) — settings and schedules
 - [Release guide](docs/release.md) — release gate, Docker E2E and rollback
 - [Security policy](SECURITY.md) — threat model and security policy
+- [0.1.0 beta release notes](docs/release-notes-0.1.0.md) — capabilities and known limitations
+- [Contributing](.github/CONTRIBUTING.md) — development setup and contribution rules
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Leo van der Meulen.

@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic Flask secret used to verify API error redaction"
+targetRules = ["generic-api-key"]
+regexTarget = "secret"
+regexes = ['''fixture-secret-with-at-least-32-bytes''']

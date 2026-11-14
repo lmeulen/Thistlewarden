@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an improvement within the supported project boundary
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or user need
+      description: Explain the task or limitation without including sensitive evaluation data.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired user experience and outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Project boundary
+      options:
+        - label: I understand Thistlewarden currently supports local, single-user deployment only.
+          required: true
+        - label: I searched existing issues.
+          required: true
