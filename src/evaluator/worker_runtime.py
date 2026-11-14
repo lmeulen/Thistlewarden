@@ -31,7 +31,7 @@ from evaluator.judge_extensions import (
 from evaluator.judges import register_builtin_judge
 from evaluator.logging_config import log_event
 from evaluator.models import ModelProfileInput, ModelProfileRecord, PricingInput
-from evaluator.provider import OpenAIProviderClient
+from evaluator.provider import OpenAIProviderClient, ProviderGuardrailError
 from evaluator.rate_limits import ProviderCallExecutor
 from evaluator.runs import RunQueue
 from evaluator.streaming import OpenAIStreamingClient, StreamingCompletionResult
@@ -244,8 +244,16 @@ class StreamingTargetCaller:
             result.content,
             evaluate=result.evaluate,
             metrics=metrics,
-            attempts=({"category": "target", "provider_request_id": result.provider_request_id},),
+            attempts=(
+                {
+                    "category": "target",
+                    "provider_request_id": result.provider_request_id,
+                    "outcome_category": result.outcome_category,
+                },
+            ),
             error_code=result.error_code,
+            outcome_category=result.outcome_category,
+            provider_evidence=result.provider_evidence.as_dict(),
         )
 
     @staticmethod
@@ -289,6 +297,8 @@ class _CoreJudgeProvider:
         )
         if self._cancelled is not None and self._cancelled.is_set():
             raise CancelledError
+        if not completion.evaluate:
+            raise ProviderGuardrailError(completion.provider_evidence)
         usage = completion.usage
         normalized_usage = (
             None

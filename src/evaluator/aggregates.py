@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import sqlite3
 from collections.abc import Sequence
@@ -34,11 +35,31 @@ def _median(values: list[Decimal]) -> Decimal | None:
     return ordered[middle] if size % 2 else (ordered[middle - 1] + ordered[middle]) / Decimal(2)
 
 
+def outcome_category(row: sqlite3.Row | dict[str, Any]) -> str:
+    if row["status"] != "error":
+        return "normal"
+    try:
+        payload = json.loads(row["result_json"])
+    except (json.JSONDecodeError, TypeError):
+        return "unknown"
+    category = payload.get("outcome_category") if isinstance(payload, dict) else None
+    return (
+        category
+        if category in {"provider_guardrail", "provider_error", "processing_error", "unknown"}
+        else "unknown"
+    )
+
+
 def aggregate_rows(rows: Sequence[sqlite3.Row | dict[str, Any]]) -> dict[str, Any]:
     total = len(rows)
     passed = sum(row["status"] == "passed" for row in rows)
     failed = sum(row["status"] == "failed" for row in rows)
     errors = sum(row["status"] == "error" for row in rows)
+    categories = [outcome_category(row) for row in rows]
+    guardrails = categories.count("provider_guardrail")
+    provider_errors = categories.count("provider_error")
+    processing_errors = categories.count("processing_error")
+    unknown_errors = categories.count("unknown")
     evaluated = [row for row in rows if row["score"] is not None and row["status"] != "error"]
     weight_sum = sum((Decimal(row["weight"]) for row in evaluated), Decimal(0))
     score = (
@@ -64,6 +85,11 @@ def aggregate_rows(rows: Sequence[sqlite3.Row | dict[str, Any]]) -> dict[str, An
         "passed": passed,
         "failed": failed,
         "errors": errors,
+        "guardrails": guardrails,
+        "provider_errors": provider_errors,
+        "processing_errors": processing_errors,
+        "unknown_errors": unknown_errors,
+        "guardrail_rate": Decimal(guardrails) / Decimal(total) if total else None,
         "weighted_score": score,
         "pass_rate": Decimal(passed) / Decimal(passed + failed) if passed + failed else None,
         "error_rate": Decimal(errors) / Decimal(total) if total else None,

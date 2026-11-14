@@ -291,6 +291,20 @@ class RunViewService:
     @classmethod
     def _result(cls, row: dict[str, Any]) -> dict[str, Any]:
         row["evaluation"] = json.loads(row.pop("result_json"))
+        if row["status"] == "error":
+            category = row["evaluation"].get("outcome_category")
+            row["outcome_category"] = (
+                category
+                if category
+                in {"provider_guardrail", "provider_error", "processing_error", "unknown"}
+                else "unknown"
+            )
+        else:
+            row["outcome_category"] = "normal"
+        row["outcome_stage"] = row["evaluation"].get("outcome_stage")
+        row["outcome_code"] = row["evaluation"].get("outcome_code")
+        evidence = row["evaluation"].get("provider_evidence")
+        row["provider_evidence"] = evidence if isinstance(evidence, dict) else {}
         row["case"] = json.loads(row.pop("case_json"))
         config = json.loads(row["case"].get("evaluator_config_json") or "{}")
         row["case"]["expected_value"] = config.get("expected_value") or row["case"].get(
@@ -344,6 +358,10 @@ def status_label(status: str) -> str:
         "cancelled": "Cancelled",
         "passed": "Passed",
         "error": "Error",
+        "provider_guardrail": "Provider guardrail",
+        "provider_error": "Provider error",
+        "processing_error": "Processing error",
+        "unknown": "Unknown error",
         "not_evaluated": "Not evaluated",
         "indeterminate": "Indeterminate",
     }.get(status, status.replace("_", " ").capitalize())

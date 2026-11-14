@@ -36,6 +36,10 @@ _COLUMNS = (
     "output_tokens",
     "cached_input_tokens",
     "reasoning_tokens",
+    "outcome_category",
+    "outcome_stage",
+    "outcome_code",
+    "provider_evidence_json",
     "result_json",
 )
 
@@ -65,6 +69,28 @@ class RunExportService:
                 ]
 
             results = rows("run_results", "job_id")
+            for result in results:
+                try:
+                    payload = json.loads(result["result_json"])
+                except (json.JSONDecodeError, TypeError):
+                    payload = {}
+                category = payload.get("outcome_category") if isinstance(payload, dict) else None
+                result["outcome_category"] = (
+                    "normal"
+                    if result["status"] != "error"
+                    else category
+                    if category
+                    in {"provider_guardrail", "provider_error", "processing_error", "unknown"}
+                    else "unknown"
+                )
+                result["outcome_stage"] = payload.get("outcome_stage")
+                result["outcome_code"] = payload.get("outcome_code")
+                evidence = payload.get("provider_evidence")
+                result["provider_evidence_json"] = json.dumps(
+                    evidence if isinstance(evidence, dict) else {},
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
             attempts = [
                 dict(x)
                 for x in c.execute(

@@ -120,7 +120,9 @@ Open a run from **Runs** to see its overview. The **Run overview** panel intenti
 
 A missing metric means insufficient or unavailable measured data, not a score of zero. Do not compare an incomplete run with a finished run as though their KPI coverage were equal.
 
-**Result status:** **Passed** and **failed** both mean evaluator ran; failed did not meet its configured condition. **Error** means no normal evaluation result was produced, for example due to provider, judge, or processing failure. Investigate errors before interpreting score or pass rate.
+**Result status:** **Passed** and **failed** both mean evaluator ran; failed did not meet its configured condition. **Error** means no normal evaluation result was produced. Error results are further classified as **Provider guardrail**, **Provider error**, **Processing error**, or **Unknown error**. A provider guardrail means the provider deliberately blocked generation under its content policy; it is not a transport outage. Unknown is used conservatively for historical or unclassified errors. Investigate all error categories before interpreting score or pass rate.
+
+Guardrails remain part of the error rate because they prevented a usable evaluation result. They do not contribute to score or pass rate. Run status is therefore **Completed with errors**, or **Failed** when every job is blocked or otherwise errors. This conservative treatment prevents policy-blocked requests from making reliability look better. Result detail and exports retain only bounded evidence such as finish reason, provider code, and provider request ID. Partial content returned before intervention is labeled and retained for audit but is never evaluated as a normal answer.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
@@ -167,7 +169,7 @@ Use it to identify trade-offs rather than selecting only rank one:
 - Compare known cost coverage before declaring a model cheaper.
 - Inspect gate dots and detailed gate outcomes before approving a release.
 
-The **Model performance** chart shows score, pass rate, and error rate on a 0–100% scale for each model. Pass rate excludes error results; error rate reflects jobs that could not produce an evaluation. A good score with a high error rate needs investigation.
+The **Model performance** chart shows score, pass rate, and error rate on a 0–100% scale for each model. Pass rate excludes error results; error rate reflects jobs that could not produce an evaluation, including provider guardrails. Aggregate API data also separate guardrail, provider, processing, and unknown error counts. A good score with a high error rate needs investigation.
 
 The **Cost versus score** scatter plot places models by total known cost on X-axis and weighted score on Y-axis. Models lacking either known cost or score are omitted and counted below chart. Use it to spot models that are both less expensive and at least as accurate as alternatives; validate result coverage before making a decision.
 

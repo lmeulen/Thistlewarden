@@ -214,6 +214,57 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     assert "1.0000" in overview
 
 
+def test_guardrail_is_distinct_in_ui_aggregates_and_export(app) -> None:
+    client = app.test_client()
+    run_id = create_run(client, app, "Guardrail run")
+    queue = app.extensions["run_queue"]
+    lease = queue.claim("guardrail-worker")
+    assert lease is not None
+    queue.fail(
+        lease,
+        "provider_guardrail",
+        {
+            "outcome_category": "provider_guardrail",
+            "outcome_stage": "target",
+            "outcome_code": "provider_guardrail",
+            "provider_evidence": {
+                "finish_reason": "content_filter",
+                "provider_request_id": "safe-request-id",
+            },
+            "candidate": "partial output",
+            "partial_candidate": True,
+        },
+        metrics={"target_latency_ms": "25"},
+    )
+    queue.refresh_run_status(run_id)
+
+    run_page = client.get(f"/runs/{run_id}").get_data(as_text=True)
+    assert "1 guardrail · 0 other error" in run_page
+    assert "Provider guardrail" in run_page
+
+    connection = app.extensions["database_factory"].connect()
+    try:
+        result_id = connection.execute(
+            "SELECT id FROM run_results WHERE run_id=?", (run_id,)
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    detail = client.get(f"/runs/{run_id}/resultaten/{result_id}").get_data(as_text=True)
+    assert "Provider guardrail intervention" in detail
+    assert "blocked by provider policy" in detail
+    assert "Partial candidate answer" in detail and "partial output" in detail
+    assert "safe-request-id" in detail and "content_filter" in detail
+
+    aggregates = client.get(f"/api/v1/runs/{run_id}/aggregates").get_json()["models"][0]
+    assert aggregates["errors"] == 1 and aggregates["guardrails"] == 1
+    assert aggregates["error_rate"] == "1" and aggregates["guardrail_rate"] == "1"
+    exported = client.get(f"/api/v1/runs/{run_id}/export?format=json").get_json()
+    assert exported["results"][0]["outcome_category"] == "provider_guardrail"
+    assert exported["results"][0]["provider_evidence_json"] == (
+        '{"finish_reason":"content_filter","provider_request_id":"safe-request-id"}'
+    )
+
+
 def test_completed_runs_compare_filter_link_and_export(app) -> None:
     client = app.test_client()
     baseline_id = create_run(client, app, "Baseline")

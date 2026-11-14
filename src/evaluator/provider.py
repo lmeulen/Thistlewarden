@@ -25,6 +25,7 @@ from evaluator.api.errors import (
 from evaluator.endpoints import EndpointRecord, SQLiteEndpointRepository, compose_api_key
 from evaluator.models import ModelProfileInput, compose_inference_parameters
 from evaluator.network_security import validate_destination
+from evaluator.provider_outcomes import ProviderEvidence, error_evidence, is_guardrail_signal
 from evaluator.secrets import SQLiteSecretRepository
 
 _ENV_REFERENCE = re.compile(r"^\$\{([A-Z_][A-Z0-9_]*)\}$")
@@ -125,6 +126,22 @@ class CompletionResult:
     usage: ProviderUsage | None
     provider_request_id: str | None
     finish_reason: str | None
+    successful: bool = True
+    evaluate: bool = True
+    error_code: str | None = None
+    outcome_category: str = "normal"
+    provider_evidence: ProviderEvidence = ProviderEvidence()
+
+
+class ProviderGuardrailError(ProviderClientError):
+    """Provider deliberately blocked generation under a policy or guardrail."""
+
+    code = "PROVIDER_GUARDRAIL"
+    default_message = "Provider blocked generation under its content policy."
+
+    def __init__(self, evidence: ProviderEvidence) -> None:
+        super().__init__()
+        self.evidence = evidence
 
 
 def build_chat_completion_request(
@@ -150,11 +167,20 @@ def parse_completion_response(content: bytes, headers: Mapping[str, str]) -> Com
         payload = json.loads(content)
         choices = payload["choices"]
         choice = choices[0]
-        message_content = choice["message"]["content"]
-        if not isinstance(message_content, str):
+        message = choice["message"]
+        if not isinstance(message, dict):
             raise TypeError
+        message_content = message.get("content")
+        refusal_present = message.get("refusal") is not None
         finish_reason = choice.get("finish_reason")
         if finish_reason is not None and not isinstance(finish_reason, str):
+            raise TypeError
+        guarded = refusal_present or is_guardrail_signal(
+            finish_reason=finish_reason, provider_code=None
+        )
+        if not guarded and not isinstance(message_content, str):
+            raise TypeError
+        if guarded and message_content is not None and not isinstance(message_content, str):
             raise TypeError
         usage_value = payload.get("usage")
         usage = None if usage_value is None else ProviderUsage.model_validate(usage_value)
@@ -164,7 +190,22 @@ def parse_completion_response(content: bytes, headers: Mapping[str, str]) -> Com
         ) from exc
     lowered = {key.lower(): value for key, value in headers.items()}
     request_id = next((lowered[name] for name in _REQUEST_ID_HEADERS if lowered.get(name)), None)
-    return CompletionResult(message_content, usage, request_id, finish_reason)
+    evidence = ProviderEvidence(
+        finish_reason=finish_reason,
+        provider_request_id=request_id,
+        refusal_present=refusal_present,
+    )
+    return CompletionResult(
+        message_content or "",
+        usage,
+        request_id,
+        finish_reason,
+        successful=not guarded,
+        evaluate=not guarded,
+        error_code="provider_guardrail" if guarded else None,
+        outcome_category="provider_guardrail" if guarded else "normal",
+        provider_evidence=evidence,
+    )
 
 
 class ProviderHeaderResolver:
@@ -280,6 +321,20 @@ class OpenAIProviderClient:
     @staticmethod
     def _classify_status(response: httpx.Response) -> None:
         status = response.status_code
+        if 400 <= status < 500:
+            length = response.headers.get("content-length")
+            content = b""
+            if length is not None:
+                try:
+                    if int(length) <= _DIAGNOSTIC_BODY_LIMIT:
+                        content = response.read()
+                except ValueError:
+                    pass
+            evidence = error_evidence(content, dict(response.headers))
+            if is_guardrail_signal(
+                finish_reason=evidence.finish_reason, provider_code=evidence.provider_code
+            ):
+                raise ProviderGuardrailError(evidence)
         if status in {401, 403}:
             raise AuthenticationError()
         if status == 429:

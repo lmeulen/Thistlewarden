@@ -23,6 +23,7 @@ from evaluator.provider import (
     attach_provider_diagnostic,
     build_chat_completion_request,
 )
+from evaluator.provider_outcomes import ProviderEvidence, is_guardrail_signal
 from evaluator.time import Clock, SystemClock
 
 
@@ -87,6 +88,8 @@ class StreamingCompletionResult:
     successful: bool
     evaluate: bool
     error_code: str | None
+    outcome_category: str
+    provider_evidence: ProviderEvidence
 
 
 class _Accumulator:
@@ -161,7 +164,12 @@ class _Accumulator:
             if self.usage is not None:
                 tps = Decimal(self.usage.completion_tokens) / seconds
         valid_end = self.done or self.finish_reason is not None
-        successful = error is None and valid_end
+        guarded = is_guardrail_signal(finish_reason=self.finish_reason, provider_code=None)
+        successful = error is None and valid_end and not guarded
+        evidence = ProviderEvidence(
+            finish_reason=self.finish_reason,
+            provider_request_id=request_id,
+        )
         return StreamingCompletionResult(
             content="".join(self.parts),
             usage=self.usage,
@@ -173,7 +181,19 @@ class _Accumulator:
             tokens_per_second=tps,
             successful=successful,
             evaluate=successful,
-            error_code=error if error is not None else None if valid_end else "unexpected_eof",
+            error_code=(
+                error
+                if error is not None
+                else "provider_guardrail"
+                if guarded
+                else None
+                if valid_end
+                else "unexpected_eof"
+            ),
+            outcome_category=(
+                "provider_guardrail" if guarded else "normal" if successful else "provider_error"
+            ),
+            provider_evidence=evidence,
         )
 
 
