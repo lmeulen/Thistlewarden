@@ -105,7 +105,22 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
         response = client.get(path)
         assert response.status_code == 200
         assert text in response.get_data(as_text=True)
-    assert "Configuration" in client.get("/").get_data(as_text=True)
+    page = client.get("/").get_data(as_text=True)
+    navigation = page[page.index('<nav aria-label="Main navigation">') : page.index("</nav>")]
+    labels = (
+        "Overview",
+        "Runs",
+        "Golden sets",
+        "Endpoints and models",
+        "Judges",
+        "Settings",
+        "Backup",
+    )
+    assert all(label in navigation for label in labels)
+    assert [navigation.index(f">{label}</a>") for label in labels] == sorted(
+        navigation.index(f">{label}</a>") for label in labels
+    )
+    assert ">Configuration</a>" not in navigation
 
 
 def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
