@@ -37,6 +37,7 @@ from evaluator.models import ModelProfileService, SQLiteModelProfileRepository
 from evaluator.provider import OpenAIProviderClient, ProviderHeaderResolver
 from evaluator.rate_limits import CentralEndpointLimiter, ProviderCallExecutor, RetryPolicy
 from evaluator.repositories import SQLiteSettingsRepository
+from evaluator.run_comparisons import RunComparisonService
 from evaluator.run_exports import RunExportService
 from evaluator.run_views import (
     RunViewService,
@@ -133,6 +134,7 @@ def create_app(
     quality_gate_service: QualityGateService | None = None
     configuration_exchange_service: ConfigurationExchangeService | None = None
     run_export_service: RunExportService | None = None
+    run_comparison_service: RunComparisonService | None = None
     run_view_service: RunViewService | None = None
     worker_runtime: WorkerRuntime | None = None
     model_profile_tester: ModelProfileTester | None = None
@@ -175,6 +177,7 @@ def create_app(
             database_factory, judge_registry
         )
         run_export_service = RunExportService(database_factory)
+        run_comparison_service = RunComparisonService(database_factory)
         run_view_service = RunViewService(database_factory)
         quality_gate_service = QualityGateService(database_factory, aggregate_service)
         golden_set_service = GoldenSetService(
@@ -314,6 +317,8 @@ def create_app(
         app.extensions["configuration_exchange_service"] = configuration_exchange_service
     if run_export_service is not None:
         app.extensions["run_export_service"] = run_export_service
+    if run_comparison_service is not None:
+        app.extensions["run_comparison_service"] = run_comparison_service
     if run_view_service is not None:
         app.extensions["run_view_service"] = run_view_service
     if worker_runtime is not None:

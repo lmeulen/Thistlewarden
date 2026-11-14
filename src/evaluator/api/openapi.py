@@ -345,6 +345,24 @@ def build_openapi_document() -> dict[str, Any]:
                     "responses": {"200": {"description": "Model aggregates"}},
                 }
             },
+            "/api/v1/runs/{run_id}/comparison-candidates": {
+                "get": {
+                    "operationId": "getRunComparisonCandidates",
+                    "responses": {"200": {"description": "Completed baseline candidates"}},
+                }
+            },
+            "/api/v1/runs/{run_id}/compare/{baseline_id}": {
+                "get": {
+                    "operationId": "compareRuns",
+                    "responses": {"200": {"description": "Snapshot-based comparison"}},
+                }
+            },
+            "/api/v1/runs/{run_id}/compare/{baseline_id}/export": {
+                "get": {
+                    "operationId": "exportRunComparison",
+                    "responses": {"200": {"description": "Deterministic comparison report"}},
+                }
+            },
             "/api/v1/runs/{run_id}/cancel": {
                 "post": {
                     "operationId": "cancelRun",
