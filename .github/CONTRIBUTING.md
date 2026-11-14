@@ -9,6 +9,37 @@ Thank you for helping improve Thistlewarden. The project welcomes focused bug re
 - Do not include API keys, `.env` files, databases, exports, prompts, model answers, customer data, or other sensitive content.
 - Report suspected vulnerabilities privately as described in [SECURITY.md](../SECURITY.md).
 
+## Issue labels
+
+Maintainers classify each triaged open issue on three required axes:
+
+- **Type** — exactly one of `type:bug`, `type:feature`, `type:enhancement`, `type:maintenance`, or `type:documentation`.
+- **Priority** — exactly one of `priority:critical`, `priority:high`, `priority:medium`, or `priority:low`. Priority expresses user and project impact, not implementation order or effort.
+- **Area** — exactly one primary `area:*` label. Use the area owning most of the change; mention secondary impact in the issue instead of adding several area labels.
+
+Add one `effort:*` label (`effort:S`, `effort:M`, or `effort:L`) only after enough investigation to estimate scope. Effort is relative and never changes priority.
+
+| Axis | Meaning |
+|---|---|
+| `type:bug` | Existing supported behavior is incorrect or broken. |
+| `type:feature` | New user-facing capability or workflow. |
+| `type:enhancement` | Material improvement to existing user-facing behavior. |
+| `type:maintenance` | Internal quality, test, build, dependency, or operational work. |
+| `type:documentation` | Documentation-only change. |
+| `priority:critical` | Release-blocking, data-loss, or severe supported-boundary security risk; act immediately. |
+| `priority:high` | Major user workflow, reliability, security, or cost impact; target next. |
+| `priority:medium` | Meaningful improvement or bounded risk; schedule normally. |
+| `priority:low` | Limited impact, uncommon edge case, or exploratory work. |
+| `effort:S` | Focused change, normally a few files and tests. |
+| `effort:M` | Cross-layer change requiring design and integration tests. |
+| `effort:L` | Major design, migration, or multi-stage delivery. |
+
+Canonical areas are `area:api`, `area:cli`, `area:costs`, `area:exports`, `area:golden-sets`, `area:providers`, `area:runs`, `area:security`, `area:settings`, `area:testing`, and `area:ux`. Add a new area only when several issues need a stable owner that none of these labels represent.
+
+GitHub state, assignee, milestone, and pull-request links represent workflow. Do not add labels such as `in progress`, `blocked`, or `done`. Standard labels such as `duplicate`, `invalid`, `question`, `wontfix`, `good first issue`, and `help wanted` are optional signals, not classification axes. Dependency automation labels apply to pull requests. Intake forms may initially add `bug` or `enhancement`; maintainers replace that broad intake label with canonical `type:*` during triage.
+
+Closed historical issues do not require retroactive relabeling. Reopened issues must follow current policy.
+
 ## Development setup
 
 Thistlewarden requires Python 3.12 and uses a `src` layout.
