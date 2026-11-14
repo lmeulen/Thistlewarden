@@ -6,6 +6,7 @@ import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -14,13 +15,28 @@ BASE = os.environ.get("E2E_BASE_URL", "http://127.0.0.1:5000")
 FIXTURE_SECRET = "release-fixture-secret"
 
 
+def _validate_base_url(value: str) -> str:
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"127.0.0.1", "localhost"}:
+        raise ValueError("E2E_BASE_URL must use HTTP(S) and a loopback host")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("E2E_BASE_URL must not contain credentials, query, or fragment")
+    return value.rstrip("/")
+
+
 def request(path: str, *, method: str = "GET", body: Any | None = None) -> tuple[int, bytes]:
     data = None if body is None else json.dumps(body).encode()
     headers = {"Accept": "application/json"}
     if data is not None:
         headers["Content-Type"] = "application/json"
-    response = urllib.request.urlopen(
-        urllib.request.Request(BASE + path, data=data, headers=headers, method=method), timeout=10
+    response = urllib.request.urlopen(  # noqa: S310 -- validated HTTP(S) loopback URL
+        urllib.request.Request(
+            _validate_base_url(BASE) + path,
+            data=data,
+            headers=headers,
+            method=method,
+        ),
+        timeout=10,
     )
     return response.status, response.read()
 

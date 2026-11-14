@@ -63,10 +63,12 @@ Copy `.env.example` to `.env` only for local application runs. Generate new loca
 Run all checks before submitting a pull request:
 
 ```bash
+python -m pip check
+python -m pip_audit -r requirements.txt --progress-spinner off
 python -m ruff check .
 python -m ruff format --check .
 python -m mypy src
-python -m pytest -q tests/unit tests/integration
+python -m pytest -q tests/unit tests/integration --cov=evaluator --cov-branch --cov-report=term-missing:skip-covered
 ```
 
 Changes affecting packaging, startup, providers, workers, persistence, or release behavior should also pass the Docker release gate in [docs/release.md](../docs/release.md).

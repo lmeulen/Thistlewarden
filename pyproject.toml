@@ -46,7 +46,9 @@ thistlewarden-admin = "evaluator.cli:main"
 [project.optional-dependencies]
 dev = [
   "mypy==1.18.2",
+  "pip-audit==2.10.1",
   "pytest==9.0.3",
+  "pytest-cov==7.1.0",
   "pytest-xdist==3.8.0",
   "ruff==0.14.5",
   "types-jsonschema==4.25.1.20251009",
@@ -78,7 +80,23 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["B", "C4", "E", "F", "I", "PIE", "PLE", "S", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/e2e_release.py" = ["S101", "S105", "S310"]
+"src/evaluator/config.py" = ["S104", "S105"]
+"src/evaluator/config_io.py" = ["S608"]
+"src/evaluator/costs.py" = ["S101"]
+"src/evaluator/golden_sets.py" = ["S101", "S608"]
+"src/evaluator/migrations.py" = ["S608"]
+"src/evaluator/mock_provider.py" = ["S104"]
+"src/evaluator/models.py" = ["S101", "S608"]
+"src/evaluator/rate_limits.py" = ["S311"]
+"src/evaluator/run_exports.py" = ["S608"]
+"src/evaluator/run_views.py" = ["S608"]
+"src/evaluator/runs.py" = ["S608"]
+"src/evaluator/settings.py" = ["S104"]
+"tests/**" = ["S"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -92,3 +110,12 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = "dotenv.*"
 ignore_missing_imports = true
+
+[tool.coverage.run]
+branch = true
+source = ["evaluator"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+skip_covered = true

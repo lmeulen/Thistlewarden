@@ -8,10 +8,12 @@ Install [Gitleaks](https://github.com/gitleaks/gitleaks), then run the quality a
 gitleaks git . --redact --config .gitleaks.toml
 python -m pip install -r requirements.txt
 python -m pip install -e .
+python -m pip check
+python -m pip_audit -r requirements.txt --progress-spinner off
 python -m ruff check .
 python -m ruff format --check .
 python -m mypy src
-python -m pytest -q tests/unit tests/integration
+python -m pytest -q tests/unit tests/integration --cov=evaluator --cov-branch --cov-report=term-missing:skip-covered
 python -m pip wheel --no-deps --wheel-dir dist .
 ```
 
