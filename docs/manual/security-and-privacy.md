@@ -65,6 +65,3 @@ Request diagnostics use route templates rather than concrete request paths. Serv
 These safeguards reduce accidental leakage in application logs, but are not authorization or data-loss-prevention system. Keep log files access-controlled and encrypted according to policy. When reporting issue, provide generated request ID, time, non-sensitive action, and status—not copied prompts, outputs, credentials, or full exports.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

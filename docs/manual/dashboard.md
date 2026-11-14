@@ -67,5 +67,3 @@ Use these buttons when a dashboard count identifies missing setup or work requir
 The main navigation bar remains available on every page. Use it to move directly between the dashboard, endpoints, golden sets, judges, runs, settings, and configuration exchange.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

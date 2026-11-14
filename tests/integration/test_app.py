@@ -75,6 +75,48 @@ def test_index_renders_english_page_with_empty_dashboard(app) -> None:
     assert "<span>Local single-user evaluator</span>" in page
 
 
+def test_dark_theme_controls_and_persistence_hooks_render(app) -> None:
+    page = app.test_client().get("/").get_data(as_text=True)
+
+    assert 'id="theme-toggle" type="button" aria-pressed="false"' in page
+    assert '<span id="theme-label">Dark theme</span>' in page
+    assert "localStorage.getItem('thistlewarden-theme')" in page
+    assert "localStorage.setItem('thistlewarden-theme',theme)" in page
+    assert "prefers-color-scheme: dark" in page
+    assert "document.documentElement.dataset.theme=theme" in page
+    assert page.index("document.documentElement.dataset.theme=theme") < page.index("app.css")
+
+
+def test_dark_theme_styles_cover_surfaces_statuses_and_charts(app) -> None:
+    css = app.test_client().get("/static/app.css").get_data(as_text=True)
+
+    assert ":root[data-theme=dark]{color-scheme:dark" in css
+    for selector in (
+        ":root[data-theme=dark] input",
+        ":root[data-theme=dark] table",
+        ":root[data-theme=dark] .warning",
+        ":root[data-theme=dark] .status-passed",
+        ":root[data-theme=dark] .status-provider_guardrail",
+        ":root[data-theme=dark] .status-provider_error",
+        ":root[data-theme=dark] .status-processing_error",
+        ":root[data-theme=dark] .status-unknown",
+        ":root[data-theme=dark] .scatter-axis",
+        ":root[data-theme=dark] .scatter-grid",
+        ":root[data-theme=dark] .scatter-label",
+        ":root[data-theme=dark] .scatter-point",
+        ":root[data-theme=dark] .chart-track",
+        ":root[data-theme=dark] .chart-score",
+        ":root[data-theme=dark] .chart-pass",
+        ":root[data-theme=dark] .chart-fail",
+        ":root[data-theme=dark] .chart-error",
+        ":root[data-theme=dark] .gate-dot-passed",
+        ":root[data-theme=dark] .gate-dot-failed",
+        ":root[data-theme=dark] .gate-dot-indeterminate",
+        ":root[data-theme=dark] .gate-threshold",
+    ):
+        assert selector in css
+
+
 def test_application_icon_is_served(app) -> None:
     response = app.test_client().get("/static/app-icon.svg")
 

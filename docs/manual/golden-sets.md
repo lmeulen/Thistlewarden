@@ -164,5 +164,3 @@ Deletion is permanent for current golden-set item. Before bulk deletion, export 
 After successful bulk deletion, remaining cases are renumbered internally to preserve contiguous order. Review set and run-size preview before starting next run.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

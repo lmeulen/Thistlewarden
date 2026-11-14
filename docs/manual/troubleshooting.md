@@ -88,5 +88,3 @@ A useful support report contains request ID, approximate UTC time, action attemp
 Do not include API keys, cookies, CSRF values, secret headers, prompts, expected answers, candidate output, complete provider responses, or unredacted exports. Request IDs help operator correlate safe logs without requiring sensitive payload copies. Caller-provided `X-Request-ID` is not trusted as application correlation value; use ID returned by application.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

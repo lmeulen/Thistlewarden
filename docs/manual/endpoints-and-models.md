@@ -371,5 +371,3 @@ The profiles share endpoint, `top_p`, maximum output-token count, empty custom p
 Use **Test model** after copying or modifying either profile. In particular, do not copy GPT-5 mini's reasoning or maximum-token field settings to GPT-4.1 mini without a successful provider test, and do not assume configured prices are current billing terms.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

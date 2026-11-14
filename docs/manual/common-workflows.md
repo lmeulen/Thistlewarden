@@ -84,7 +84,3 @@ For broad or risky change, duplicate golden set first. Rename and version duplic
 Do not modify historical exports to simulate new baseline. Keep prior run and export for audit, then compare new run metrics/results with prior evidence manually. Deactivate obsolete cases or sets when needed; do not delete material merely to hide previous failures. Existing run snapshots remain available until run itself is deleted under retention policy.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

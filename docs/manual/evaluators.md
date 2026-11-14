@@ -558,5 +558,3 @@ Selecting evaluation method fills **Evaluator configuration (JSON)** with valid 
 Choose simplest method that measures requirement. Deterministic evaluators are fast, local, repeatable, and usable in unsaved output tester. LLM judge supports nuanced judgment but depends on provider availability, configuration, cost, and nondeterministic model behavior. Every method result stores score, pass/fail state, and reason; inspect individual result details when outcome surprises you.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)
