@@ -45,6 +45,8 @@ from evaluator.settings import ResolvedSettings, SettingLifecycle, SettingsServi
 
 gui = Blueprint("gui", __name__)
 _LOG = logging.getLogger(__name__)
+_GUI_PAGE_SIZE = 100
+_RUN_SET_PAGE_SIZE = 25
 
 
 @gui.errorhandler(ApiError)
@@ -89,6 +91,21 @@ def _discovery_service() -> ModelDiscoveryService:
 
 def _golden_service() -> GoldenSetService:
     return cast(GoldenSetService, current_app.extensions["golden_set_service"])
+
+
+def _requested_page(name: str = "page") -> int:
+    return max(request.args.get(name, 1, type=int) or 1, 1)
+
+
+def _page_details(page: int, per_page: int, total: int) -> dict[str, int]:
+    pages = max(1, (total + per_page - 1) // per_page)
+    return {
+        "page": min(page, pages),
+        "pages": pages,
+        "total": total,
+        "range_start": (page - 1) * per_page + 1 if total else 0,
+        "range_end": min(page * per_page, total),
+    }
 
 
 def _evaluation_preview_service() -> EvaluationPreviewService:
@@ -546,8 +563,15 @@ def model_test(profile_id: UUID) -> str:
 
 @gui.get("/golden-sets")
 def golden_sets_page() -> str:
-    records, _ = _golden_service().list_sets(1, 100)
-    return render_template("golden_sets.html", golden_sets=records)
+    service = _golden_service()
+    page = _requested_page()
+    records, total = service.list_sets(page, _GUI_PAGE_SIZE)
+    details = _page_details(page, _GUI_PAGE_SIZE, total)
+    if details["page"] != page:
+        page = details["page"]
+        records, total = service.list_sets(page, _GUI_PAGE_SIZE)
+        details = _page_details(page, _GUI_PAGE_SIZE, total)
+    return render_template("golden_sets.html", golden_sets=records, pagination=details)
 
 
 @gui.post("/golden-sets/<uuid:set_id>/dupliceren")
@@ -584,13 +608,37 @@ def golden_set_edit(set_id: UUID) -> str | Response:
         except (ApiError, ValueError) as exc:
             flash(_error_message(exc), "error")
     record = service.get_set(set_id)
-    items, _ = service.list_items(
-        set_id, page=1, per_page=100, category=None, tag=None, enabled=None
+    page = _requested_page()
+    category = (request.args.get("category") or "").strip()[:200] or None
+    tag = (request.args.get("tag") or "").strip()[:200] or None
+    enabled_value = (request.args.get("enabled") or "").strip().lower()
+    enabled = {"true": True, "false": False}.get(enabled_value)
+    items, total = service.list_items(
+        set_id,
+        page=page,
+        per_page=_GUI_PAGE_SIZE,
+        category=category,
+        tag=tag,
+        enabled=enabled,
     )
+    details = _page_details(page, _GUI_PAGE_SIZE, total)
+    if details["page"] != page:
+        page = details["page"]
+        items, total = service.list_items(
+            set_id,
+            page=page,
+            per_page=_GUI_PAGE_SIZE,
+            category=category,
+            tag=tag,
+            enabled=enabled,
+        )
+        details = _page_details(page, _GUI_PAGE_SIZE, total)
     return render_template(
         "golden_set_form.html",
         golden_set=record,
         items=items,
+        pagination=details,
+        item_filters={"category": category or "", "tag": tag or "", "enabled": enabled_value},
         gates=_gate_service().defaults(set_id),
         judges=_judge_service().list_all(),
         selected_judge_id=_judge_service().golden_set_override(set_id),
@@ -824,7 +872,25 @@ def runs_page() -> str:
 
 @gui.route("/runs/nieuw", methods=["GET", "POST"])
 def run_new() -> str | Response:
-    golden_sets, _ = _golden_service().list_sets(1, 100)
+    service = _golden_service()
+    set_page = _requested_page("set_page")
+    set_query = (request.args.get("set_query") or "").strip()[:200]
+    golden_sets, set_total = service.search_sets(
+        set_page,
+        _RUN_SET_PAGE_SIZE,
+        query=set_query,
+        active_only=True,
+    )
+    set_pagination = _page_details(set_page, _RUN_SET_PAGE_SIZE, set_total)
+    if set_pagination["page"] != set_page:
+        set_page = set_pagination["page"]
+        golden_sets, set_total = service.search_sets(
+            set_page,
+            _RUN_SET_PAGE_SIZE,
+            query=set_query,
+            active_only=True,
+        )
+        set_pagination = _page_details(set_page, _RUN_SET_PAGE_SIZE, set_total)
     models = [model for model in _all_models() if model.data.active]
     judges = [judge for judge in _judge_service().list_all() if judge.data.active]
     if request.method == "POST":
@@ -859,6 +925,8 @@ def run_new() -> str | Response:
     return render_template(
         "run_form.html",
         golden_sets=golden_sets,
+        set_query=set_query,
+        set_pagination=set_pagination,
         models=models,
         judges=judges,
         concurrency=settings.run_concurrency,

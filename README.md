@@ -16,7 +16,6 @@ Thistlewarden is designed for one trusted user on one computer. It has no user a
 
 ## Known limitations
 
-- Golden-set and test-case lists are limited to 100 displayed records until [issue #19](https://github.com/lmeulen/Thistlewarden/issues/19) is resolved.
 - Large run exports are assembled in memory until [issue #20](https://github.com/lmeulen/Thistlewarden/issues/20) is resolved.
 - Export SQL identifiers still need an explicit allowlist; see [issue #21](https://github.com/lmeulen/Thistlewarden/issues/21).
 - This beta supports local, single-user deployment only. Network deployment and untrusted users are outside the threat model.

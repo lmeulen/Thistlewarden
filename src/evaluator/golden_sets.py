@@ -486,6 +486,31 @@ class SQLiteGoldenSetRepository:
             connection.close()
         return [self._map_set(row) for row in rows], total
 
+    def search_sets(
+        self, *, page: int, per_page: int, query: str | None, active_only: bool
+    ) -> tuple[list[GoldenSetRecord], int]:
+        clauses: list[str] = []
+        values: list[Any] = []
+        if query:
+            clauses.append("name LIKE ? ESCAPE '\\' COLLATE NOCASE")
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            values.append(f"%{escaped}%")
+        if active_only:
+            clauses.append("active = 1")
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        connection = self._factory.connect()
+        try:
+            total = int(
+                connection.execute(f"SELECT COUNT(*) FROM golden_sets{where}", values).fetchone()[0]
+            )
+            rows = connection.execute(
+                f"SELECT * FROM golden_sets{where} ORDER BY name LIMIT ? OFFSET ?",
+                (*values, per_page, (page - 1) * per_page),
+            ).fetchall()
+        finally:
+            connection.close()
+        return [self._map_set(row) for row in rows], total
+
     def get_set(self, set_id: UUID) -> GoldenSetRecord | None:
         connection = self._factory.connect()
         try:
@@ -894,6 +919,23 @@ class GoldenSetService:
     def list_sets(self, page: int, per_page: int) -> tuple[list[GoldenSetRecord], int]:
         self._pagination(page, per_page)
         return self._repository.list_sets(page=page, per_page=per_page)
+
+    def search_sets(
+        self,
+        page: int,
+        per_page: int,
+        *,
+        query: str | None = None,
+        active_only: bool = False,
+    ) -> tuple[list[GoldenSetRecord], int]:
+        self._pagination(page, per_page)
+        normalized_query = query.strip()[:200] if query else None
+        return self._repository.search_sets(
+            page=page,
+            per_page=per_page,
+            query=normalized_query or None,
+            active_only=active_only,
+        )
 
     def get_set(self, set_id: UUID) -> GoldenSetRecord:
         result = self._repository.get_set(set_id)

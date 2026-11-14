@@ -486,6 +486,86 @@ def test_duplicate_set_and_quick_delete_item(app) -> None:
     )
 
 
+def test_golden_set_and_case_pagination_reaches_101st_record(app) -> None:
+    client = app.test_client()
+    service = app.extensions["golden_set_service"]
+    records = [
+        service.create_set({"name": f"Paged set {index:03}", "version": "1.0"})
+        for index in range(1, 102)
+    ]
+
+    first_page = client.get("/golden-sets").get_data(as_text=True)
+    assert "Showing 1–100 of 101 golden sets." in first_page
+    assert "Paged set 101" not in first_page
+    second_page = client.get("/golden-sets?page=2").get_data(as_text=True)
+    assert "Showing 101–101 of 101 golden sets." in second_page
+    assert "Paged set 101" in second_page
+    assert "Page 2 of 2" in second_page
+    assert "Paged set 101" in client.get("/golden-sets?page=999").get_data(as_text=True)
+
+    set_id = records[0].id
+    cases = [
+        service.create_item(
+            set_id,
+            {
+                "case_id": f"case-{index:03}",
+                "prompt": "Prompt",
+                "evaluation_method": "exact_match",
+                "evaluator_config": {"expected_value": "yes"},
+                "category": "paged",
+                "tags": ["last"],
+                "enabled": index != 101,
+            },
+        )
+        for index in range(1, 102)
+    ]
+    case_page = client.get(f"/golden-sets/{set_id}?page=2").get_data(as_text=True)
+    assert "Showing 101–101 of 101 test cases." in case_page
+    assert "case-101" in case_page
+    assert f"/golden-items/{cases[-1].id}" in case_page
+
+    filtered = client.get(f"/golden-sets/{set_id}?category=paged&tag=last").get_data(as_text=True)
+    assert "category=paged" in filtered and "tag=last" in filtered
+    assert 'value="paged"' in filtered and 'value="last"' in filtered
+    disabled = client.get(f"/golden-sets/{set_id}?enabled=false").get_data(as_text=True)
+    assert "case-101" in disabled
+    assert '<option value="false" selected>' in disabled
+
+    token = _csrf(client, f"/golden-sets/{set_id}?page=2")
+    deleted = client.post(
+        f"/golden-items/{cases[-1].id}/verwijderen",
+        data={"csrf_token": token},
+        follow_redirects=True,
+    )
+    assert deleted.status_code == 200
+    assert "Test case deleted" in deleted.get_data(as_text=True)
+    assert (
+        service.list_items(set_id, page=1, per_page=100, category=None, tag=None, enabled=None)[1]
+        == 100
+    )
+
+
+def test_run_form_can_find_and_select_101st_golden_set(app) -> None:
+    client = app.test_client()
+    service = app.extensions["golden_set_service"]
+    records = [
+        service.create_set({"name": f"Run set {index:03}", "version": "1.0"})
+        for index in range(1, 102)
+    ]
+
+    page = client.get("/runs/nieuw?set_page=5").get_data(as_text=True)
+    assert "Showing 101–101 of 101 matching active golden sets." in page
+    assert f'value="{records[-1].id}"' in page
+    assert "Run set 101 · 1.0" in page
+    assert "Page 5 of 5" in page
+
+    searched = client.get("/runs/nieuw?set_query=Run+set+101").get_data(as_text=True)
+    assert "Showing 1–1 of 1 matching active golden sets." in searched
+    assert f'value="{records[-1].id}"' in searched
+    assert 'name="set_query" value="Run set 101"' in searched
+    assert "set_query=Run+set+101" in searched or "set_query=Run%20set%20101" in searched
+
+
 def test_quality_gates_and_golden_json_import_preview(app) -> None:
     client = app.test_client()
     set_id = _create_set(client)
