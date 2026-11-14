@@ -14,6 +14,17 @@
       {% endfor %}
     </select>
   </label>
+  <label>Implementation
+    <select name="implementation_id" required>
+      {% for implementation_id,implementation_version in implementations %}
+      <option value="{{ implementation_id }}" data-version="{{ implementation_version }}" {% if d and d.implementation_id==implementation_id and d.implementation_version==implementation_version %}selected{% endif %}>{{ implementation_id }} @ {{ implementation_version }}</option>
+      {% endfor %}
+    </select>
+    <input type="hidden" name="implementation_version" value="{{ d.implementation_version if d else '1.0' }}">
+  </label>
+  <label class="wide">Implementation configuration (JSON object)
+    <textarea name="implementation_config" rows="5">{{ d.implementation_config|tojson if d else '{}' }}</textarea>
+  </label>
   <fieldset class="wide">
     <legend>Inference override</legend>
     <p>Set either temperature or reasoning effort. Leave both empty to use model profile settings. Reasoning effort uses model profile’s configured reasoning field path.</p>
@@ -27,4 +38,5 @@
   <label class="check"><input type="checkbox" name="active" {% if not d or d.active %}checked{% endif %}> Active</label>
   <div class="actions wide"><button>Save</button><a href="{{ url_for('gui.judges_page') }}">Back</a></div>
 </form>
+<script nonce="{{ csp_nonce() }}">(function(){var select=document.querySelector('[name=implementation_id]'),version=document.querySelector('[name=implementation_version]');function sync(){version.value=select.options[select.selectedIndex].dataset.version}select.addEventListener('change',sync);sync()})();</script>
 {% endblock %}

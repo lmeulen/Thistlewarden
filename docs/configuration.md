@@ -50,7 +50,7 @@ Secret-free bundles contain:
 
 Every object has globally unique UUID `id` and object-specific `data`. Secret values are always `null`; importing secret metadata does not recreate secret. Enter secret through GUI after import. `merge` remaps colliding UUIDs. `replace` archives active historical configuration rather than deleting run references.
 
-Machine-valid example: `examples/release-configuration.json`.
+Machine-valid example: `examples/release-configuration.json`. Judge profiles include immutable `implementation_id`, `implementation_version`, and validated secret-free `implementation_config`; see [Custom LLM judge extensions](judge-extensions.md).
 
 ## Golden-set JSON
 

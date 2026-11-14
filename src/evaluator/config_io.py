@@ -15,6 +15,7 @@ from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.endpoints import EndpointInput
 from evaluator.gates import QualityGates
 from evaluator.golden_sets import GoldenSetInput, GoldenSetItemInput
+from evaluator.judge_extensions import JudgeImplementationRegistry
 from evaluator.judges import JudgeProfileInput
 from evaluator.logging_config import log_semantic_event
 from evaluator.models import ModelProfileInput
@@ -103,8 +104,13 @@ def _plain(row: sqlite3.Row, excluded: set[str] | frozenset[str] = frozenset()) 
 
 
 class ConfigurationExchangeService:
-    def __init__(self, factory: SQLiteConnectionFactory) -> None:
+    def __init__(
+        self,
+        factory: SQLiteConnectionFactory,
+        judge_registry: JudgeImplementationRegistry | None = None,
+    ) -> None:
         self._factory = factory
+        self._judge_registry = judge_registry
 
     def export(self) -> ConfigurationBundle:
         c = self._factory.connect()
@@ -143,10 +149,12 @@ class ConfigurationExchangeService:
                         "threshold",
                         "rubric_json",
                         "temperature_enabled",
+                        "implementation_config_json",
                     },
                 )
                 if not row["temperature_enabled"]:
                     data["temperature"] = None
+                data["implementation_config"] = json.loads(row["implementation_config_json"])
                 judges.append(BundleObject(id=row["id"], data=data))
             sets = [
                 BundleObject(id=r["id"], data=_plain(r))
@@ -198,7 +206,13 @@ class ConfigurationExchangeService:
                 d.pop("endpoint_id", None)
                 ModelProfileInput.model_validate(_model_wire(d))
             for item in bundle.judge_profiles:
-                JudgeProfileInput.model_validate(item.data)
+                judge = JudgeProfileInput.model_validate(item.data)
+                if self._judge_registry is not None:
+                    self._judge_registry.validate_configuration(
+                        judge.implementation_id,
+                        judge.implementation_version,
+                        judge.implementation_config,
+                    )
             for item in bundle.golden_sets:
                 GoldenSetInput.model_validate(
                     {
@@ -382,7 +396,11 @@ class ConfigurationExchangeService:
         for x in b.judge_profiles:
             d = x.data
             c.execute(
-                f"{verb} INTO judge_profiles VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                f"{verb} INTO judge_profiles("
+                "id,name,model_profile_id,prompt_template,template_version,threshold,rubric_json,"
+                "temperature,max_output_tokens,is_global_default,active,created_at,updated_at,"
+                "temperature_enabled,reasoning_value,implementation_id,implementation_version,"
+                "implementation_config_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     rid(x.id),
                     d["name"],
@@ -399,6 +417,9 @@ class ConfigurationExchangeService:
                     now,
                     int(d.get("temperature") is not None),
                     d.get("reasoning_value"),
+                    d.get("implementation_id", "openai-compatible"),
+                    d.get("implementation_version", "1.0"),
+                    json.dumps(d.get("implementation_config", {}), separators=(",", ":")),
                 ),
             )
         for x in b.golden_sets:
