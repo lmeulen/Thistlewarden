@@ -21,6 +21,7 @@ from evaluator.endpoints import EndpointInput, EndpointRecord, HeaderInput
 from evaluator.models import ModelProfileInput
 from evaluator.provider import (
     OpenAIProviderClient,
+    ProviderGuardrailError,
     ProviderHeaderResolver,
     attach_provider_diagnostic,
     build_chat_completion_request,
@@ -117,6 +118,38 @@ def test_request_body_composes_messages_optional_fields_reasoning_and_custom() -
     }
 
 
+def test_response_parser_normalizes_refusal_without_retaining_refusal_text() -> None:
+    result = parse_completion_response(
+        json.dumps(
+            {
+                "choices": [
+                    {
+                        "message": {"content": None, "refusal": "sensitive refusal detail"},
+                        "finish_reason": "content_filter",
+                    }
+                ]
+            }
+        ).encode(),
+        {"X-Request-ID": "guard-1"},
+    )
+    assert not result.successful and not result.evaluate
+    assert result.error_code == "provider_guardrail"
+    assert result.content == ""
+    assert result.provider_evidence.as_dict() == {
+        "finish_reason": "content_filter",
+        "provider_request_id": "guard-1",
+        "refusal_present": True,
+    }
+    assert "sensitive" not in repr(result)
+
+
+def test_unknown_finish_reason_remains_normal_completion() -> None:
+    result = parse_completion_response(
+        b'{"choices":[{"message":{"content":"ok"},"finish_reason":"future_reason"}]}', {}
+    )
+    assert result.successful and result.outcome_category == "normal"
+
+
 def test_response_parser_accepts_usage_and_request_id() -> None:
     result = parse_completion_response(
         json.dumps(
@@ -170,6 +203,40 @@ def test_http_status_classification(status: int, error: type[Exception]) -> None
     )
     with pytest.raises(error):
         client.complete(_endpoint(), ModelProfileInput(model_id="m", display_name="M"), prompt="p")
+
+
+def test_known_policy_http_code_is_guardrail_but_unknown_code_is_client_error() -> None:
+    policy = _client(
+        lambda request: httpx.Response(
+            400,
+            headers={"x-request-id": "policy-1"},
+            json={"error": {"code": "content_policy_violation", "message": "private"}},
+        )
+    )
+    with pytest.raises(ProviderGuardrailError) as captured:
+        policy.complete(_endpoint(), ModelProfileInput(model_id="m", display_name="M"), prompt="p")
+    assert captured.value.evidence.as_dict() == {
+        "provider_code": "content_policy_violation",
+        "provider_request_id": "policy-1",
+    }
+    assert "private" not in repr(captured.value.evidence)
+
+    unknown = _client(lambda request: httpx.Response(400, json={"error": {"code": "future_code"}}))
+    with pytest.raises(ProviderClientError):
+        unknown.complete(_endpoint(), ModelProfileInput(model_id="m", display_name="M"), prompt="p")
+
+    oversized = _client(
+        lambda request: httpx.Response(
+            400,
+            headers={"content-length": "999999"},
+            json={"error": {"code": "content_filter"}},
+        )
+    )
+    with pytest.raises(ProviderClientError) as ordinary:
+        oversized.complete(
+            _endpoint(), ModelProfileInput(model_id="m", display_name="M"), prompt="p"
+        )
+    assert not isinstance(ordinary.value, ProviderGuardrailError)
 
 
 def test_provider_diagnostic_parses_redacts_and_bounds_error_response() -> None:

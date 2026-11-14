@@ -352,6 +352,21 @@ def test_stream_assembles_content_usage_and_exact_metrics() -> None:
     assert result.usage.completion_tokens_details == {"reasoning_tokens": 1}
 
 
+def test_content_filter_preserves_partial_content_but_prevents_evaluation() -> None:
+    result = _client(
+        [
+            b'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+            b'data: {"choices":[{"delta":{},"finish_reason":"content_filter"}]}\n\n',
+        ],
+        FakeClock([1.0, 1.1, 1.2]),
+    ).complete(_endpoint(), ModelProfileInput(model_id="m", display_name="M"), prompt="p")
+    assert result.content == "partial"
+    assert not result.successful and not result.evaluate
+    assert result.error_code == "provider_guardrail"
+    assert result.outcome_category == "provider_guardrail"
+    assert result.provider_evidence.as_dict() == {"finish_reason": "content_filter"}
+
+
 def test_provider_finish_is_valid_without_done_but_unexpected_eof_is_not() -> None:
     finished = _client(
         [b'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n'],

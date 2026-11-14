@@ -11,11 +11,21 @@ from decimal import Decimal
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
+from evaluator.api.errors import (
+    AuthenticationError,
+    InvalidProviderResponseError,
+    NetworkError,
+    ProviderClientError,
+    ProviderServerError,
+    RateLimitError,
+    TimeoutError,
+)
 from evaluator.evaluators import EvaluationResult, EvaluatorRegistry
 from evaluator.gates import QualityGateService
 from evaluator.golden_sets import GoldenSetItemInput, GoldenSetItemRecord
 from evaluator.judge_extensions import JudgeExtensionError
 from evaluator.logging_config import log_context, log_event
+from evaluator.provider import ProviderGuardrailError
 from evaluator.runs import JobLease, LeaseLost, RunQueue
 from evaluator.time import utc_now
 
@@ -29,6 +39,8 @@ class TargetOutcome:
     metrics: dict[str, Any] = field(default_factory=dict)
     attempts: tuple[dict[str, Any], ...] = ()
     error_code: str | None = None
+    outcome_category: str = "normal"
+    provider_evidence: dict[str, Any] = field(default_factory=dict)
 
 
 class TargetCaller(Protocol):
@@ -95,6 +107,7 @@ class WorkerPipeline:
             generation=lease.generation,
             evaluator_method=case["evaluation_method"],
         )
+        stage = "target"
         try:
             model = self._queue.snapshot(lease.model_snapshot_id, "model")
             log_event(
@@ -115,9 +128,20 @@ class WorkerPipeline:
                 self._queue.record_attempt(lease, attempt.get("category"), attempt)
             if not outcome.evaluate:
                 self._queue.fail(
-                    lease, outcome.error_code or "target_error", {"error_code": outcome.error_code}
+                    lease,
+                    outcome.error_code or "target_error",
+                    {
+                        "outcome_category": outcome.outcome_category,
+                        "outcome_stage": "target",
+                        "outcome_code": outcome.error_code,
+                        "provider_evidence": outcome.provider_evidence,
+                        "candidate": outcome.content,
+                        "partial_candidate": bool(outcome.content),
+                    },
+                    metrics=outcome.metrics,
                 )
             else:
+                stage = "judge" if case["evaluation_method"] == "llm_judge" else "evaluator"
                 log_event(
                     _LOG,
                     logging.DEBUG,
@@ -150,6 +174,60 @@ class WorkerPipeline:
         except LeaseLost:
             log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
             return True
+        except ProviderGuardrailError as exc:
+            evidence = exc.evidence.as_dict()
+            log_event(
+                _LOG,
+                logging.WARNING,
+                "provider_guardrail_intervened",
+                job_id=lease.job_id,
+                outcome_stage=stage,
+                provider_code=evidence.get("provider_code"),
+                finish_reason=evidence.get("finish_reason"),
+            )
+            try:
+                self._queue.fail(
+                    lease,
+                    "provider_guardrail",
+                    {
+                        "outcome_category": "provider_guardrail",
+                        "outcome_stage": stage,
+                        "outcome_code": "provider_guardrail",
+                        "provider_evidence": evidence,
+                    },
+                )
+            except LeaseLost:
+                log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
+        except (
+            AuthenticationError,
+            InvalidProviderResponseError,
+            NetworkError,
+            ProviderClientError,
+            ProviderServerError,
+            RateLimitError,
+            TimeoutError,
+        ) as exc:
+            log_event(
+                _LOG,
+                logging.ERROR,
+                "provider_call_failed",
+                job_id=lease.job_id,
+                error_code=exc.code.lower(),
+                exception_type=type(exc).__name__,
+                outcome_stage=stage,
+            )
+            try:
+                self._queue.fail(
+                    lease,
+                    exc.code.lower(),
+                    {
+                        "outcome_category": "provider_error",
+                        "outcome_stage": stage,
+                        "outcome_code": exc.code.lower(),
+                    },
+                )
+            except LeaseLost:
+                log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
         except JudgeExtensionError as exc:
             log_event(
                 _LOG,
@@ -164,7 +242,12 @@ class WorkerPipeline:
                 self._queue.fail(
                     lease,
                     "judge_extension_error",
-                    {"error_type": type(exc).__name__},
+                    {
+                        "error_type": type(exc).__name__,
+                        "outcome_category": "processing_error",
+                        "outcome_stage": "judge",
+                        "outcome_code": "judge_extension_error",
+                    },
                 )
             except LeaseLost:
                 log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
@@ -179,7 +262,16 @@ class WorkerPipeline:
                 evaluator_method=case["evaluation_method"],
             )
             try:
-                self._queue.fail(lease, "pipeline_error", {"error_type": type(exc).__name__})
+                self._queue.fail(
+                    lease,
+                    "pipeline_error",
+                    {
+                        "error_type": type(exc).__name__,
+                        "outcome_category": "processing_error",
+                        "outcome_stage": stage,
+                        "outcome_code": "pipeline_error",
+                    },
+                )
             except LeaseLost:
                 log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
         finally:

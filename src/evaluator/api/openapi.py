@@ -342,7 +342,15 @@ def build_openapi_document() -> dict[str, Any]:
             "/api/v1/runs/{run_id}/aggregates": {
                 "get": {
                     "operationId": "getRunAggregates",
-                    "responses": {"200": {"description": "Model aggregates"}},
+                    "responses": {
+                        "200": {
+                            "description": (
+                                "Model aggregates including error_rate, guardrails, "
+                                "provider_errors, processing_errors, unknown_errors, "
+                                "and guardrail_rate"
+                            )
+                        }
+                    },
                 }
             },
             "/api/v1/runs/{run_id}/comparison-candidates": {

@@ -24,10 +24,15 @@
   <div><h1>Result {{ result.case_id }}</h1><p>{{ result.model.display_name }} · <span class="badge status-{{ result.status }}">{{ status_label(result.status) }}</span></p></div>
   <a href="{{ url_for('gui.run_detail', run_id=run.id) }}#run-results">Back to run</a>
 </div>
+{% if result.outcome_category == 'provider_guardrail' %}
+<div class="message guardrail" role="status"><h2>Provider guardrail intervention</h2><p>Generation was blocked by provider policy and was not evaluated as a normal answer.</p>{% if result.evaluation.partial_candidate %}<p>Partial candidate content returned before intervention remains available below for audit.</p>{% endif %}</div>
+{% elif result.status == 'error' %}
+<div class="message error" role="status"><h2>{{ status_label(result.outcome_category) }}</h2><p>No normal evaluation result was produced.</p></div>
+{% endif %}
 <div class="cards result-summary-cards">
   <section>
     <h2>Metrics</h2>
-    <dl><dt>Score</dt><dd>{{ display_metric(result.score, places=4) }}</dd><dt>Latency</dt><dd>{{ display_metric(result.target_latency_ms, suffix=' ms') }}</dd><dt>TTFT</dt><dd>{{ display_metric(result.ttft_ms, suffix=' ms') }}</dd><dt>TPS</dt><dd>{{ display_metric(result.tps) }}</dd><dt>Input/output tokens</dt><dd>{{ result.input_tokens if result.input_tokens is not none else 'Unknown' }} / {{ result.output_tokens if result.output_tokens is not none else 'Unknown' }}</dd><dt>Cached/reasoning tokens</dt><dd>{{ result.cached_input_tokens if result.cached_input_tokens is not none else 'Unknown' }} / {{ result.reasoning_tokens if result.reasoning_tokens is not none else 'Unknown' }}</dd><dt>Target cost</dt><dd>{{ display_money(result.target_cost) }}</dd></dl>
+    <dl>{% if result.status == 'error' %}<dt>Outcome</dt><dd>{{ status_label(result.outcome_category) }}</dd>{% if result.outcome_stage %}<dt>Stage</dt><dd>{{ result.outcome_stage|title }}</dd>{% endif %}{% if result.outcome_code %}<dt>Code</dt><dd><code>{{ result.outcome_code }}</code></dd>{% endif %}{% for key,value in result.provider_evidence.items() %}<dt>{{ key|replace('_', ' ')|title }}</dt><dd>{{ value }}</dd>{% endfor %}{% endif %}<dt>Score</dt><dd>{{ display_metric(result.score, places=4) }}</dd><dt>Latency</dt><dd>{{ display_metric(result.target_latency_ms, suffix=' ms') }}</dd><dt>TTFT</dt><dd>{{ display_metric(result.ttft_ms, suffix=' ms') }}</dd><dt>TPS</dt><dd>{{ display_metric(result.tps) }}</dd><dt>Input/output tokens</dt><dd>{{ result.input_tokens if result.input_tokens is not none else 'Unknown' }} / {{ result.output_tokens if result.output_tokens is not none else 'Unknown' }}</dd><dt>Cached/reasoning tokens</dt><dd>{{ result.cached_input_tokens if result.cached_input_tokens is not none else 'Unknown' }} / {{ result.reasoning_tokens if result.reasoning_tokens is not none else 'Unknown' }}</dd><dt>Target cost</dt><dd>{{ display_money(result.target_cost) }}</dd></dl>
   </section>
   <section class="evaluation-panel">
     <h2>Evaluation</h2>
@@ -61,6 +66,6 @@
   {% if result.case.system_prompt %}<h3>System</h3><pre class="content">{{ result.case.system_prompt }}</pre>{% endif %}
   <h3>User</h3><pre class="content">{{ result.case.prompt }}</pre>
   <h3>Expected</h3><pre class="content">{{ result.case.expected_value or 'Not set' }}</pre>
-  <h3>Candidate answer</h3><pre class="content">{{ result.evaluation.candidate if result.evaluation.candidate is defined else 'Not available for older run.' }}</pre>
+  <h3>{{ 'Partial candidate answer' if result.evaluation.partial_candidate else 'Candidate answer' }}</h3><pre class="content">{{ result.evaluation.candidate if result.evaluation.candidate is defined else 'Not available for older run.' }}</pre>
 </section>
 {% endblock %}

@@ -21,6 +21,7 @@ def row(status, score, weight="1", **values):
         "output_tokens": None,
         "cached_input_tokens": None,
         "reasoning_tokens": None,
+        "result_json": "{}",
     }
     result.update(values)
     return result
@@ -61,6 +62,26 @@ def test_weighted_rates_percentiles_unknown_and_costs() -> None:
     assert value["cost_per_passed"] == Decimal("6")
     assert value["known_total_cost"] == Decimal("6")
     assert value["known_cost_count"] == 3
+
+
+def test_error_breakdown_keeps_guardrails_in_error_rate() -> None:
+    value = aggregate_rows(
+        [
+            row(
+                "error",
+                None,
+                result_json='{"outcome_category":"provider_guardrail"}',
+            ),
+            row("error", None, result_json='{"outcome_category":"provider_error"}'),
+            row("error", None, result_json='{"outcome_category":"processing_error"}'),
+            row("error", None),
+        ]
+    )
+    assert value["errors"] == 4 and value["error_rate"] == Decimal("1")
+    assert value["guardrails"] == 1 and value["guardrail_rate"] == Decimal("0.25")
+    assert value["provider_errors"] == 1
+    assert value["processing_errors"] == 1
+    assert value["unknown_errors"] == 1
 
 
 def test_known_total_cost_sums_available_target_costs() -> None:

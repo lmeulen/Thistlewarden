@@ -434,8 +434,15 @@ class RunQueue:
         finally:
             connection.close()
 
-    def fail(self, lease: JobLease, error_code: str, metadata: dict[str, Any]) -> None:
-        now = self._clock.now_utc()
+    def fail(
+        self,
+        lease: JobLease,
+        error_code: str,
+        metadata: dict[str, Any],
+        *,
+        metrics: dict[str, Any] | None = None,
+    ) -> None:
+        now, metrics = self._clock.now_utc(), metrics or {}
         connection = self._factory.connect()
         try:
             with transaction(connection):
@@ -452,15 +459,15 @@ class RunQueue:
                         None,
                         "1",
                         json.dumps(metadata, separators=(",", ":")),
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
+                        metrics.get("target_cost"),
+                        metrics.get("judge_cost"),
+                        metrics.get("target_latency_ms"),
+                        metrics.get("ttft_ms"),
+                        metrics.get("tps"),
+                        metrics.get("input_tokens"),
+                        metrics.get("output_tokens"),
+                        metrics.get("cached_input_tokens"),
+                        metrics.get("reasoning_tokens"),
                         to_utc_iso(now),
                     ),
                 )

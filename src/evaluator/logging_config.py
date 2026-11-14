@@ -80,6 +80,8 @@ _ALLOWED_FIELDS: Final = frozenset(
         "object_id",
         "object_type",
         "outcome",
+        "outcome_stage",
+        "provider_code",
         "path",
         "port",
         "preview",
