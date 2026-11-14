@@ -4,6 +4,10 @@ Thistlewarden monitors the quality and reliability of language models.
 
 Local single-user web app for reproducible evaluation of OpenAI-compatible language models. Dutch GUI; English code, API fields, logs and technical documentation.
 
+![Thistlewarden dashboard showing evaluation, configuration, and test-material summaries](docs/manual/images/dashboard.png)
+
+*Thistlewarden overview with synthetic demonstration data.*
+
 ## Status
 
 MVP implementation: golden sets, evaluators, multiple model profiles, streaming metrics, exact costs, LLM judging, quality gates, configuration exchange, exports, retention, English GUI and security/performance hardening.

@@ -233,6 +233,10 @@ The port may be different if `PORT` was changed during installation. Use the add
 
 The application opens on the dashboard. The navigation bar provides access to endpoints and model profiles, golden sets, judge profiles, runs, settings, and configuration exchange.
 
+![Thistlewarden dashboard showing evaluation, configuration, and test-material summaries](images/dashboard.png)
+
+*The dashboard is the application overview. See [Understand the dashboard](dashboard.md) for an explanation of its statistics and shortcuts.*
+
 Thistlewarden deliberately listens on the local computer by default. Open it from a browser on the same computer that runs the application. Do not replace `127.0.0.1` with a network address or expose the application through a proxy.
 
 If the browser reports that it cannot connect to `http://127.0.0.1:5000`:

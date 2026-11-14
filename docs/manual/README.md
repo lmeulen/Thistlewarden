@@ -4,6 +4,10 @@
 
 Use this manual to connect models, build evaluations, run comparisons, and understand results.
 
+![Thistlewarden dashboard showing evaluation, configuration, and test-material summaries](images/dashboard.png)
+
+*Thistlewarden overview with synthetic demonstration data. See [Understand the dashboard](dashboard.md) for details.*
+
 ## Start here
 
 - [Run your first evaluation](getting-started.md#quick-start) — Connect one model, create one test, and inspect the result.
