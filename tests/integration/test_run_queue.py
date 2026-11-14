@@ -4,10 +4,12 @@ import base64
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
 from evaluator import create_app
+from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.runs import LeaseLost, RunQueue
 
 pytestmark = pytest.mark.integration
@@ -57,6 +59,37 @@ def fixture_app(tmp_path: Path):
         },
     )
     return app, golden, model
+
+
+def test_run_rename_changes_only_mutable_name(tmp_path: Path) -> None:
+    app, golden, model = fixture_app(tmp_path)
+    queue = app.extensions["run_queue"]
+    run_id = queue.create_run(
+        {
+            "name": "Original",
+            "golden_set_id": str(golden.id),
+            "model_profile_ids": [str(model.id)],
+        }
+    )
+    before = app.extensions["run_view_service"].run(run_id)
+
+    queue.rename(run_id, "  Revised  ")
+
+    after = app.extensions["run_view_service"].run(run_id)
+    assert after["name"] == "Revised"
+    for key in ("id", "status", "total_jobs", "created_at"):
+        assert after[key] == before[key]
+
+
+def test_run_rename_rejects_invalid_or_unknown_run(tmp_path: Path) -> None:
+    app, _, _ = fixture_app(tmp_path)
+    queue = app.extensions["run_queue"]
+
+    for name in ("", "   ", "x" * 201):
+        with pytest.raises(ValidationApiError):
+            queue.rename(uuid4(), name)
+    with pytest.raises(NotFoundError):
+        queue.rename(uuid4(), "Valid name")
 
 
 def test_judge_only_model_is_excluded_from_target_aggregates(tmp_path: Path) -> None:

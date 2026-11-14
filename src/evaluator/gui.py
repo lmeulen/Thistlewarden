@@ -1195,6 +1195,16 @@ def run_result_detail(run_id: UUID, result_id: UUID) -> str:
     )
 
 
+@gui.post("/runs/<uuid:run_id>/naam")
+def run_rename(run_id: UUID) -> Response:
+    try:
+        _run_queue().rename(run_id, request.form.get("name", ""))
+        flash("Run renamed.", "success")
+    except ApiError as exc:
+        flash(_error_message(exc), "error")
+    return redirect(url_for("gui.run_detail", run_id=run_id))
+
+
 @gui.post("/runs/<uuid:run_id>/annuleren")
 def run_cancel(run_id: UUID) -> Response:
     if "confirm" not in request.form:

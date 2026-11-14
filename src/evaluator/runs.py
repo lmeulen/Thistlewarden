@@ -62,6 +62,21 @@ class RunQueue:
         self._lease_seconds, self._max_profiles = lease_seconds, max_profiles
         self._judge_registry = judge_registry
 
+    def rename(self, run_id: UUID, name: str) -> None:
+        normalized = name.strip()
+        if not normalized or len(normalized) > 200:
+            raise ValidationApiError("Run name must contain between 1 and 200 characters.")
+        connection = self._factory.connect()
+        try:
+            with transaction(connection, mode="IMMEDIATE"):
+                cursor = connection.execute(
+                    "UPDATE runs SET name=? WHERE id=?", (normalized, str(run_id))
+                )
+                if cursor.rowcount != 1:
+                    raise NotFoundError("Run not found.")
+        finally:
+            connection.close()
+
     def create_run(self, payload: Any) -> UUID:
         try:
             data = RunInput.model_validate(payload)
