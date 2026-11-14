@@ -98,7 +98,7 @@ The optional note is stored with the run. Use it for context needed by reviewers
 
 Select **Start run** only after reviewing the preflight size and potential cost. The run is created in a pending state, then workers claim and process its jobs. Open its detail page from **Runs** to monitor it.
 
-The runs list shows each run's status, weighted score, quality-gate status, completed-job count, percentage progress, and creation time. A non-terminal run detail page refreshes progress automatically about every two seconds.
+The runs list shows each run's status, weighted score, quality-gate status, completed-job count, percentage progress, and creation time. A non-terminal run detail page refreshes progress automatically about every two seconds. To correct or clarify a run name, open its detail page, select the pencil beside the name, enter a new name, and select **Save name**. Renaming changes only the display name; immutable run inputs, snapshots, results, and timestamps remain unchanged.
 
 Expected terminal outcomes include:
 

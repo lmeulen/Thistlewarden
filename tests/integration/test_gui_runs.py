@@ -5,6 +5,7 @@ import json
 import os
 import re
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -103,6 +104,45 @@ def complete_run(app, run_id: str, *, status="passed"):
     )
     queue.refresh_run_status(lease.run_id)
     app.extensions["quality_gate_service"].evaluate_run(lease.run_id)
+
+
+def test_run_can_be_renamed_from_detail_page(app) -> None:
+    client = app.test_client()
+    run_id = create_run(client, app, "Original run")
+    page = client.get(f"/runs/{run_id}").get_data(as_text=True)
+    assert 'aria-label="Rename run"' in page
+    assert f'action="/runs/{run_id}/naam"' in page
+    token = csrf(client, f"/runs/{run_id}")
+
+    response = client.post(
+        f"/runs/{run_id}/naam",
+        data={"csrf_token": token, "name": "  Renamed & reviewed  "},
+        follow_redirects=True,
+    )
+
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Run renamed." in text
+    assert "<h1>Renamed &amp; reviewed</h1>" in text
+    assert app.extensions["run_view_service"].run(UUID(run_id))["name"] == "Renamed & reviewed"
+
+
+def test_run_rename_validates_name_and_csrf_without_mutation(app) -> None:
+    client = app.test_client()
+    run_id = create_run(client, app, "Stable name")
+    token = csrf(client, f"/runs/{run_id}")
+
+    missing_csrf = client.post(f"/runs/{run_id}/naam", data={"name": "Changed"})
+    assert missing_csrf.status_code == 400
+    invalid = client.post(
+        f"/runs/{run_id}/naam",
+        data={"csrf_token": token, "name": "   "},
+        follow_redirects=True,
+    )
+
+    assert invalid.status_code == 200
+    assert "Run name must contain between 1 and 200 characters." in invalid.get_data(as_text=True)
+    assert app.extensions["run_view_service"].run(UUID(run_id))["name"] == "Stable name"
 
 
 def test_new_run_preview_targets_creation_form_and_uses_english(app) -> None:

@@ -75,6 +75,23 @@ def test_index_renders_english_page_with_empty_dashboard(app) -> None:
     assert "<span>Local single-user evaluator</span>" in page
 
 
+def test_header_links_open_github_and_manual_in_new_tabs(app) -> None:
+    page = app.test_client().get("/").get_data(as_text=True)
+    github = (
+        '<a href="https://github.com/lmeulen/Thistlewarden" target="_blank" '
+        'rel="noopener noreferrer">GitHub'
+    )
+    manual = (
+        '<a href="https://github.com/lmeulen/Thistlewarden/blob/master/docs/manual/README.md" '
+        'target="_blank" rel="noopener noreferrer">Manual'
+    )
+
+    assert github in page
+    assert manual in page
+    assert page.count("(opens in a new tab)") == 2
+    assert page.index(github) < page.index(manual) < page.index('id="theme-toggle"')
+
+
 def test_dark_theme_controls_and_persistence_hooks_render(app) -> None:
     page = app.test_client().get("/").get_data(as_text=True)
 
