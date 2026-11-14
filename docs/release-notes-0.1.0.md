@@ -26,7 +26,6 @@ Thistlewarden 0.1.0 supports one trusted user on one host. Keep the application 
 
 ### Known limitations
 
-- Golden-set and test-case lists display at most 100 records ([#19](https://github.com/lmeulen/Thistlewarden/issues/19)).
 - Large run exports are assembled in memory ([#20](https://github.com/lmeulen/Thistlewarden/issues/20)).
 - Export SQL identifiers do not yet use an explicit allowlist ([#21](https://github.com/lmeulen/Thistlewarden/issues/21)).
 - Provider destination checks do not pin the resolved IP into the HTTP transport ([#22](https://github.com/lmeulen/Thistlewarden/issues/22)).
