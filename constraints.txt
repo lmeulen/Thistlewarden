@@ -18,7 +18,7 @@ jsonschema-specifications==2025.9.1
 MarkupSafe==3.0.4
 pydantic==2.12.4
 pydantic_core==2.41.5
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 referencing==0.37.0
 regex==2026.9.29
 rpds-py==2026.9.1
