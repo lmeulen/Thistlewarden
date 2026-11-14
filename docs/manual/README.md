@@ -25,6 +25,7 @@ Use this manual to connect models, build evaluations, run comparisons, and under
 ## Run and review
 
 - [Start and manage runs](runs-and-results.md#running-evaluations) — Select models, monitor progress, cancel work, or retry failures.
+- [Automate runs from command line](runs-and-results.md#automating-runs-from-command-line) — Look up stable IDs, run quality gates, export reports, and use CI exit codes.
 - [Understand results](runs-and-results.md#understanding-results) — Read scores, metrics, charts, costs, and individual evaluations.
 - [Follow common workflows](common-workflows.md) — Compare models, build regression suites, and preserve history.
 - [Import, export, and back up data](import-export.md) — Move test sets, exchange configuration, export reports, and protect data.
