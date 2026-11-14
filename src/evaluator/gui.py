@@ -38,6 +38,7 @@ from evaluator.golden_sets import JUDGE_PRESETS, GoldenSetService, evaluator_con
 from evaluator.judges import JudgeProfileService
 from evaluator.logging_config import log_event
 from evaluator.models import ModelProfileService
+from evaluator.run_comparisons import ComparisonFilter, RunComparisonService
 from evaluator.run_exports import RunExportService, safe_filename
 from evaluator.run_views import RESULT_PAGE_SIZE, ResultQuery, RunViewService
 from evaluator.runs import RunQueue
@@ -130,6 +131,10 @@ def _run_views() -> RunViewService:
 
 def _run_exports() -> RunExportService:
     return cast(RunExportService, current_app.extensions["run_export_service"])
+
+
+def _run_comparisons() -> RunComparisonService:
+    return cast(RunComparisonService, current_app.extensions["run_comparison_service"])
 
 
 def _aggregates() -> AggregateService:
@@ -1068,6 +1073,42 @@ def run_detail(run_id: UUID) -> str:
         query_error=query_error,
         has_next=has_next,
         gates=gate_results,
+    )
+
+
+@gui.get("/runs/<uuid:run_id>/compare")
+def run_compare(run_id: UUID) -> str:
+    baseline_value = request.args.get("baseline", "").strip()
+    try:
+        baseline = UUID(baseline_value) if baseline_value else None
+    except ValueError as exc:
+        raise ValidationApiError("Invalid baseline run.") from exc
+    filter_value = request.args.get("filter", "all")
+    if filter_value not in {"all", "regression", "improvement", "unchanged", "incomparable"}:
+        raise ValidationApiError("Invalid comparison filter.")
+    comparison = (
+        _run_comparisons().compare(run_id, baseline, filter_=cast(ComparisonFilter, filter_value))
+        if baseline is not None
+        else None
+    )
+    return render_template(
+        "run_compare.html",
+        run=_run_views().run(run_id),
+        candidates=_run_comparisons().candidates(run_id),
+        comparison=comparison,
+        selected_baseline=baseline,
+        selected_filter=filter_value,
+    )
+
+
+@gui.get("/runs/<uuid:run_id>/compare/<uuid:baseline_id>/export")
+def run_compare_export(run_id: UUID, baseline_id: UUID) -> Response:
+    comparison = _run_comparisons().compare(run_id, baseline_id)
+    name = safe_filename(f"{comparison['candidate']['name']}-vs-{comparison['baseline']['name']}")
+    return Response(
+        _run_comparisons().export_json(run_id, baseline_id),
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{name}.comparison.json"'},
     )
 
 

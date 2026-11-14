@@ -173,6 +173,20 @@ The **Cost versus score** scatter plot places models by total known cost on X-ax
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
+### Compare with a historical baseline
+
+For a completed run, select **Compare baseline**, then choose another completed run. Candidate list labels each baseline as **Compatible**, **Partially compatible**, or **Incompatible** and previews warnings. Selection is explicit for each comparison; Thistlewarden does not automatically approve or persist a baseline relationship.
+
+Records match by immutable source case and model-profile identities. A matched result is comparable only when case content, evaluator method/configuration, case weight, model identity, endpoint/pricing/inference snapshot, and—when used—judge preset/version/execution snapshot are identical. Changed inputs appear as **Incomparable** rather than contributing misleading deltas. Added and removed records are also separate.
+
+Use filters to show regressions (passed to failed), improvements (failed to passed), unchanged records, or incomparable records. Links open both source results. Mean deltas are candidate minus baseline for score, latency, TTFT, throughput, tokens, and configured costs. A metric pair with either value missing is excluded from that metric. Error results are incomparable for quality/performance deltas; error-rate delta uses matched records whose immutable inputs agree. Changed weights are never blended into aggregate deltas.
+
+Select **Download regression report** for deterministic JSON containing compatibility warnings, methodology, summaries, deltas, and result links/identifiers. Report reads historical snapshots and mutates neither run.
+
+Valid comparison: rerun same immutable suite/model configuration after a controlled external model update. Potentially misleading comparison: changed prompt, expected answer, evaluator option, case weight, model inference setting, pricing, or judge version. Such changes can explain an apparent regression; inspect warnings and incomparable records before release decisions. Avoid statistical-significance claims from small suites: comparison reports arithmetic deltas, not statistical confidence.
+
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
+
 ### Judge-type results
 
 **Results by judge type** groups results by evaluation method: Exact match, Contains, Regex, Numeric, JSON Schema, or LLM judge. Each row shows result count, weighted score, passed percentage, and a stacked bar for passed, failed, and error results.

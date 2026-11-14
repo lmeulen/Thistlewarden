@@ -21,6 +21,7 @@ from evaluator.gates import QualityGateService
 from evaluator.golden_sets import GoldenSetService, golden_item_to_dict, golden_set_to_dict
 from evaluator.judges import JudgeProfileService, judge_profile_to_dict
 from evaluator.models import ModelProfileService, profile_to_dict
+from evaluator.run_comparisons import ComparisonFilter, RunComparisonService
 from evaluator.run_exports import RunExportService, safe_filename
 from evaluator.runs import RunQueue
 from evaluator.settings import SettingsService
@@ -128,6 +129,13 @@ def _model_profile_service() -> ModelProfileService:
     service = current_app.extensions.get("model_profile_service")
     if not isinstance(service, ModelProfileService):
         raise RuntimeError("Model profile service is unavailable")
+    return service
+
+
+def _run_comparison_service() -> RunComparisonService:
+    service = current_app.extensions.get("run_comparison_service")
+    if not isinstance(service, RunComparisonService):
+        raise RuntimeError("Run comparison service is unavailable")
     return service
 
 
@@ -499,6 +507,33 @@ def get_run(run_id: UUID) -> Response:
 @api_v1.get("/runs/<uuid:run_id>/aggregates")
 def get_run_aggregates(run_id: UUID) -> Response:
     return jsonify({"models": aggregate_to_dict(_aggregate_service().for_run(run_id))})
+
+
+@api_v1.get("/runs/<uuid:run_id>/comparison-candidates")
+def get_comparison_candidates(run_id: UUID) -> Response:
+    return jsonify({"runs": _run_comparison_service().candidates(run_id)})
+
+
+@api_v1.get("/runs/<uuid:run_id>/compare/<uuid:baseline_id>")
+def compare_runs(run_id: UUID, baseline_id: UUID) -> Response:
+    filter_value = request.args.get("filter", "all")
+    return jsonify(
+        _run_comparison_service().compare(
+            run_id, baseline_id, filter_=cast(ComparisonFilter, filter_value)
+        )
+    )
+
+
+@api_v1.get("/runs/<uuid:run_id>/compare/<uuid:baseline_id>/export")
+def export_run_comparison(run_id: UUID, baseline_id: UUID) -> Response:
+    service = _run_comparison_service()
+    report = service.compare(run_id, baseline_id)
+    name = safe_filename(f"{report['candidate']['name']}-vs-{report['baseline']['name']}")
+    return Response(
+        service.export_json(run_id, baseline_id),
+        mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{name}.comparison.json"'},
+    )
 
 
 @api_v1.get("/runs/<uuid:run_id>/export")

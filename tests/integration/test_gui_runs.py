@@ -105,6 +105,24 @@ def complete_run(app, run_id: str, *, status="passed"):
     app.extensions["quality_gate_service"].evaluate_run(lease.run_id)
 
 
+def test_new_run_preview_targets_creation_form_and_uses_english(app) -> None:
+    text = app.test_client().get("/runs/nieuw").get_data(as_text=True)
+    assert 'id="run-create-form"' in text
+    assert '<fieldset class="golden-set-picker"><legend>Golden set</legend>' in text
+    assert '<fieldset class="run-details-panel"><legend>Run details</legend>' in text
+    assert text.index('name="name" form="run-create-form"') < text.index(
+        "<legend>Golden set</legend>"
+    )
+    for heading in ("Run preview", "Model profiles", "Judge", "Quality gates", "Start run"):
+        assert f"<legend>{heading}</legend>" in text
+    assert 'name="golden_set_id" form="run-create-form" required' in text
+    assert "document.getElementById('run-create-form')" in text
+    assert "document.querySelector('form')" not in text
+    assert "Choose a golden set and models." in text
+    assert " en modellen" not in text
+    assert "data-sets=" in text and '"active_cases": 1' in text
+
+
 def test_start_poll_results_filters_and_detail(app) -> None:
     client = app.test_client()
     run_id = create_run(client, app)
@@ -194,6 +212,37 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     overview = client.get("/runs").get_data(as_text=True)
     assert "<th>Score</th>" in overview
     assert "1.0000" in overview
+
+
+def test_completed_runs_compare_filter_link_and_export(app) -> None:
+    client = app.test_client()
+    baseline_id = create_run(client, app, "Baseline")
+    complete_run(app, baseline_id, status="passed")
+    candidate_id = create_run(client, app, "Candidate")
+    complete_run(app, candidate_id, status="failed")
+
+    chooser = client.get(f"/runs/{candidate_id}/compare")
+    chooser_text = chooser.get_data(as_text=True)
+    assert chooser.status_code == 200
+    assert "Baseline" in chooser_text and "Compatible" in chooser_text
+    page = client.get(f"/runs/{candidate_id}/compare?baseline={baseline_id}&filter=regression")
+    text = page.get_data(as_text=True)
+    assert "Regressions</span><strong>1" in text
+    assert "case-one" in text and "Model M" in text
+    assert f"/runs/{baseline_id}/resultaten/" in text
+    assert f"/runs/{candidate_id}/resultaten/" in text
+    export = client.get(f"/runs/{candidate_id}/compare/{baseline_id}/export")
+    payload = json.loads(export.data)
+    assert export.status_code == 200
+    assert payload["compatibility"] == "compatible"
+    assert payload["summary"]["regressions"] == 1
+    api = client.get(f"/api/v1/runs/{candidate_id}/compare/{baseline_id}")
+    assert api.status_code == 200 and api.get_json()["summary"]["regressions"] == 1
+    assert client.get(f"/runs/{candidate_id}/compare?baseline=bad").status_code == 400
+    assert (
+        client.get(f"/api/v1/runs/{candidate_id}/compare/{baseline_id}?filter=bad").status_code
+        == 400
+    )
 
 
 def test_cancel_delete_and_export_require_csrf_and_confirmation(app) -> None:
