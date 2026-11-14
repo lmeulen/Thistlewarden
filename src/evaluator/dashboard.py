@@ -40,6 +40,7 @@ class DashboardStatistics:
     total_cases: int = 0
     priced_model_profiles: int = 0
     active_judge_profiles: int = 0
+    total_judge_profiles: int = 0
     llm_judge_cases: int = 0
     overall_pass_rate: Decimal | None = None
     average_weighted_score: Decimal | None = None
@@ -108,6 +109,7 @@ class DashboardService:
                      )) AS priced_model_profiles,
                     (SELECT COUNT(*) FROM judge_profiles WHERE active = 1)
                         AS active_judge_profiles,
+                    (SELECT COUNT(*) FROM judge_profiles) AS total_judge_profiles,
                     result_statistics.passed AS result_passed,
                     result_statistics.failed AS result_failed,
                     (SELECT AVG(weighted_score) FROM run_scores) AS average_weighted_score

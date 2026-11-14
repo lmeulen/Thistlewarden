@@ -66,6 +66,8 @@ def test_gui_renders_english_navigation_and_masks_settings_secrets(app) -> None:
     assert page.status_code == 200
     assert "Endpoints and models" in text
     assert "Environment values take precedence" in text
+    assert "<th>Active value</th>" in text
+    assert "<th>Desired value</th>" not in text
     assert "gui-fixture-secret" not in text
     assert "ENCRYPTION_KEY" in text and "••••••••" in text
     assert "Read-only" in text
@@ -216,6 +218,33 @@ def test_endpoint_delete_requires_matching_name(app) -> None:
         )
     finally:
         connection.close()
+
+
+def test_endpoint_model_list_scrolls_at_twenty_models(app) -> None:
+    services = app.extensions
+    endpoints = [
+        services["endpoint_service"].create(
+            {
+                "name": f"Provider {count}",
+                "completions_url": f"https://provider-{count}.example/v1/chat",
+            }
+        )
+        for count in (19, 20)
+    ]
+    for endpoint, count in zip(endpoints, (19, 20), strict=True):
+        for index in range(count):
+            services["model_profile_service"].create(
+                endpoint.id,
+                {"model_id": f"model-{index}", "display_name": f"Model {index}"},
+            )
+
+    text = app.test_client().get("/endpoints").get_data(as_text=True)
+    short_panel = text[text.index("Provider 19") : text.index("Provider 20")]
+    long_panel = text[text.index("Provider 20") :]
+    assert "model-list-scroll" not in short_panel
+    assert 'class="model-list model-list-scroll"' in long_panel
+    assert 'tabindex="0"' in long_panel
+    assert 'aria-label="Models for Provider 20; scroll for more"' in long_panel
 
 
 def test_endpoint_page_bulk_deletes_selected_models_only(app) -> None:

@@ -158,7 +158,28 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         and 'name="judge_type"' in text
         and 'value="exact_match" selected' in text
     )
-    assert "<th>Cost</th><th>Gates</th>" in text
+    for key, label in (
+        ("rank", "Rank"),
+        ("model", "Model"),
+        ("score", "Score"),
+        ("latency", "Latency p95"),
+        ("ttft", "TTFT p95"),
+        ("tps", "Mean TPS"),
+        ("tokens", "Tokens in/out"),
+        ("cost", "Cost"),
+        ("gates", "Gates"),
+    ):
+        assert f"model_sort={key}" in text and f">{label}" in text
+    assert '<th aria-sort="ascending"><a class="table-sort"' in text
+    assert "model_direction=desc" in text
+    assert "status=passed" in text and "judge_type=exact_match" in text
+    sorted_page = client.get(f"/runs/{run_id}?model_sort=cost&model_direction=desc")
+    assert sorted_page.status_code == 200
+    assert '<th aria-sort="descending"><a class="table-sort"' in sorted_page.get_data(as_text=True)
+    invalid_sort = client.get(f"/runs/{run_id}?model_sort=invalid")
+    invalid_text = invalid_sort.get_data(as_text=True)
+    assert "Invalid model comparison sorting." in invalid_text
+    assert 'Rank<span aria-hidden="true">▲</span>' in invalid_text
     run_overview = text[text.index("Run overview") : text.index("Model comparison")]
     assert run_overview.count('<article class="kpi">') == 5
     assert "<span>Weighted Score</span><strong>1.00</strong>" in run_overview
@@ -172,7 +193,7 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     model_table = text[text.index("Model comparison") : text.index("Model performance")]
     assert "<th>Pass rate</th>" not in model_table
     assert "<th>Error rate</th>" not in model_table
-    assert "<th>Latency p95</th>" in model_table
+    assert '>Latency p95<span class="sr-only">; activate to sort ascending</span>' in model_table
     assert "Latency gem./p95" not in model_table
     assert 'class="gate-dot gate-dot-passed"' in model_table
     assert 'title="Weighted score: Passed"' in model_table

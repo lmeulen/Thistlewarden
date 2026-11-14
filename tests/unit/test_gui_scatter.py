@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from evaluator.gui import _cost_score_scatter
+from evaluator.gui import _cost_score_scatter, _sort_model_comparison
 
 
 def _aggregate(score: str, *, cost: str = "1", name: str = "Model") -> dict[str, Any]:
@@ -51,6 +51,74 @@ def test_scatter_handles_single_point_and_omits_unknowns() -> None:
     assert scatter["points"][0]["x"] == Decimal(70)
     assert scatter["points"][0]["y"] == Decimal(20)
     assert scatter["omitted"] == 1
+
+
+def test_model_comparison_sorts_every_column_and_keeps_missing_values_last() -> None:
+    first = {
+        "rank": 2,
+        "model_snapshot_id": "b",
+        "model": {"display_name": "Beta"},
+        "weighted_score": Decimal("0.8"),
+        "latency_p95": Decimal(20),
+        "ttft_p95": Decimal(10),
+        "tps_mean": Decimal(30),
+        "input_tokens": 7,
+        "output_tokens": 2,
+        "known_total_cost": Decimal("0.2"),
+        "gates": [{"outcome": "passed"}],
+    }
+    second = {
+        "rank": 1,
+        "model_snapshot_id": "a",
+        "model": {"display_name": "Alpha"},
+        "weighted_score": Decimal("0.9"),
+        "latency_p95": Decimal(30),
+        "ttft_p95": Decimal(5),
+        "tps_mean": Decimal(40),
+        "input_tokens": 3,
+        "output_tokens": 8,
+        "known_total_cost": Decimal("0.1"),
+        "gates": [{"outcome": "failed"}],
+    }
+    missing = {
+        "rank": 3,
+        "model_snapshot_id": "c",
+        "model": {"display_name": "Missing"},
+        "weighted_score": None,
+        "latency_p95": None,
+        "ttft_p95": None,
+        "tps_mean": None,
+        "input_tokens": None,
+        "output_tokens": None,
+        "known_total_cost": None,
+        "gates": [],
+    }
+    items = [first, second, missing]
+    expected_ascending = {
+        "rank": ["a", "b", "c"],
+        "model": ["a", "b", "c"],
+        "score": ["b", "a", "c"],
+        "latency": ["b", "a", "c"],
+        "ttft": ["a", "b", "c"],
+        "tps": ["b", "a", "c"],
+        "tokens": ["a", "b", "c"],
+        "cost": ["a", "b", "c"],
+        "gates": ["a", "b", "c"],
+    }
+    for column, expected in expected_ascending.items():
+        assert [
+            item["model_snapshot_id"] for item in _sort_model_comparison(items, column, "asc")
+        ] == expected
+        descending = _sort_model_comparison(items, column, "desc")
+        expected_descending = (
+            list(reversed(expected))
+            if column in {"rank", "model"}
+            else [
+                *reversed(expected[:-1]),
+                "c",
+            ]
+        )
+        assert [item["model_snapshot_id"] for item in descending] == expected_descending
 
 
 def test_scatter_clamps_negative_costs_and_out_of_range_scores() -> None:

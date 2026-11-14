@@ -953,6 +953,53 @@ def run_new() -> str | Response:
     )
 
 
+_MODEL_COMPARISON_SORTS = {
+    "rank",
+    "model",
+    "score",
+    "latency",
+    "ttft",
+    "tps",
+    "tokens",
+    "cost",
+    "gates",
+}
+_GATE_SORT_ORDER = {"failed": 0, "indeterminate": 1, "passed": 2}
+
+
+def _sort_model_comparison(
+    aggregates: list[dict[str, Any]], sort: str, direction: str
+) -> list[dict[str, Any]]:
+    def value(item: dict[str, Any]) -> Any:
+        if sort == "rank":
+            return item["rank"]
+        if sort == "model":
+            return (item["model"].get("display_name") or "").casefold()
+        if sort == "tokens":
+            if item["input_tokens"] is None and item["output_tokens"] is None:
+                return None
+            return (item["input_tokens"] or 0, item["output_tokens"] or 0)
+        if sort == "gates":
+            if not item["gates"]:
+                return None
+            return tuple(sorted(_GATE_SORT_ORDER[gate["outcome"]] for gate in item["gates"]))
+        return item[
+            {
+                "score": "weighted_score",
+                "latency": "latency_p95",
+                "ttft": "ttft_p95",
+                "tps": "tps_mean",
+                "cost": "known_total_cost",
+            }[sort]
+        ]
+
+    available = [item for item in aggregates if value(item) is not None]
+    missing = [item for item in aggregates if value(item) is None]
+    available.sort(key=lambda item: item["model_snapshot_id"])
+    available.sort(key=value, reverse=direction == "desc")
+    return available + missing
+
+
 def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
     plot_left = Decimal(70)
     plot_width = Decimal(660)
@@ -1058,6 +1105,12 @@ def run_detail(run_id: UUID) -> str:
             gates_by_model.setdefault(model_snapshot_id, []).append(gate)
     for aggregate in aggregates:
         aggregate["gates"] = gates_by_model.get(aggregate["model_snapshot_id"], [])
+    model_sort = request.args.get("model_sort", "rank").strip()
+    model_direction = request.args.get("model_direction", "asc").strip()
+    if model_sort not in _MODEL_COMPARISON_SORTS or model_direction not in {"asc", "desc"}:
+        model_sort, model_direction = "rank", "asc"
+        query_error = query_error or "Invalid model comparison sorting."
+    aggregates = _sort_model_comparison(aggregates, model_sort, model_direction)
     result_rows = _run_views().results(run_id, query)
     analysis = _run_views().analysis(run_id)
     has_next = len(result_rows) > RESULT_PAGE_SIZE
@@ -1066,6 +1119,8 @@ def run_detail(run_id: UUID) -> str:
         run=run,
         models=models,
         aggregates=aggregates,
+        model_sort=model_sort,
+        model_direction=model_direction,
         cost_score_scatter=_cost_score_scatter(aggregates),
         analysis=analysis,
         results=result_rows[:RESULT_PAGE_SIZE],
