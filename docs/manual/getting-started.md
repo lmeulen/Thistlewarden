@@ -1,14 +1,16 @@
-# Getting started and common workflows
+<a id="page-top"></a>
 
-[Manual contents](README.md)
+# Getting started
 
-## 1. Introduction
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
+
+## Introduction
 
 Thistlewarden is a local web application for evaluating the quality, reliability, performance, and cost of OpenAI-compatible language models. It lets you define repeatable test cases, run the same tests against one or more models, and compare their results.
 
 Thistlewarden is designed for reproducible evaluation. A run stores snapshots of the selected test cases and model profiles, so its results continue to describe what was tested at that time even if you later change the configuration.
 
-### 1.1 What you can do with Thistlewarden
+### What you can do with Thistlewarden
 
 You can use Thistlewarden to:
 
@@ -23,9 +25,9 @@ You can use Thistlewarden to:
 
 Thistlewarden does not train or modify language models. It evaluates model responses using tests and criteria that you configure.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 1.2 Intended users
+### Intended users
 
 Thistlewarden is intended for people who need repeatable evidence about model behavior, including:
 
@@ -37,9 +39,9 @@ Thistlewarden is intended for people who need repeatable evidence about model be
 
 The application is designed as a local, single-user tool. It is not a multi-user service with accounts, roles, or remote collaboration features.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 1.3 Typical workflow
+### Typical workflow
 
 A complete evaluation usually follows these steps:
 
@@ -52,9 +54,9 @@ A complete evaluation usually follows these steps:
 7. Monitor progress and inspect results, metrics, costs, and quality-gate outcomes.
 8. Refine the test material and repeat the evaluation when models or prompts change.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 1.4 Core concepts
+### Core concepts
 
 Read this relationship list if diagram does not render or is difficult to use:
 
@@ -127,43 +129,43 @@ A result records the outcome of one test case for one model profile. It includes
 
 A quality gate compares aggregate run results with configured thresholds. It provides a clear passed, failed, or indeterminate outcome for release and acceptance decisions.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 1.5 Local data and sensitive content
+### Local data and sensitive content
 
 Thistlewarden stores configuration and evaluation data locally. Prompts, expected answers, model responses, judge material, and exports may contain confidential information. Provider secrets are protected separately, but test and run content is stored in the local database and can appear in downloaded exports.
 
 Protect the computer, database, backups, and exported files according to the sensitivity of your evaluation data. Do not enter production secrets into prompts, expected answers, evaluator configuration, or test output.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 1.6 First successful evaluation
+### First successful evaluation
 
 **Start here if this is your first use.** Use one approved provider credential, one model, and one to three non-sensitive cases. Provider calls and LLM judging may create charges.
 
-1. [Add an endpoint](endpoints-and-models.md#51-adding-an-endpoint), then save it.
-2. [Create a model profile](endpoints-and-models.md#61-creating-a-model-profile) and select **Test model**.
-3. [Create a golden set](golden-sets.md#71-creating-and-managing-golden-sets).
-4. [Add a test case](golden-sets.md#81-adding-and-editing-test-cases). Choose **Exact match**, **Contains**, or **JSON Schema**; use the [method chooser](evaluators.md#9-evaluation-methods) if unsure.
+1. [Add an endpoint](endpoints-and-models.md#adding-an-endpoint), then save it.
+2. [Create a model profile](endpoints-and-models.md#creating-a-model-profile) and select **Test model**.
+3. [Create a golden set](golden-sets.md#creating-and-managing-golden-sets).
+4. [Add a test case](golden-sets.md#adding-and-editing-test-cases). Choose **Exact match**, **Contains**, or **JSON Schema**; use the [method chooser](evaluators.md#evaluation-methods) if unsure.
 5. Use **Test evaluator** with one output that should pass and one that should fail.
-6. [Create a run](runs-and-results.md#111-creating-a-run) with that golden set and one model profile.
-7. Wait for terminal status, then open [individual result details](runs-and-results.md#127-individual-result-details).
+6. [Create a run](runs-and-results.md#creating-a-run) with that golden set and one model profile.
+7. Wait for terminal status, then open [individual result details](runs-and-results.md#individual-result-details).
 
 **How to read first result:** **Passed** means evaluator checked output and condition was met. **Failed** means evaluator checked output but condition was not met. **Error** means provider, judge, or processing prevented normal evaluation. Fix errors before deciding model quality.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 1.7 Current limits
+### Current limits
 
 Thistlewarden is local, single-user evaluation application. It does not provide multi-user accounts, roles, remote collaboration, or a supported public/network deployment.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 2. Quick start
+## Quick start
 
 This chapter gets a first small evaluation working. Use non-sensitive material, one approved provider credential, one model profile, and one to three test cases. Provider calls may create charges. For field-by-field reference, continue with Chapter 3 and later chapters.
 
-### 2.1 Before you begin
+### Before you begin
 
 You need:
 
@@ -174,9 +176,9 @@ You need:
 
 Do not use production secrets, customer data, or sensitive personal data in this first run. Open application at address supplied by operator, normally <http://127.0.0.1:5000>.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 2.2 Create and test model access
+### Create and test model access
 
 1. Open **Endpoints** and select **Add endpoint**.
 2. Enter non-secret **Name**, provider's full **Completions URL**, and **API key**.
@@ -185,11 +187,11 @@ Do not use production secrets, customer data, or sensitive personal data in this
 5. Enter exact provider **External model ID** and recognizable **Display name**.
 6. Keep profile **Active**, save it, then select **Test model**.
 
-Stop here if test fails. Check displayed error code, endpoint URL, key/header, model ID, and provider-supported request settings. Do not start evaluation until model test succeeds. See [provider endpoints](endpoints-and-models.md#51-adding-an-endpoint) and [model profiles](endpoints-and-models.md#61-creating-a-model-profile) for details.
+Stop here if test fails. Check displayed error code, endpoint URL, key/header, model ID, and provider-supported request settings. Do not start evaluation until model test succeeds. See [provider endpoints](endpoints-and-models.md#adding-an-endpoint) and [model profiles](endpoints-and-models.md#creating-a-model-profile) for details.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 2.3 Create one simple test
+### Create one simple test
 
 1. Open **Golden sets** and select **Add golden set**.
 2. Enter name such as `First checks`, version `0.1`, keep it active, and save.
@@ -199,11 +201,11 @@ Stop here if test fails. Check displayed error code, endpoint URL, key/header, m
 6. Use **Test evaluator** with one sample output containing phrase and one without it.
 7. Save case with **Enabled** selected.
 
-This confirms evaluator before provider calls. Choose [JSON Schema](evaluators.md#95-json-schema) instead when first test checks JSON fields/types. See [test cases](golden-sets.md#81-adding-and-editing-test-cases) and [evaluation methods](evaluators.md#9-evaluation-methods) for more methods.
+This confirms evaluator before provider calls. Choose [JSON Schema](evaluators.md#json-schema) instead when first test checks JSON fields/types. See [test cases](golden-sets.md#adding-and-editing-test-cases) and [evaluation methods](evaluators.md#evaluation-methods) for more methods.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 2.4 Run and inspect evaluation
+### Run and inspect evaluation
 
 1. Open **Runs** and select **New run**.
 2. Enter descriptive name, select `First checks`, and select tested model profile.
@@ -213,15 +215,15 @@ This confirms evaluator before provider calls. Choose [JSON Schema](evaluators.m
 
 Interpret status first: **Passed** means output met evaluator condition; **Failed** means evaluation ran but condition did not match; **Error** means provider, judge, or processing prevented normal evaluation. Resolve errors before judging model quality. Inspect prompt, candidate output, and evaluation reason before changing test.
 
-Next: add representative cases, then compare models or add quality gates only after baseline works. See [running evaluations](runs-and-results.md#11-running-evaluations) and [understanding results](runs-and-results.md#12-understanding-results).
+Next: add representative cases, then compare models or add quality gates only after baseline works. See [running evaluations](runs-and-results.md#running-evaluations) and [understanding results](runs-and-results.md#understanding-results).
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 3. Getting started
+## Set up Thistlewarden
 
 **Reading guide:** Complete this chapter, then Chapters 5–8 and 10 for first evaluation. Chapters 10 and 12 are optional advanced evaluation features. Chapters 14–14 and 16–17 contain import, operator, troubleshooting, and security reference; use them when needed.
 
-### 3.1 Opening the application
+### Opening the application
 
 Thistlewarden runs as a local web application. Start it using the installation method selected by your operator, then open the following address in a modern web browser:
 
@@ -242,9 +244,9 @@ If the browser reports that it cannot connect to `http://127.0.0.1:5000`:
 
 Do not continue if the browser shows a certificate warning, an unexpected login page, or a different application.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 3.2 Initial configuration
+### Initial configuration
 
 Before you can run an evaluation, configure at least one provider endpoint and one active model profile. You also need an active golden set with at least one enabled test case before starting a run.
 
@@ -285,9 +287,9 @@ Before creating substantial test material, verify these points:
 
 If model testing fails, resolve the endpoint or profile error before starting a run. A successful saved endpoint does not prove that its credentials, URL, model name, or provider availability are correct.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 3.3 Recommended first workflow
+### Recommended first workflow
 
 Start with a small deterministic evaluation. It confirms that provider access, model configuration, test material, and result reporting work before you introduce LLM judging, multiple models, or quality gates.
 
@@ -308,153 +310,7 @@ Use realistic but non-sensitive test data. Runs store prompts, expected answers,
 
 When the baseline is stable, expand the golden set into a regression suite. Run it whenever you change a model, model profile, prompt strategy, endpoint, or provider configuration.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 4. Dashboard
 
-### 4.1 Available statistics
-
-The dashboard is the application home page. It provides a read-only summary of evaluation activity, configured model access, and available test material. The summary updates when you refresh the page.
-
-![Dashboard with evaluation, configuration, and test-material summaries](images/dashboard.png)
-
-*Dashboard overview. Screenshots use synthetic demonstration data.*
-
-It has three cards:
-
-- **Evaluate** shows run counts:
-  - **Total runs**: every run retained in the application.
-  - **Active runs**: runs that are pending or running.
-  - **Finished runs**: runs that completed, completed with errors, failed, or were cancelled.
-- **Configure** shows model-access counts:
-  - **Active model profiles**: profiles that are active and whose endpoint is also active.
-  - **Active endpoints**: enabled provider endpoints.
-  - **Total model profiles**: all profiles, including inactive profiles and profiles under inactive endpoints.
-- **Test material** shows golden-set counts:
-  - **Enabled test cases**: cases that are enabled and belong to an active golden set.
-  - **Active golden sets**: enabled golden sets.
-  - **Total test cases**: all cases, including disabled cases and cases in inactive golden sets.
-
-A new installation displays zero for every value. This is normal until you configure endpoints, profiles, golden sets, and runs.
-
-[Back to top](README.md#manual-top)
-
-### 4.2 Interpreting totals and active-item counts
-
-The dashboard distinguishes total records from records currently available for new work.
-
-**Total** counts are inventory counts. They include inactive, disabled, completed, cancelled, and historical records where relevant. Use them to understand how much configuration and test material the application contains.
-
-**Active** and **enabled** counts show records eligible for normal use:
-
-- A model profile counts as active only when both the profile and its parent endpoint are active.
-- A test case counts as enabled only when both the case and its parent golden set are active.
-- A run remains in the total after it finishes, fails, or is cancelled; it no longer counts as active.
-
-These rules explain apparent differences between totals and usable records. For example, activating a model profile does not make it usable if its endpoint is inactive. Likewise, enabling a test case does not include it in a new run while its golden set is inactive.
-
-Use the dashboard as a quick readiness check before creating a run. If active model profiles or enabled test cases are zero, open the linked configuration page and check the parent record as well as the child record.
-
-[Back to top](README.md#manual-top)
-
-### 4.3 Navigation shortcuts
-
-Each dashboard card has a button that opens the page associated with its summary:
-
-- **View runs** opens **Runs**, where you create, monitor, inspect, export, and manage evaluation runs.
-- **View endpoints** opens **Endpoints**, where you manage provider endpoints and their model profiles.
-- **View golden sets** opens **Golden sets**, where you manage test suites and test cases.
-
-Use these buttons when a dashboard count identifies missing setup or work requiring attention. For example:
-
-- select **View endpoints** when no active model profiles are available;
-- select **View golden sets** when no enabled test cases are available;
-- select **View runs** to inspect active runs or compare completed work.
-
-The main navigation bar remains available on every page. Use it to move directly between the dashboard, endpoints, golden sets, judges, runs, settings, and configuration exchange.
-
-[Back to top](README.md#manual-top)
-
-## 16. Common workflows
-
-### 16.1 First evaluation from start to finish
-
-Use this small, low-risk workflow to establish working baseline:
-
-1. Create provider endpoint with approved non-production credential; keep endpoint active.
-2. Create active model profile, confirm model ID and request parameters, then use **Test connection**.
-3. Create active golden set named and versioned for purpose, for example `Support baseline` version `0.1`.
-4. Add three to ten enabled cases representing key behaviors. Start with Exact match, Contains, Numeric, or JSON Schema.
-5. Use **Test evaluator** with known passing and failing candidate output for each deterministic case.
-6. Optionally set simple quality gates after you know expected baseline; do not guess strict thresholds initially.
-7. Open **Runs**, select golden set and one model profile, enter descriptive run name, and inspect preflight size/cost warning.
-8. Start run and wait for terminal status.
-9. Review weighted score, failed/error results, latency, and known cost. Open individual results to verify evaluator behavior.
-10. Export results or record run name/ID before changing suite or profile.
-
-Fix configuration or test intent before scaling to many models/cases. A passing connection test proves basic provider call path, not that prompts, evaluator criteria, price configuration, or quality expectations are correct.
-
-[Back to top](README.md#manual-top)
-
-### 16.2 Comparing multiple models
-
-Select two or more active target model profiles in one new run. Thistlewarden runs every enabled case against every selected model, producing comparable result matrix under same run snapshots. Run preview shows `active cases × selected models` job count.
-
-For useful comparison, hold constant golden set, enabled cases, evaluator configuration, judge selection, and quality gates. Give run name clear comparison scope, for example `Support 1.2 — model A vs model B`. Use same provider settings where meaningful, but preserve model-specific token/reasoning fields when provider requires them.
-
-After completion, use **Model comparison** for weighted score, P95 latency, P95 TTFT, mean TPS, token totals, costs, and gate indicators. Use cost-versus-score chart to identify models omitted due to unknown cost/score. Filter results by model and case to explain aggregate differences. Compare error counts before treating score differences as quality differences.
-
-More models multiply provider calls and potential cost. Start with small suite, avoid changing live configuration while comparison runs, and ensure configured price rates are current enough for planning. Run snapshots let a completed comparison remain auditable even after profile edits.
-
-[Back to top](README.md#manual-top)
-
-### 16.3 Building regression suites
-
-A regression suite is stable golden set representing behaviors that must not degrade. Build it incrementally from real defects, critical customer tasks, safety requirements, structured-output contracts, and known edge cases.
-
-Recommended practice:
-
-1. Define suite purpose, owner, version, category vocabulary, and entry criteria.
-2. Add focused cases with stable IDs; one primary behavior per case.
-3. Use categories and tags to cover product areas and support filtered investigation.
-4. Weight critical cases deliberately; do not inflate scores by overweighting everything.
-5. Prefer deterministic evaluators for objective contracts and test examples before saving.
-6. Add LLM judge only for quality that cannot be expressed deterministically.
-7. Run suite against known-good baseline and inspect every surprising pass/fail.
-8. Configure calibrated gates once baseline is trustworthy.
-9. Run suite before release or model/configuration change and retain run exports as evidence when needed.
-
-Add a case when it protects meaningful behavior; remove or disable only with documented reason. Keep cases representative and non-sensitive. Duplicate golden set to branch major release or policy change, rather than silently redefining historical baseline.
-
-[Back to top](README.md#manual-top)
-
-### 16.4 Combining deterministic and LLM-based evaluation
-
-Use deterministic methods and LLM judge in same golden set, selecting each based on requirement. Deterministic checks are repeatable, fast, local, and do not make extra provider call. LLM judge handles relevance, completeness, reasoning quality, and other nuanced criteria, but adds cost, latency, provider dependency, and variation.
-
-Example composition:
-
-- JSON Schema validates required response shape.
-- Exact match or Numeric validates fixed field/value.
-- Contains verifies mandatory warning or citation.
-- LLM judge evaluates usefulness and completeness of longer answer.
-
-Make pass criteria explicit. Do not use LLM judge where JSON Schema or exact rule is sufficient. Do not use deterministic fragments as proxy for overall quality when semantic assessment is required. For LLM judge, configure active judge execution profile, low temperature, and calibrated immutable preset. Remember judge receives candidate and evaluation context; use approved provider and non-sensitive material.
-
-Review results by **Judge type** in run detail. Investigate disagreement between methods: it may reveal prompt ambiguity, overly brittle deterministic rule, weak rubric, or target behavior issue. Gate thresholds aggregate all results, so confirm weighting and evaluator mix represent actual release policy.
-
-[Back to top](README.md#manual-top)
-
-### 16.5 Updating tests while preserving historical results
-
-Runs store immutable snapshots of selected case content, model configuration, judge profile, and quality gates at run creation. Editing a live golden set or model profile changes future runs only; it does not rewrite completed result data.
-
-For routine update, edit case, increment golden-set version, record reason in description/tags or team change record, test evaluator, and start new named run. Keep stable Case ID when test remains same conceptual behavior, so reviewers can follow it across versions. Create new ID when behavior or acceptance contract changes materially.
-
-For broad or risky change, duplicate golden set first. Rename and version duplicate, modify copy, run it, and retain original active only until replacement is approved. Duplication includes cases, judge override, and quality-gate defaults but creates independent identifiers.
-
-Do not modify historical exports to simulate new baseline. Keep prior run and export for audit, then compare new run metrics/results with prior evidence manually. Deactivate obsolete cases or sets when needed; do not delete material merely to hide previous failures. Existing run snapshots remain available until run itself is deleted under retention policy.
-
-[Back to top](README.md#manual-top)
-
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)

@@ -1,10 +1,11 @@
+<a id="page-top"></a>
+
 # Import, export, and backup
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 14. Import, export, and backup
 
-### 14.1 Importing golden sets
+### Importing golden sets
 
 Import reusable test material from **Golden sets** by selecting **Import JSON/CSV**. Choose **JSON** or **CSV**, choose file, and select **Validate and preview** before committing.
 
@@ -12,9 +13,9 @@ JSON can carry golden-set metadata and test cases. CSV imports test cases and re
 
 After successful validation, select file again and choose **Complete import**. Import creates a new golden set with new internal identifiers; it does not update an existing set. Open created set to review metadata, case order, evaluator configuration, activation, judge override, and quality gates before using it in a run.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 14.2 Previewing import changes
+### Previewing import changes
 
 Golden-set preview validates file without writing data. It reports name, version, and number of test cases. Use it to catch malformed JSON or CSV, missing required values, invalid evaluator configurations, duplicate case IDs, and size-limit issues before import.
 
@@ -22,9 +23,9 @@ Preview is not a reservation or staged upload. It does not retain file content. 
 
 For full application configuration, **Configuration exchange** preview additionally reports mode, new-object count, records to archive, UUID conflicts/remaps, and endpoints missing secrets. Review all counts and warnings before committing.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 14.3 Exporting golden sets
+### Exporting golden sets
 
 Open a saved golden set. In **Testcases**, select **JSON** or **CSV** to download it.
 
@@ -33,9 +34,9 @@ Open a saved golden set. In **Testcases**, select **JSON** or **CSV** to downloa
 
 Exports contain test material, including prompts, expected answers, evaluator configurations, and potentially sensitive content. Store them only in approved locations, restrict access, and review changes before importing edited files. A golden-set export is not a complete application backup: it does not include endpoints, model profiles, judges, run history, or secret values.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 14.4 Exporting run results
+### Exporting run results
 
 Open run detail and select **Export**. Select one format, acknowledge sensitive-content warning, then select **Download**.
 
@@ -49,9 +50,9 @@ Run exports may contain prompts, system prompts, expected answers, candidate mod
 
 Export before permanently deleting a run. An export is a point-in-time copy and does not update after future configuration changes.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 14.5 Exporting and importing application configuration
+### Exporting and importing application configuration
 
 Open **Configuration exchange** to download or import a version `1.0` JSON configuration bundle.
 
@@ -68,9 +69,9 @@ To import:
 
 Import commits atomically: valid configuration changes are applied together, or no partial bundle is written. Imported endpoints with missing secrets cannot make provider calls until secrets are entered locally.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 14.6 Conflict handling
+### Conflict handling
 
 Golden-set import creates a new set, so destination golden-set name must be unique. If name conflicts, rename source set or use another CSV destination name, validate again, and retry. Import validation also rejects duplicate case IDs within imported file without regard to letter case.
 
@@ -80,9 +81,9 @@ Configuration **Replace** does not delete active existing endpoints, model profi
 
 Always preview current file against target environment immediately before committing. Treat cross-environment imports as change-controlled operations, especially where names, active state, provider URLs, or pricing differ.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 14.7 Backing up application data
+### Backing up application data
 
 **Operator task:** use your organization-approved backup procedure. See also [configuration guide](../configuration.md) for data paths and retention settings.
 
@@ -98,6 +99,6 @@ Recommended process:
 
 Do not rely on configuration export alone: it intentionally omits secret values and run history. Do not rely on run or golden-set exports alone: each contains only a subset of data. Define retention, encryption, access, and restore-testing practices that meet your organization's requirements.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)

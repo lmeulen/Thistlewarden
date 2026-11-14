@@ -1,10 +1,12 @@
+<a id="page-top"></a>
+
 # Golden sets and test cases
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 7. Golden sets
+## Golden sets
 
-### 7.1 Creating and managing golden sets
+### Creating and managing golden sets
 
 A golden set is a reusable test suite. It groups related test cases and provides the test material selected when creating a run.
 
@@ -19,13 +21,13 @@ To create one:
 7. Select **Save**.
 8. On the set page, select **Add test case** to add test material.
 
-After saving, the golden-set page lists its test cases and provides controls to add, edit, select, delete, export, configure a judge override, and configure quality gates. See [chapter 8](#8-test-cases) for case authoring and [chapter 13](quality-gates.md#13-quality-gates) for gate configuration.
+After saving, the golden-set page lists its test cases and provides controls to add, edit, select, delete, export, configure a judge override, and configure quality gates. See [chapter 8](#test-cases) for case authoring and [chapter 13](quality-gates.md#quality-gates) for gate configuration.
 
 Use one golden set for a coherent evaluation purpose, such as customer-support answers, retrieval quality, structured output, or safety regressions. Avoid mixing unrelated tasks in one set: separate sets make results easier to interpret and allow each set to have its own judge and quality standards.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 7.2 Versioning, tags, and activation
+### Versioning, tags, and activation
 
 **Version** is a user-managed label for the test-suite revision. Thistlewarden does not automatically increment it. Update it when a change is meaningful to your team, for example after adding coverage, changing expected behavior, or preparing a release baseline. Use a consistent convention such as `1.0`, `1.1`, or `2026.11`.
 
@@ -40,9 +42,9 @@ Use the **Active** checkbox to control whether a golden set can be selected for 
 
 Deactivate a set to retire a suite, pause maintenance, or prevent accidental runs. Completed runs preserve snapshots of their selected test material, so later changes to a set, including activation or version changes, do not change historical run results.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 7.3 Duplicating golden sets
+### Duplicating golden sets
 
 Duplicate a golden set to create a new editable baseline without changing the source set.
 
@@ -55,9 +57,9 @@ Duplication copies the golden-set metadata and test cases, including each case's
 
 Use duplication when branching a regression suite for a new release, provider, product area, or evaluator strategy. Rename and version the copy immediately so users can distinguish it from its source in run selection and exports.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 7.4 Selecting a judge profile
+### Selecting a judge profile
 
 A golden set can use a specific judge profile for its LLM judge test cases. Configure the override after saving the golden set:
 
@@ -70,13 +72,13 @@ The override affects only test cases using the **LLM judge** evaluation method. 
 
 Choose a set-specific override when that suite needs a different judge model, prompt template, rubric behavior, or cost profile than other suites. Use the global default when one approved judge profile should apply across sets.
 
-Before assigning a profile, confirm that it is configured with an active model profile and that its model can be called successfully. A judge failure can cause LLM-judge results to fail even when target-model calls succeed. See [chapter 10](judges.md#10-judge-profiles) for creating and managing judge profiles.
+Before assigning a profile, confirm that it is configured with an active model profile and that its model can be called successfully. A judge failure can cause LLM-judge results to fail even when target-model calls succeed. See [chapter 10](judges.md#judge-profiles) for creating and managing judge profiles.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 8. Test cases
+## Test cases
 
-### 8.1 Adding and editing test cases
+### Adding and editing test cases
 
 Open golden set and select **Add test case**. A test case defines one prompt, expected behavior, and evaluation method for every selected model in a run.
 
@@ -90,9 +92,9 @@ Case ID must be unique within golden set. Use stable descriptive IDs such as `su
 
 Evaluator configuration is stored as JSON. Form starts with valid method-specific example. For **Exact match**, **Contains**, **Regex**, **Numeric**, **JSON Schema**, and **LLM judge**, switch between raw JSON and form fields; both views edit same configuration. JSON Schema form provides schema and expected-value JSON editors, Markdown code-fence option, and read-only Draft 2020-12 indicator. Enable **Require exact expected value** to distinguish an intentional JSON value—including `null`, `false`, or an empty value—from no expected-value check. Contains form fields let you add and remove separate single-line expected fragments and configure whether all or any fragment must occur. Regex form fields provide a multiline pattern plus full-match, case-sensitivity, multiline, and dot-all options. Changing evaluation method replaces configuration with a new valid example; review and customize it before saving. Opening existing case preserves its stored configuration until you actively change method.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 8.2 Prompts and expected values
+### Prompts and expected values
 
 **User prompt** is required text sent to target model. Write it as representative request from intended workload. **System prompt** is optional instruction sent before user prompt; use it when target behavior depends on system-level context.
 
@@ -108,11 +110,11 @@ Write prompts and expectations to make pass condition clear:
 - Use deterministic evaluator for exact structured or numeric requirements when possible.
 - Do not include credentials, personal data, or production secrets in any prompt or answer field.
 
-Candidate answers produced during runs, and their input prompt material, become part of result detail and exports. See [chapter 18](operations.md#18-security-and-privacy) for handling sensitive content.
+Candidate answers produced during runs, and their input prompt material, become part of result detail and exports. See [chapter 18](security-and-privacy.md#security-and-privacy) for handling sensitive content.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 8.3 Categories, tags, weights, and ordering
+### Categories, tags, weights, and ordering
 
 Use **Category** for one primary grouping, such as `support`, `retrieval`, `safety`, or `structured-output`. Use comma-separated **Tags** for multiple cross-cutting labels, such as `release`, `billing`, `nl`, or `regression`. Tags must be non-blank and unique within case.
 
@@ -122,9 +124,9 @@ Cases retain an internal order. New cases are appended. Imported and duplicated 
 
 Keep category/tag vocabulary controlled. Inconsistent forms such as `Billing`, `billing`, and `bill` weaken reporting and maintenance.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 8.4 Enabling and disabling test cases
+### Enabling and disabling test cases
 
 **Enabled** controls whether case participates in new runs. It is selected by default.
 
@@ -135,9 +137,9 @@ Keep category/tag vocabulary controlled. Inconsistent forms such as `Billing`, `
 
 Disable case to quarantine flaky scenario, pause work in progress, exclude obsolete provider behavior, or reduce run cost without deleting test material. Add an explanatory tag or update description when team needs to know why case is disabled. Existing runs retain their case snapshots regardless of later enabled-state changes.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 8.5 Testing candidate output before saving
+### Testing candidate output before saving
 
 Use **Test evaluator** in test-case form to check current unsaved evaluation settings against sample candidate output.
 
@@ -151,9 +153,9 @@ Preview uses production validation and deterministic evaluator behavior, but wri
 
 LLM judge preview is unavailable in this form because it needs run/model snapshot, provider call, credentials, rate limiting, and may incur cost. Save case and use a controlled run to evaluate LLM-judge behavior. Do not enter sensitive output into preview field: it is sent in request even though it is not persisted or returned.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 8.6 Bulk selection and deletion
+### Bulk selection and deletion
 
 On golden-set page, select checkboxes beside one or more test cases, then select **Delete selection**. Browser asks for confirmation and requires at least one selected item. Use individual **Delete** controls for a single case.
 
@@ -161,6 +163,6 @@ Deletion is permanent for current golden-set item. Before bulk deletion, export 
 
 After successful bulk deletion, remaining cases are renumbered internally to preserve contiguous order. Review set and run-size preview before starting next run.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)

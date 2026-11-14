@@ -1,10 +1,11 @@
+<a id="page-top"></a>
+
 # Troubleshooting
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 17. Troubleshooting
 
-### 17.1 Provider connection failures
+### Provider connection failures
 
 Symptoms include failed model connection test, `NETWORK_ERROR`, `TIMEOUT_ERROR`, provider-client/server errors, or run results with error status. Work from lowest-risk checks upward:
 
@@ -18,9 +19,9 @@ Symptoms include failed model connection test, `NETWORK_ERROR`, `TIMEOUT_ERROR`,
 
 Do not paste full endpoint headers, prompts, responses, or credentials into tickets/logs. A saved endpoint does not prove network reachability or provider acceptance. If local browser cannot open application, resolve application startup/readiness first rather than provider configuration.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 17.2 Authentication and rate-limit errors
+### Authentication and rate-limit errors
 
 Authentication failures usually mean missing, expired, revoked, malformed, or incorrectly placed API key/secret header. Open endpoint, verify authentication method and header name required by provider, then enter replacement secret only when needed. Leaving secret field blank on edit preserves existing value. Confirm endpoint/model are active and test connection. Never expose credential while diagnosing.
 
@@ -28,9 +29,9 @@ Rate-limit errors mean provider rejected or delayed request due to request, toke
 
 Mitigate rate limits by reducing selected models/cases, lowering run concurrency, waiting for provider reset, checking provider quota, or using approved endpoint with adequate capacity. Do not repeatedly start identical large runs; this can increase cost and backlog. Inspect run error rows and provider account status, then retry failed jobs only after cause is corrected.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 17.3 Invalid evaluator configuration
+### Invalid evaluator configuration
 
 Case save rejects invalid evaluator configuration JSON, unknown fields, wrong types, missing required method fields, invalid regular expressions, invalid JSON Schema, duplicate rubric IDs, and invalid numeric/range values. Error message identifies field where available.
 
@@ -46,9 +47,9 @@ Use this recovery sequence:
 
 Changing method replaces form JSON with its new example, so copy deliberate custom configuration elsewhere before switching. Output preview validates evaluator settings but does not save them. LLM judge output preview is unavailable; use controlled run.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 17.4 Regular expression and JSON Schema problems
+### Regular expression and JSON Schema problems
 
 For **Regex**, first decide whether requirement is search anywhere or full candidate match. Set `full_match` for whole answer; otherwise use anchors such as `^` and `$` deliberately. Check escaping: JSON requires backslashes to be escaped, for example `"\\d+"` for digit pattern. Test case sensitivity, multiline, and dot-all behavior with both passing and failing samples. Simplify nested or ambiguous repetition; regex evaluation has short timeout and timed-out pattern fails.
 
@@ -56,9 +57,9 @@ For **JSON Schema**, candidate must be valid standalone JSON. Check quotation, c
 
 Use result reason and metadata in individual run result to identify parse vs schema failure. Reduce complex contract to minimal working schema, verify output tester, then add constraints incrementally.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 17.5 LLM judge setup problems
+### LLM judge setup problems
 
 LLM judge needs active judge profile resolved by run override, golden-set override, or active global default. It also needs active judge model profile and active parent endpoint. Check each link before run. Ensure test case selects a registered preset and provides preset-required `expected_value` or `context`.
 
@@ -66,9 +67,9 @@ Judge model must return strict JSON response containing score, passed, reason, a
 
 Do not expect **Test evaluator** to invoke judge: output preview rejects LLM judge because it needs run snapshot/provider call and may cost money. Verify judge through controlled run with non-sensitive data. If judge profile is changed, start new run; existing run uses its snapshot.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 17.6 Interrupted or incomplete runs
+### Interrupted or incomplete runs
 
 A run may be pending/running while workers process jobs, `completed with errors` when some jobs fail, `failed` when all jobs fail, or `cancelled` after confirmed cancellation. Open run detail and inspect progress, result status, and error rows. Do not delete run before recording/exporting evidence needed for diagnosis.
 
@@ -76,9 +77,9 @@ After application interruption, expired worker leases are recovered when applica
 
 Wait for recovery to settle, then refresh run detail. For terminal run with failures, correct root cause and use **Retry failed jobs** to create new run for failed source profiles. This is a new run using current live configuration and selected failed profiles, not continuation of old immutable snapshot. Cancel only if remaining work should stop; pending jobs are cancelled, while already running provider calls may have begun.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 17.7 Using request IDs when reporting errors
+### Using request IDs when reporting errors
 
 Application generates request ID for HTTP request correlation and returns it in `X-Request-ID` response header. API error payloads also contain `error.request_id`. Record this ID immediately when page/API action fails.
 
@@ -86,6 +87,6 @@ A useful support report contains request ID, approximate UTC time, action attemp
 
 Do not include API keys, cookies, CSRF values, secret headers, prompts, expected answers, candidate output, complete provider responses, or unredacted exports. Request IDs help operator correlate safe logs without requiring sensitive payload copies. Caller-provided `X-Request-ID` is not trusted as application correlation value; use ID returned by application.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)

@@ -1,10 +1,12 @@
+<a id="page-top"></a>
+
 # Runs and results
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 11. Running evaluations
+## Running evaluations
 
-### 11.1 Creating a run
+### Creating a run
 
 A run evaluates every enabled test case in one active golden set against one or more active model profiles. Open **Runs** and select **New run** to create one.
 
@@ -21,9 +23,9 @@ A run evaluates every enabled test case in one active golden set against one or 
 
 Provider calls may incur costs. Starting a run creates immutable snapshots of selected cases, models, judge configuration, and quality gates. Subsequent edits to live configuration do not change that run's work or results.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 11.2 Selecting a golden set and model profiles
+### Selecting a golden set and model profiles
 
 Only active golden sets appear in the run form. A selected set must contain at least one enabled test case. Only active model profiles whose parent endpoints are also active can be selected.
 
@@ -41,9 +43,9 @@ Select profiles that answer the same comparison question. For a provider migrati
 
 The optional note is stored with the run. Use it for context needed by reviewers; do not put credentials, customer data, or other sensitive content in it.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 11.3 Starting and monitoring a run
+### Starting and monitoring a run
 
 Select **Start run** only after reviewing the preflight size and potential cost. The run is created in a pending state, then workers claim and process its jobs. Open its detail page from **Runs** to monitor it.
 
@@ -58,9 +60,9 @@ Expected terminal outcomes include:
 
 While work is in progress, results and aggregates can be incomplete. Wait for a terminal outcome before using scores, quality-gate results, rankings, or exports as a final comparison. Inspect individual results for provider, evaluator, or judge errors before treating a low score as model behavior.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 11.4 Cancelling a run
+### Cancelling a run
 
 You can cancel only a pending or running run.
 
@@ -72,9 +74,9 @@ Cancellation stops pending jobs and marks the run cancelled. Work already execut
 
 Use cancellation for an incorrect selection, unexpected run size, configuration problem, or budget concern. Confirm the checkbox deliberately: it prevents an accidental click from stopping active evaluation work.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 11.5 Rerunning failures
+### Rerunning failures
 
 Use **Retry failed jobs** on a run detail page when one or more jobs have status **error**. Enter a name for the new run, then select the action.
 
@@ -86,9 +88,9 @@ Retry is useful after resolving transient provider failures, connectivity issues
 
 If no jobs failed, retry is unavailable and no new run is created.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 11.6 Deleting a run
+### Deleting a run
 
 Delete only a terminal run—completed, completed with errors, failed, or cancelled—when its stored results are no longer needed.
 
@@ -96,15 +98,15 @@ Delete only a terminal run—completed, completed with errors, failed, or cancel
 2. In **Actions**, select **I understand deletion is permanent**.
 3. Select **Delete run**.
 
-Deletion permanently removes run records, job results, and associated snapshots. It cannot be undone. Export needed results first; see [chapter 14](import-export.md#14-import-export-and-backup) for export guidance. Active runs must be cancelled and reach a terminal state before deletion.
+Deletion permanently removes run records, job results, and associated snapshots. It cannot be undone. Export needed results first; see [chapter 14](import-export.md#import-export-and-backup) for export guidance. Active runs must be cancelled and reach a terminal state before deletion.
 
 Keep runs needed for release evidence, regression baselines, cost review, or audit history. Delete disposable experiments and obsolete retries according to your retention policy.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 12. Understanding results
+## Understanding results
 
-### 12.1 Run overview KPIs
+### Run overview KPIs
 
 Open a run from **Runs** to see its overview. The **Run overview** panel intentionally contains five high-level KPIs:
 
@@ -120,9 +122,9 @@ A missing metric means insufficient or unavailable measured data, not a score of
 
 **Result status:** **Passed** and **failed** both mean evaluator ran; failed did not meet its configured condition. **Error** means no normal evaluation result was produced, for example due to provider, judge, or processing failure. Investigate errors before interpreting score or pass rate.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 12.2 Weighted score
+### Weighted score
 
 Each evaluated result has a score, normally from `0` to `1`. A passing deterministic or judge evaluation commonly scores `1`; a failing evaluation commonly scores `0`, though an evaluator may provide an intermediate score.
 
@@ -136,9 +138,9 @@ Test-case weight comes from the golden-set case snapshot. Higher-weight cases in
 
 Use weighted score to compare models against same run material. Do not compare scores from different golden sets, materially different weights, or different judge configurations without accounting for those changes. Review failed cases and quality gates alongside the aggregate: a high average can still hide a critical regression in a heavily important scenario if its weight is too low.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 12.3 Latency, TTFT, throughput, and costs
+### Latency, TTFT, throughput, and costs
 
 Thistlewarden reports target-model performance measurements when provider data permits:
 
@@ -152,9 +154,9 @@ The model table and overview show known target costs and their coverage. Unknown
 
 P95 is a tail metric: roughly 95% of recorded measurements are at or below it. It exposes slow experiences that averages can hide. Small result sets make percentiles less stable, so use sufficiently broad suites before enforcing tight latency gates.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 12.4 Model comparison charts
+### Model comparison charts
 
 The **Model comparison** table ranks model snapshots within the run. It shows weighted score, P95 latency, P95 TTFT, mean TPS, input/output tokens, known cost, and quality-gate indicators. Ranking favors higher score, then lower error rate, then lower known total cost when values are available.
 
@@ -169,9 +171,9 @@ The **Model performance** chart shows score, pass rate, and error rate on a 0–
 
 The **Cost versus score** scatter plot places models by total known cost on X-axis and weighted score on Y-axis. Models lacking either known cost or score are omitted and counted below chart. Use it to spot models that are both less expensive and at least as accurate as alternatives; validate result coverage before making a decision.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 12.5 Judge-type results
+### Judge-type results
 
 **Results by judge type** groups results by evaluation method: Exact match, Contains, Regex, Numeric, JSON Schema, or LLM judge. Each row shows result count, weighted score, passed percentage, and a stacked bar for passed, failed, and error results.
 
@@ -179,9 +181,9 @@ Use this view to find evaluator-specific patterns. For example, JSON Schema erro
 
 If one judge type has many errors, open filtered individual results to determine whether source is model output, evaluator configuration, judge availability, or provider failure. Fix configuration and run a new comparison rather than editing historical results.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 12.6 Filtering and sorting results
+### Filtering and sorting results
 
 Use **Results** filters on run detail to narrow investigation:
 
@@ -196,9 +198,9 @@ Select **Apply** after changing filters. Results are paginated; use **Previous**
 
 Useful workflows: filter **error** first to resolve operational problems; filter **failed** and sort by score ascending to inspect weakest outcomes; select one model to understand regression scope; or sort cost descending to investigate expensive cases. Filtering changes display only, never run data or aggregates.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 12.7 Individual result details
+### Individual result details
 
 Select a case ID in results table to open its individual result. Page shows:
 
@@ -211,9 +213,9 @@ Use detail page to distinguish evaluation failure from execution error. A failed
 
 Result pages can contain sensitive prompts, expected answers, and model output. Limit access, avoid copying sensitive content into tickets, and use export confirmation carefully.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 12.8 Dynamic score graph
+### Dynamic score graph
 
 The cost-versus-score graph scales Y-axis to make high-score differences readable while keeping every valid score visible. Its upper bound is always `1.00`. Lower bound is selected from `0.00`, `0.50`, `0.80`, or `0.90`, choosing highest bound that does not exclude any plotted score. Graph then draws five evenly spaced Y-axis ticks.
 
@@ -221,6 +223,6 @@ For example, when all plotted scores are at least `0.90`, graph starts at `0.90`
 
 Dynamic scale improves comparison among strong models, but it can visually magnify small differences. Read axis labels before interpreting point separation, and use precise weighted scores from table for final decisions. Graph omits models with unknown cost or score.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)

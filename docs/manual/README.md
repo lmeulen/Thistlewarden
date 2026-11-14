@@ -2,47 +2,36 @@
 
 # Thistlewarden User Manual
 
-Use this index to open a focused manual topic. For environment variables and release procedures, see [configuration](../configuration.md) and [release guide](../release.md).
+Use this manual to connect models, build evaluations, run comparisons, and understand results.
 
-## Topics
+## Start here
 
-- [Getting started and common workflows](getting-started.md) — Introduction, quick start, dashboard, and recurring workflows.
-- [Endpoints and model profiles](endpoints-and-models.md) — Provider access, authentication, model settings, and pricing.
-- [Golden sets and test cases](golden-sets.md) — Dataset lifecycle, test-case authoring, ordering, and deletion.
-- [Evaluation methods](evaluators.md) — Exact match, contains, regex, numeric, JSON Schema, and LLM judge cases.
-- [Judge profiles](judges.md) — Judge models, inference settings, presets, and assignment.
-- [Runs and results](runs-and-results.md) — Starting, monitoring, cancelling, retrying, and interpreting runs.
-- [Quality gates](quality-gates.md) — Release thresholds and gate outcomes.
-- [Import, export, and backup](import-export.md) — Golden-set and configuration exchange, reports, and backups.
-- [Operations, security, and privacy](operations.md) — Settings, restart behavior, secrets, and sensitive data.
-- [Troubleshooting](troubleshooting.md) — Provider, evaluator, judge, and interrupted-run diagnosis.
+- [Run your first evaluation](getting-started.md#quick-start) — Connect one model, create one test, and inspect the result.
+- [Set up Thistlewarden](getting-started.md#set-up-thistlewarden) — Open the application and verify initial configuration.
+- [Understand the dashboard](dashboard.md) — See recent runs, evaluation coverage, pricing, and shortcuts.
 
-## 19. Glossary
+## Build evaluations
 
-Key terms are first explained in [Core concepts](getting-started.md#14-core-concepts). Use this glossary as reference for abbreviations and detailed meanings.
+- [Connect endpoints and models](endpoints-and-models.md) — Add provider access, model settings, and pricing.
+- [Create golden sets and test cases](golden-sets.md) — Build and maintain reusable evaluation suites.
+- [Choose an evaluation method](evaluators.md) — Compare exact text, fragments, patterns, numbers, JSON, or judged quality.
+- [Configure an LLM judge](judges.md) — Select judge models, inference settings, and immutable presets.
+- [Configure quality gates](quality-gates.md) — Decide when run quality is acceptable.
 
-### 19.1 Terms and abbreviations
+## Run and review
 
-| Term | Meaning |
-| --- | --- |
-| **Active** | Available for new work. An active model profile also requires active parent endpoint; enabled case also requires active golden set. |
-| **API key** | Provider credential used by endpoint authentication. Treat as secret; UI masks it and environment-managed secrets are not editable there. |
-| **Case ID** | Stable, user-defined identifier for test case within golden set. Preserve it for same conceptual behavior across versions. |
-| **Candidate output** | Answer returned by target model for one case. |
-| **Completion** | Provider model call producing candidate output. |
-| **Endpoint** | Provider connection definition: URLs, authentication method/secret reference, timeout, limits, and rate-limit settings. |
-| **Evaluator** | Method that scores candidate output against case criteria: Exact match, Contains, Regex, Numeric, JSON Schema, or LLM judge. |
-| **Golden set** | Versioned collection of test cases used as evaluation suite. |
-| **Judge profile** | Saved LLM-judge configuration containing judge model, rubric, threshold, temperature, output limit, and active/default state. |
-| **LLM judge** | Evaluator that asks configured judge model to assess response using rubric. It adds provider dependency, latency, cost, and possible variation. |
-| **Model profile** | Target-model request configuration, including model ID, generation parameters, token field behavior, and configured rates. |
-| **P95** | 95th percentile. P95 latency/TTFT means 95% of observed values are at or below displayed value. |
-| **Quality gate** | Configured run acceptance thresholds evaluated after terminal run. Outcome is passed, failed, or indeterminate. |
-| **Result** | Stored outcome for one case/model job, including status, score, evaluation detail, and available metrics. |
-| **Run** | Evaluation execution over enabled case snapshots and selected model snapshots. One run can contain multiple target models. |
-| **Snapshot** | Immutable copy of case, model, judge, and gate data captured for run, preserving historical meaning after live configuration changes. |
-| **TTFT** | Time to first token: elapsed time before first streamed candidate content. |
-| **TPS** | Tokens per second during generation when provider usage and timing allow calculation. |
-| **Weighted score** | Aggregate score that accounts for case weights; interpret with job/error status and evaluator mix. |
+- [Start and manage runs](runs-and-results.md#running-evaluations) — Select models, monitor progress, cancel work, or retry failures.
+- [Understand results](runs-and-results.md#understanding-results) — Read scores, metrics, charts, costs, and individual evaluations.
+- [Follow common workflows](common-workflows.md) — Compare models, build regression suites, and preserve history.
+- [Import, export, and back up data](import-export.md) — Move test sets, exchange configuration, export reports, and protect data.
 
-[Back to top](#manual-top)
+## Manage Thistlewarden
+
+- [Change application settings](settings.md) — Understand editable values, environment overrides, secrets, and restarts.
+- [Protect security and privacy](security-and-privacy.md) — Handle credentials, prompts, answers, exports, and local access safely.
+- [Configuration reference](../configuration.md) — Review environment variables, runtime limits, and schedules.
+- [Release guide](../release.md) — Run release checks and offline end-to-end verification.
+
+## Get help
+
+- [Troubleshoot problems](troubleshooting.md) — Diagnose provider, authentication, evaluator, judge, and interrupted-run issues.

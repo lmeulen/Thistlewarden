@@ -1,10 +1,11 @@
+<a id="page-top"></a>
+
 # Quality gates
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 13. Quality gates
 
-### 13.1 Purpose of quality gates
+### Purpose of quality gates
 
 Quality gates convert run metrics into explicit acceptance checks. They assess aggregate results after run completes, helping teams decide whether model/version is acceptable for release, regression baseline, or cost/performance target.
 
@@ -14,9 +15,9 @@ Gates do not stop an in-progress run, alter individual result scores, or replace
 
 Set defaults on golden set to apply same release criteria to future runs. At run creation, optionally replace those defaults for one run. Thistlewarden snapshots selected gates at start, so later changes do not rewrite historical gate outcomes.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 13.2 Configuring thresholds
+### Configuring thresholds
 
 Open saved golden set and find **Quality gates**. Enter only checks you want to enforce, then select **Save gates**. Empty field means that gate is not configured. Start with one quality gate after you have stable baseline results; quality gates are advanced release-policy controls, not required for first run.
 
@@ -39,9 +40,9 @@ In **New run**, leave **Completely replace golden set defaults** unchecked to us
 
 Begin with few meaningful gates. For example, require weighted score at least `0.85`, error rate no more than `0.02`, and total cost no more than approved budget. Calibrate thresholds from known-good baseline runs and revise them through normal change review.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 13.3 Passed, failed, and indeterminate states
+### Passed, failed, and indeterminate states
 
 Gate evaluation occurs after run reaches `completed` or `completed with errors`. Runs still pending, running, cancelled, or otherwise non-terminal have `not evaluated` status. A completed run with no configured gates also has `not evaluated` status.
 
@@ -55,9 +56,9 @@ Overall run gate status is **failed** if any gate fails. If none fail but one or
 
 Missing latency, TTFT, TPS, score, pass-rate, error-rate, or cost data can make relevant gate indeterminate. Total-cost gate is indeterminate when any model total cost is unknown. Treat indeterminate as insufficient evidence, not as pass. Investigate missing metrics, provider errors, or incomplete cost configuration before release decision.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 13.4 Interpreting gate results
+### Interpreting gate results
 
 Run detail page shows overall gate status near run status, per-model gate dots in comparison table, and **Quality gates** table. Table lists gate name, model or **Entire run**, measured value, threshold, visualization, and outcome.
 
@@ -74,6 +75,6 @@ Do not loosen threshold solely to make one run pass. First determine whether reg
 
 Exports include stored gate results with run data. Preserve them with release evidence when gates support formal acceptance decisions.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)

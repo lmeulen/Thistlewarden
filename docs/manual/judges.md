@@ -1,10 +1,11 @@
+<a id="page-top"></a>
+
 # Judge profiles
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 10. Judge profiles
 
-### 10.1 Creating an LLM judge profile
+### Creating an LLM judge profile
 
 **Advanced feature:** finish one deterministic evaluation first. LLM judge makes extra provider call and can add cost, latency, and model variation.
 
@@ -21,9 +22,9 @@ Complete these fields:
 
 Create separate profiles when suites require different models or operational settings. Deactivate obsolete profiles rather than relying on users to avoid them. Profile edits affect new runs only: started run holds execution-profile snapshot.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 10.2 Selecting a judge model
+### Selecting a judge model
 
 Judge model is selected from existing model profiles. It is a second model role: target profiles generate candidate outputs, while judge profile assesses them. Judge model can be same provider/model as target, but independent capable model is often better for reducing self-assessment bias.
 
@@ -33,25 +34,25 @@ Choose model with reliable instruction following and structured JSON output. Sta
 
 Avoid changing a commonly used judge profile without a tracked change decision. Create versioned replacement, run comparison, then make replacement active/default after review.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 10.3 Prompt contract
+### Prompt contract
 
 Application uses fixed built-in judge request contract. It sends original prompt, preset-required expected value when present, resolved preset rubric, optional item context, and candidate answer as quoted untrusted evaluation data. It instructs judge model to return one JSON object only, with score, passed flag, reason, and exactly one result for each rubric criterion.
 
 Judge execution profiles cannot supply or override prompt templates. Semantic prompt-contract changes require an application release and, where evaluation meaning changes, a new preset version.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 10.4 Rubrics and scoring thresholds
+### Rubrics and scoring thresholds
 
 Each registered preset defines ordered observable criteria, criterion weights, and an inclusive threshold. Judge returns criterion score from `0` to `1` and reason for every preset criterion. Thistlewarden calculates overall score as weighted mean of criterion scores, then compares calculated score with preset threshold. Judge-provided overall score and pass flag are retained for diagnostics but do not override calculated result.
 
-Test cases and judge profiles cannot extend, replace, or override preset rubric or threshold. Calibrate each preset using known good, borderline, and unacceptable candidate answers before using it for release gates. Semantic changes require a new immutable preset version. See [section 9.6](evaluators.md#96-llm-judge) for available presets and required inputs.
+Test cases and judge profiles cannot extend, replace, or override preset rubric or threshold. Calibrate each preset using known good, borderline, and unacceptable candidate answers before using it for release gates. Semantic changes require a new immutable preset version. See [section 9.6](evaluators.md#llm-judge) for available presets and required inputs.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 10.5 Assigning judges to golden sets
+### Assigning judges to golden sets
 
 A golden set selects judge with its **Judge profile** override. Open saved golden set, choose profile in **Override**, then select **Save judge override**. Select **Use global default** to remove set-specific choice.
 
@@ -65,6 +66,6 @@ Deterministic methods never use this selection. A golden set can contain both de
 
 Confirm selected judge is active and backed by available active model profile before starting run. Use set override for specialized domain rubric or lower-cost experimentation, and run override for one-off comparison without changing set configuration. Run captures resolved judge settings, so later assignment/profile changes do not alter historical results.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)

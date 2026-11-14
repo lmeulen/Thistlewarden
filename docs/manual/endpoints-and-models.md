@@ -1,10 +1,12 @@
+<a id="page-top"></a>
+
 # Endpoints and model profiles
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 5. Provider endpoints
+## Provider endpoints
 
-### 5.1 Adding an endpoint
+### Adding an endpoint
 
 An endpoint defines one OpenAI-compatible provider connection. Create an endpoint before creating model profiles. It stores connection details shared by every model profile under that provider.
 
@@ -17,7 +19,7 @@ An endpoint defines one OpenAI-compatible provider connection. Create an endpoin
 3. Enter a clear, unique **Name**, such as `Development provider` or `Local inference server`.
 4. Enter the required **Completions URL**. This must be the provider's full HTTP(S) URL for chat completions, not its website or management console.
 5. Enter **Models URL** when the provider exposes a model-list endpoint and you want to use model discovery. Leave it empty if model discovery is unavailable or you will enter model IDs manually.
-6. Enter the API key and authentication settings required by the provider. See [Authentication and headers](#52-authentication-and-headers).
+6. Enter the API key and authentication settings required by the provider. See [Authentication and headers](#authentication-and-headers).
 
 | Field | First-run need | Safe guidance |
 |---|---|---|
@@ -52,9 +54,9 @@ Leave rate-limit fields empty if no limit is known. Set conservative values when
 
 Saving an endpoint validates its format but does not prove that the URL, credentials, or provider service work. Always test the connection before relying on the endpoint for an evaluation.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 5.2 Authentication and headers
+### Authentication and headers
 
 Configure authentication on the endpoint, not in model profiles or test material. Thistlewarden applies the endpoint credentials and headers to provider requests for every model profile under that endpoint.
 
@@ -110,9 +112,9 @@ Use dedicated, least-privilege provider credentials where possible. Do not put c
 
 If a key may have been exposed, revoke or rotate it through the provider, update the endpoint with the replacement key, and test the connection again.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 5.3 Enabling, editing, and deleting endpoints
+### Enabling, editing, and deleting endpoints
 
 Open **Endpoints**, then select an endpoint name to edit it. Update its URL, credentials, headers, connection settings, rate limits, or active state, and select **Save**. Saving validates the submitted configuration but does not test the provider connection; run model discovery after material connection changes.
 
@@ -143,9 +145,9 @@ Select **Delete endpoint** on its edit page, then confirm the browser request. D
 
 An endpoint with historical references may not be deletable. In that case, disable it instead. This preserves historical run context and avoids breaking records that refer to the endpoint. Delete only endpoints that are no longer needed and have no retained dependencies.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 5.4 Discovering available models
+### Discovering available models
 
 Model discovery asks an endpoint's configured **Models URL** for its available model IDs. It is both a connection check and a convenience for creating model profiles.
 
@@ -176,9 +178,9 @@ If discovery fails, check:
 
 A successful discovery proves that the Models URL responded with a compatible model list. It does not prove that every returned model can generate responses. Test each model profile separately.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 5.5 ChatNS example configuration
+### ChatNS example configuration
 
 **Advanced provider-specific example.** Skip this section unless you use ChatNS. The currently configured ChatNS endpoint uses the following non-secret values. Use this as an example only; confirm current URLs, subscription access, and limits with the ChatNS API documentation before creating or changing an endpoint.
 
@@ -213,11 +215,11 @@ In the endpoint form, leave **Trusted internal HTTP endpoint** and its confirmat
 
 The configured concurrency limit of `2` intentionally restricts simultaneous ChatNS calls. Do not increase it without confirming the service quota and expected workload. Keep rate-limit fields blank unless ChatNS supplies limits that should be enforced by Thistlewarden.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 6. Model profiles
+## Model profiles
 
-### 6.1 Creating a model profile
+### Creating a model profile
 
 A model profile selects one external model on an endpoint and defines how Thistlewarden sends inference settings and calculates cost. Create separate profiles when you need to compare model IDs, generation settings, or price schedules.
 
@@ -242,9 +244,9 @@ If the endpoint has a Models URL, use **Retrieve available models** to select a 
 
 Use names that identify meaningful differences, for example `gpt-4o balanced`, `gpt-4o low temperature`, or `Provider X production`. Do not put credentials or sensitive data in a model ID, display name, or description.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 6.2 Generation parameters
+### Generation parameters
 
 The **Inference** section controls optional request fields sent to the provider. Empty values are omitted. Configure only fields supported by the selected provider and model.
 
@@ -275,9 +277,9 @@ For a reasoning setting, provide both its field path and value, such as `reasoni
 
 Custom parameters must be a JSON object. They cannot override built-in request fields or a field already configured through the profile. Use them only for documented provider options. Save changes and test the model before using new parameters in a run.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 6.3 Cost configuration
+### Cost configuration
 
 The **Prices per million tokens** section lets Thistlewarden estimate and report model cost. Enter provider prices in your chosen billing currency; Thistlewarden records the numeric total but does not convert currencies.
 
@@ -298,9 +300,9 @@ You can then optionally provide high-context cached-input and reasoning prices. 
 
 Use prices from the provider's current billing documentation and update profiles when pricing changes. Incorrect or missing usage data from a provider can make a run cost unknown or incomplete. A zero price means zero in reported totals; it does not mean the provider call was free.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 6.4 Testing a model connection
+### Testing a model connection
 
 Save a profile before testing it. On the profile edit page, select **Test model**. Thistlewarden sends a fixed streaming test prompt using the saved endpoint, model ID, inference settings, and credentials.
 
@@ -319,9 +321,9 @@ If testing fails, review the displayed error code, message, and application requ
 
 Test again after changing an endpoint, model ID, authentication header, inference setting, or network configuration.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 6.5 Activating and deactivating profiles
+### Activating and deactivating profiles
 
 The **Active** checkbox controls whether a model profile is available for new runs.
 
@@ -334,11 +336,11 @@ Deactivate profiles to pause an experiment, retire a model version, prevent acci
 
 Before activating a changed profile, save it and run **Test model**. The dashboard counts a profile as active only when both it and its endpoint are active.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 6.6 ChatNS example model profiles
+### ChatNS example model profiles
 
-**Advanced provider-specific example.** Skip this section unless you use ChatNS. The current ChatNS configuration contains active baseline profiles for `gpt-4.1-mini` and `gpt-5-mini`. Both use the **ChatNS API** endpoint described in [section 5.5](#55-chatns-example-configuration). Treat these values as current examples, not permanent provider guidance; confirm supported parameters and pricing before changing them.
+**Advanced provider-specific example.** Skip this section unless you use ChatNS. The current ChatNS configuration contains active baseline profiles for `gpt-4.1-mini` and `gpt-5-mini`. Both use the **ChatNS API** endpoint described in [section 5.5](#chatns-example-configuration). Treat these values as current examples, not permanent provider guidance; confirm supported parameters and pricing before changing them.
 
 | Setting | GPT-4.1 mini | GPT-5 mini |
 |---|---|---|
@@ -368,6 +370,6 @@ The profiles share endpoint, `top_p`, maximum output-token count, empty custom p
 
 Use **Test model** after copying or modifying either profile. In particular, do not copy GPT-5 mini's reasoning or maximum-token field settings to GPT-4.1 mini without a successful provider test, and do not assume configured prices are current billing terms.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)

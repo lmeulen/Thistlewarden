@@ -1,25 +1,27 @@
+<a id="page-top"></a>
+
 # Evaluation methods
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-## 9. Evaluation methods
+## Which evaluation method should I use?
 
-Choose simplest method that measures required behavior. Start with deterministic method; use LLM judge only when rule cannot express requirement.
+Choose the simplest method that measures required behavior. Start with a deterministic method; use an LLM judge only when a rule cannot express the requirement.
 
-| If you need to check… | Choose | Avoid when… |
+| What must be correct? | Use | Do not use it when… |
 |---|---|---|
-| Same fixed text, ID, or label | **Exact match** | Valid wording may differ. |
-| One or more required phrases | **Contains** | Exact output structure matters. |
-| A text pattern such as an ID | **Regex** | Simple exact/contains rule is enough. |
-| A number or tolerance | **Numeric** | Candidate has several ambiguous numbers. |
-| JSON fields, types, or shape | **JSON Schema** | Output is ordinary flexible prose. |
-| Relevance, completeness, or style | **LLM judge** | A deterministic rule can measure it. |
+| One fixed text value, ID, status, or label | [Exact match](#exact-match) | Different wording should also pass. |
+| One or more required words or phrases | [Contains](#contains) | Output structure or complete value matters. |
+| A predictable text pattern, such as an identifier | [Regular expression](#regular-expression) | Exact match or contains can express the rule. |
+| A number, optionally within a tolerance | [Numeric comparison](#numeric-comparison) | Output contains several ambiguous numbers. |
+| JSON fields, data types, required properties, or structure | [JSON Schema](#json-schema) | Output is flexible prose rather than JSON. |
+| Meaning, relevance, completeness, safety, or style | [LLM judge](#llm-judge) | A deterministic method can measure the requirement. |
 
 For every deterministic method, use **Test evaluator** with one known passing output and one known failing output before saving case.
 
 In examples below, **evaluator configuration** is validator input, **candidate output** is model text being tested, and **result** states pass/fail and score. Test-case prompt is omitted because evaluator receives only candidate output plus saved configuration. LLM judge additionally receives original prompt and listed judge context.
 
-### 9.1 Exact match
+### Exact match
 
 Use **Exact match** when candidate must equal `expected_value` in evaluator configuration after configured text normalization. It returns score `1` for match or `0` for mismatch.
 
@@ -108,9 +110,9 @@ First line
 
 Result: **Pass**, score `1`; newline and spaces collapse to one space. With `collapse_whitespace: false`, same candidate fails.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 9.2 Contains
+### Contains
 
 Use **Contains** when candidate must contain one or more required fragments. It returns score `1` when configured fragment condition matches, otherwise `0`. It does not use **Expected answer**.
 
@@ -192,9 +194,9 @@ Evaluator configuration:
 
 Candidate output using Windows line endings between sentences → **Pass**, because newlines are normalized. Candidate output with both sentences on one line → **Fail**; enable `collapse_whitespace` if line layout should not matter.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 9.3 Regular expression
+### Regular expression
 
 Use **Regex** for a pattern requirement. It returns score `1` when pattern matches candidate, otherwise `0`.
 
@@ -284,9 +286,9 @@ Status: closed
 
 Result: **Pass**, score `1`; `multiline` lets both anchors address lines and `dot_all` lets `.*` cross line breaks. Turning either option off makes this candidate fail.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 9.4 Numeric comparison
+### Numeric comparison
 
 Use **Numeric** when candidate contains numeric value close to configured expected value. It returns score `1` inside tolerance and `0` outside tolerance or when unambiguous number cannot be extracted.
 
@@ -379,9 +381,9 @@ Candidate output: `1.274,50` → **Pass**, score `1`; parsed value is `1274.50`,
 
 With `expected_value: "0.0012"`, `extraction: "first_number"`, and decimal separator `.`, candidate `Result = 1.2e-3 mol` → **Pass**. Candidate containing `run 2: result 1.2e-3` extracts first number `2`, so it fails; avoid `first_number` when preceding numbers are possible.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 9.5 JSON Schema
+### JSON Schema
 
 Use **JSON Schema** for structured JSON output. Candidate must be standalone valid JSON and satisfy configured Draft 2020-12 schema. Form fields open by default and validate schema and optional expected-value JSON before saving or verifying. It returns score `1` on success and `0` for parsing, schema, or optional expected-value mismatch.
 
@@ -501,9 +503,9 @@ Result: **Pass**, score `1`; allowed fence is removed before parsing. Candidate 
 
 Use schema to enforce keys, types, arrays, enums, and required fields. Add `additionalProperties: false` when unknown keys must fail. Keep schema focused on contract; use expected value only where exact data matters. Validate schema and realistic candidate examples with output tester before run.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 9.6 LLM judge
+### LLM judge
 
 Use **LLM judge** when deterministic rules cannot capture quality, relevance, completeness, or style. Test case selects a predefined, versioned judge preset. Judge profile supplies model and operational call settings. Test cases cannot define or override rubrics, prompt templates, or thresholds.
 
@@ -538,9 +540,9 @@ Preset supplies immutable rubric, criterion weights, threshold, and required-inp
 
 LLM judge makes an additional provider call, can add cost and latency, and sends evaluation context—including prompt, candidate answer, optional expected answer, context, and preset rubric—to judge provider. It requires active usable judge profile and model. Results can vary with judge model. Review sample results before basing release decisions on them. Output tester intentionally does not run LLM judge; test it in a controlled run.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### 9.7 Configuration examples and expected behavior
+### Configuration examples and expected behavior
 
 Selecting evaluation method fills **Evaluator configuration (JSON)** with valid editable example. These examples show available fields, not generic defaults for every task. Save validates configuration strictly: unknown fields, wrong value types, missing required fields, invalid JSON, invalid regex, or invalid JSON Schema are rejected.
 
@@ -555,6 +557,6 @@ Selecting evaluation method fills **Evaluator configuration (JSON)** with valid 
 
 Choose simplest method that measures requirement. Deterministic evaluators are fast, local, repeatable, and usable in unsaved output tester. LLM judge supports nuanced judgment but depends on provider availability, configuration, cost, and nondeterministic model behavior. Every method result stores score, pass/fail state, and reason; inspect individual result details when outcome surprises you.
 
-[Back to top](README.md#manual-top)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-[Manual contents](README.md)
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
