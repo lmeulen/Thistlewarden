@@ -14,10 +14,12 @@ Thank you for helping improve Thistlewarden. The project welcomes focused bug re
 Maintainers classify each triaged open issue on three required axes:
 
 - **Type** — exactly one of `type:bug`, `type:feature`, `type:enhancement`, `type:maintenance`, or `type:documentation`.
-- **Priority** — exactly one of `priority:critical`, `priority:high`, `priority:medium`, or `priority:low`. Priority expresses user and project impact, not implementation order or effort.
+- **Priority** — exactly one of `prio:critical`, `prio:H`, `prio:M`, or `prio:L`. Priority expresses user and project impact, not implementation order or effort.
 - **Area** — exactly one primary `area:*` label. Use the area owning most of the change; mention secondary impact in the issue instead of adding several area labels.
 
 Add one `effort:*` label (`effort:S`, `effort:M`, or `effort:L`) only after enough investigation to estimate scope. Effort is relative and never changes priority.
+
+Priority abbreviations are uppercase: `H` means high, `M` medium, and `L` low. `critical` remains spelled out to avoid confusing it with effort sizing.
 
 | Axis | Meaning |
 |---|---|
@@ -26,10 +28,10 @@ Add one `effort:*` label (`effort:S`, `effort:M`, or `effort:L`) only after enou
 | `type:enhancement` | Material improvement to existing user-facing behavior. |
 | `type:maintenance` | Internal quality, test, build, dependency, or operational work. |
 | `type:documentation` | Documentation-only change. |
-| `priority:critical` | Release-blocking, data-loss, or severe supported-boundary security risk; act immediately. |
-| `priority:high` | Major user workflow, reliability, security, or cost impact; target next. |
-| `priority:medium` | Meaningful improvement or bounded risk; schedule normally. |
-| `priority:low` | Limited impact, uncommon edge case, or exploratory work. |
+| `prio:critical` | Release-blocking, data-loss, or severe supported-boundary security risk; act immediately. |
+| `prio:H` | Major user workflow, reliability, security, or cost impact; target next. |
+| `prio:M` | Meaningful improvement or bounded risk; schedule normally. |
+| `prio:L` | Limited impact, uncommon edge case, or exploratory work. |
 | `effort:S` | Focused change, normally a few files and tests. |
 | `effort:M` | Cross-layer change requiring design and integration tests. |
 | `effort:L` | Major design, migration, or multi-stage delivery. |
