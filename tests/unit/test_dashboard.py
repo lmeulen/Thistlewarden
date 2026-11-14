@@ -173,6 +173,7 @@ def test_statistics_apply_status_and_active_parent_definitions(tmp_path: Path) -
         total_cases=3,
         priced_model_profiles=1,
         active_judge_profiles=1,
+        total_judge_profiles=1,
         llm_judge_cases=1,
         latest_run=LatestRunStatistics(
             id="run-completed_with_errors",

@@ -62,6 +62,7 @@ def test_index_renders_english_page_with_empty_dashboard(app) -> None:
     assert "Average weighted score" in page
     assert page.count(">Unknown<") >= 2
     assert "LLM judge test cases" in page
+    assert "Total judges" in page
     assert "No completed runs yet." in page
     assert 'href="/runs"' in page
     assert 'href="/endpoints"' in page
@@ -106,6 +107,7 @@ def test_index_renders_all_dashboard_statistics(app) -> None:
                 total_cases=8,
                 priced_model_profiles=2,
                 active_judge_profiles=1,
+                total_judge_profiles=3,
                 llm_judge_cases=4,
                 overall_pass_rate=Decimal("0.625"),
                 average_weighted_score=Decimal("0.7125"),
@@ -138,6 +140,7 @@ def test_index_renders_all_dashboard_statistics(app) -> None:
         ("Active golden sets", 7),
         ("Total test cases", 8),
         ("Active judges", 1),
+        ("Total judges", 3),
         ("LLM judge test cases", 4),
     ):
         assert label in page

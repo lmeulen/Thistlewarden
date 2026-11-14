@@ -23,7 +23,7 @@
       <label class="check"><input type="checkbox" class="select-all-models"> Select all models</label>
       <button type="submit" class="danger compact">Delete selected models</button>
     </div>
-    <ul class="model-list">
+    <ul class="model-list{% if models|length >= 20 %} model-list-scroll{% endif %}"{% if models|length >= 20 %} tabindex="0" aria-label="Models for {{ endpoint.data.name }}; scroll for more"{% endif %}>
       {% for model in models %}
       <li>
         <span class="case-select">
