@@ -141,14 +141,19 @@ class RunViewService:
         connection = self._factory.connect()
         try:
             rows = connection.execute(
-                """SELECT rms.id,rms.snapshot_json FROM run_model_snapshots rms
-                WHERE rms.run_id=? AND EXISTS (
+                """SELECT rms.id,rms.source_profile_id,rms.snapshot_json
+                FROM run_model_snapshots rms WHERE rms.run_id=? AND EXISTS (
                     SELECT 1 FROM run_jobs j WHERE j.model_snapshot_id=rms.id
                 ) ORDER BY rms.id""",
                 (str(run_id),),
             ).fetchall()
             return [
-                {"id": row["id"], **self._model(json.loads(row["snapshot_json"]))} for row in rows
+                {
+                    "id": row["id"],
+                    "source_profile_id": row["source_profile_id"],
+                    **self._model(json.loads(row["snapshot_json"])),
+                }
+                for row in rows
             ]
         finally:
             connection.close()

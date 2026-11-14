@@ -25,6 +25,55 @@ Provider calls may incur costs. Starting a run creates immutable snapshots of se
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
+### Automating runs from command line
+
+Use supported local CLI when a build agent or release script must create a run without browser interaction or a publicly reachable web server. CLI uses same validation, immutable snapshots, queue, workers, evaluators, quality gates, aggregates, and exports as GUI. It acquires local database instance lock; stop Thistlewarden server before running a CLI worker.
+
+List active records and stable IDs:
+
+```bash
+thistlewarden-admin run lookup golden-sets
+thistlewarden-admin run lookup models --output json
+thistlewarden-admin run lookup judges
+```
+
+Start, process, summarize, and export a run:
+
+```bash
+thistlewarden-admin run start \
+  --name "Release candidate" \
+  --golden-set <golden-set-id> \
+  --model <model-profile-id> \
+  --min-pass-rate 0.95 \
+  --wait --output json \
+  --export-json ./reports/release-run.json
+```
+
+Repeat `--model` for multiple profiles. Stable UUIDs are recommended. An exact name is accepted only when it uniquely identifies one active record; ambiguous names fail and print matching IDs. `--judge` overrides judge selection. Gate options completely replace inherited golden-set gates when any gate option is supplied; `--no-gates` explicitly removes all gates for run.
+
+Without `--wait`, command creates pending run and prints its ID; another supported Thistlewarden process must execute it. Use `run show <run-id>`, `run wait <run-id>`, or `run export <run-id> --json <path>` later. `run wait` starts local workers. `--timeout` stops waiting but does not cancel run. Ctrl+C also leaves run record active rather than marking it cancelled; interrupted provider work may be recovered and repeated, potentially causing duplicate cost. Run ID remains in summary for investigation.
+
+Human output is concise. `--output json` emits one versioned JSON document to standard output with run ID, status, gate status, job/error counts, safe model aggregates, and configured cost. It never includes prompts, answers, credentials, headers, or complete provider responses. Explicit JSON, CSV, and HTML reports can contain sensitive prompts and answers. Existing report files are refused unless `--overwrite` is supplied.
+
+Automation exit codes are stable:
+
+| Code | Outcome |
+|---:|---|
+| `0` | Completed without execution errors; gates passed or were not configured. |
+| `2` | Usage, configuration, validation, or selection failure. |
+| `3` | One or more quality gates failed. |
+| `4` | Gate outcome was indeterminate. Default policy fails closed; `--indeterminate pass` opts out. |
+| `5` | Run failed or completed with execution errors. |
+| `6` | Run was cancelled. |
+| `7` | Waiting was interrupted with Ctrl+C. |
+| `8` | Wait timeout elapsed before terminal status. |
+| `9` | Report export failed. |
+| `10` | Local runtime startup or instance-lock failure. |
+
+Execution errors take precedence over gate outcomes. Export failure takes precedence after otherwise terminal completion. Keep `.env`, SQLite database, and reports on trusted local storage. Never expose Flask server to CI network; run CLI directly on trusted local agent instead.
+
+[Top of page](#page-top) · [Manual contents](README.md#manual-top)
+
 ### Selecting a golden set and model profiles
 
 Only active golden sets appear in the run form. A selected set must contain at least one enabled test case. Only active model profiles whose parent endpoints are also active can be selected.

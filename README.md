@@ -115,6 +115,18 @@ python -m evaluator.cli restore ./backups/manual.db ./data/restored.db
 
 Restore rejects existing target. Normal startup holds process-lifetime instance lock, migrates, restores expired leases, starts workers and then opens HTTP server. Existing schema upgrade creates consistent backup first.
 
+## Automated local runs
+
+Trusted local build agents can create, process, gate, summarize, and export runs without exposing web server:
+
+```bash
+thistlewarden-admin run lookup golden-sets
+thistlewarden-admin run lookup models
+thistlewarden-admin run start --golden-set <id> --model <id> --wait --output json
+```
+
+CLI and server cannot own same database simultaneously. Stop server before using `run wait` or `run start --wait`. See [command-line automation](docs/manual/runs-and-results.md#automating-runs-from-command-line) for gate overrides, exports, interruption behavior, and stable exit codes.
+
 ## Testing and release
 
 ```bash
