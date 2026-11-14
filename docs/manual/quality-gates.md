@@ -76,5 +76,3 @@ Do not loosen threshold solely to make one run pass. First determine whether reg
 Exports include stored gate results with run data. Preserve them with release evidence when gates support formal acceptance decisions.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

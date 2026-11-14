@@ -315,6 +315,3 @@ Use realistic but non-sensitive test data. Runs store prompts, expected answers,
 When the baseline is stable, expand the golden set into a regression suite. Run it whenever you change a model, model profile, prompt strategy, endpoint, or provider configuration.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

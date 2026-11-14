@@ -240,5 +240,3 @@ For example, when all plotted scores are at least `0.90`, graph starts at `0.90`
 Dynamic scale improves comparison among strong models, but it can visually magnify small differences. Read axis labels before interpreting point separation, and use precise weighted scores from table for final decisions. Graph omits models with unknown cost or score.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

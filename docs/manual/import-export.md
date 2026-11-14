@@ -100,5 +100,3 @@ Recommended process:
 Do not rely on configuration export alone: it intentionally omits secret values and run history. Do not rely on run or golden-set exports alone: each contains only a subset of data. Define retention, encryption, access, and restore-testing practices that meet your organization's requirements.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)

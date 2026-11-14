@@ -67,5 +67,3 @@ Deterministic methods never use this selection. A golden set can contain both de
 Confirm selected judge is active and backed by available active model profile before starting run. Use set override for specialized domain rubric or lower-cost experimentation, and run override for one-off comparison without changing set configuration. Run captures resolved judge settings, so later assignment/profile changes do not alter historical results.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
-
-[Top of page](#page-top) · [Manual contents](README.md#manual-top)
