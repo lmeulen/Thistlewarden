@@ -119,6 +119,36 @@ class RunViewService:
         finally:
             connection.close()
 
+    def rerun_defaults(self, run_id: UUID) -> dict[str, Any]:
+        """Return editable creation defaults derived from immutable run sources."""
+        connection = self._factory.connect()
+        try:
+            run = connection.execute(
+                """SELECT name,golden_set_id,judge_profile_id,note,
+                quality_gates_snapshot_json FROM runs WHERE id=?""",
+                (str(run_id),),
+            ).fetchone()
+            if run is None:
+                raise NotFoundError("Run not found.")
+            models = connection.execute(
+                """SELECT DISTINCT rms.source_profile_id FROM run_model_snapshots rms
+                WHERE rms.run_id=? AND EXISTS (
+                    SELECT 1 FROM run_jobs j WHERE j.model_snapshot_id=rms.id
+                ) ORDER BY rms.source_profile_id""",
+                (str(run_id),),
+            ).fetchall()
+        finally:
+            connection.close()
+        return {
+            "source_name": str(run["name"]),
+            "name": f"Rerun of {run['name']}",
+            "golden_set_id": str(run["golden_set_id"]),
+            "model_profile_ids": [str(row["source_profile_id"]) for row in models],
+            "judge_profile_id": str(run["judge_profile_id"] or ""),
+            "note": str(run["note"] or ""),
+            "quality_gates": json.loads(run["quality_gates_snapshot_json"] or "{}"),
+        }
+
     def golden_set_summaries(self) -> dict[str, dict[str, Any]]:
         connection = self._factory.connect()
         try:

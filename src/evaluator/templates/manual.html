@@ -1,0 +1,7 @@
+{% extends "base.html" %}{% block title %}User manual · Thistlewarden{% endblock %}{% block content %}
+<div class="heading manual-heading"><div><h1>User manual</h1><p>Local documentation packaged with this Thistlewarden version.</p></div><a class="button secondary" href="{{ url_for('gui.dashboard') }}">Back to application</a></div>
+<div class="manual-layout">
+  <nav class="panel manual-navigation" aria-label="Manual pages"><strong>Manual contents</strong><a href="{{ url_for('gui.manual_page') }}">Contents</a>{% for page in manual_pages %}<a href="{{ url_for('gui.manual_page', page=page) }}" {% if page == current_page %}aria-current="page"{% endif %}>{{ page.replace('-', ' ')|title }}</a>{% endfor %}</nav>
+  <article class="panel manual-content">{{ content }}</article>
+</div>
+{% endblock %}

@@ -163,6 +163,67 @@ def test_new_run_preview_targets_creation_form_and_uses_english(app) -> None:
     assert "data-sets=" in text and '"active_cases": 1' in text
 
 
+def test_rerun_opens_editable_prefilled_form_without_starting(app) -> None:
+    client = app.test_client()
+    golden, model = app.config["FIXTURE_IDS"]
+    token = csrf(client, "/runs/nieuw")
+    created = client.post(
+        "/runs/nieuw",
+        data={
+            "csrf_token": token,
+            "name": "Historical configuration",
+            "golden_set_id": str(golden),
+            "model_profile_ids": str(model),
+            "note": "Copied note",
+            "override_gates": "on",
+            "min_weighted_score": "0.91",
+            "max_total_cost": "1.25",
+        },
+    )
+    run_id = created.headers["Location"].rsplit("/", 1)[-1]
+
+    overview = client.get("/runs").get_data(as_text=True)
+    assert f'href="/runs/nieuw?rerun={run_id}"' in overview
+    before = len(app.extensions["run_view_service"].list_runs())
+    form = client.get(f"/runs/nieuw?rerun={run_id}")
+    text = form.get_data(as_text=True)
+
+    assert form.status_code == 200
+    assert "<h1>Rerun configuration</h1>" in text
+    assert 'value="Rerun of Historical configuration"' in text
+    assert f'<option value="{golden}" selected>' in text
+    assert f'value="{model}" checked' in text
+    assert ">Copied note</textarea>" in text
+    assert 'name="override_gates" checked' in text
+    assert 'name="min_weighted_score" value="0.91"' in text
+    assert 'name="max_total_cost" value="1.25"' in text
+    assert "This does not change or automatically start the historical run." in text
+    assert len(app.extensions["run_view_service"].list_runs()) == before
+
+    rerun_token = re.search(r'name="csrf_token" value="([^"]+)"', text)
+    assert rerun_token
+    submitted = client.post(
+        "/runs/nieuw",
+        data={
+            "csrf_token": rerun_token.group(1),
+            "name": "Edited rerun",
+            "golden_set_id": str(golden),
+            "model_profile_ids": str(model),
+            "note": "Edited note",
+            "override_gates": "on",
+            "min_weighted_score": "0.95",
+        },
+    )
+    new_id = submitted.headers["Location"].rsplit("/", 1)[-1]
+
+    assert submitted.status_code == 302
+    assert new_id != run_id
+    assert app.extensions["run_view_service"].run(UUID(new_id))["name"] == "Edited rerun"
+    assert app.extensions["run_view_service"].run(UUID(run_id))["name"] == (
+        "Historical configuration"
+    )
+
+
 def test_start_poll_results_filters_and_detail(app) -> None:
     client = app.test_client()
     run_id = create_run(client, app)
@@ -273,6 +334,31 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     overview = client.get("/runs").get_data(as_text=True)
     assert "<th>Score</th>" in overview
     assert "1.0000" in overview
+    assert 'id="run-chart-metric"' not in overview
+
+    assert "<h3>Model metrics</h3>" in text
+    assert "Compare models in this run using one metric." in text
+    assert 'id="run-chart-metric"' in text
+    for value, label in (
+        ("score", "Score"),
+        ("cost", "Cost"),
+        ("latency", "Latency"),
+        ("tokens", "Total tokens"),
+    ):
+        assert f'<option value="{value}">{label}</option>' in text
+        assert f'data-run-chart="{value}"' in text
+    assert "Score by model" in text
+    assert "Model M: 1.0000" in text
+    assert "Model M: 0.000001" in text
+    assert "Model M: 100 ms" in text
+    assert "Model M: 4 tokens" in text
+    assert "Y-axis: Weighted score. X-axis: Model." in text
+    assert "chart.hidden=chart.dataset.runChart!==chartMetric.value" in text
+    assert (
+        text.index("Cost versus score")
+        < text.index("Model metrics")
+        < text.index("Model performance")
+    )
 
 
 def test_guardrail_is_distinct_in_ui_aggregates_and_export(app) -> None:

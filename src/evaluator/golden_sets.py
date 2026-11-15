@@ -686,6 +686,7 @@ class SQLiteGoldenSetRepository:
         category: str | None,
         tag: str | None,
         enabled: bool | None,
+        evaluation_method: str | None = None,
     ) -> tuple[list[GoldenSetItemRecord], int]:
         clauses = ["golden_set_id = ?"]
         values: list[Any] = [str(set_id)]
@@ -698,6 +699,9 @@ class SQLiteGoldenSetRepository:
         if enabled is not None:
             clauses.append("enabled = ?")
             values.append(int(enabled))
+        if evaluation_method is not None:
+            clauses.append("evaluation_method = ?")
+            values.append(evaluation_method)
         where = " AND ".join(clauses)
         connection = self._factory.connect()
         try:
@@ -1034,11 +1038,18 @@ class GoldenSetService:
         category: str | None,
         tag: str | None,
         enabled: bool | None,
+        evaluation_method: str | None = None,
     ) -> tuple[list[GoldenSetItemRecord], int]:
         self.get_set(set_id)
         self._pagination(page, per_page)
         return self._repository.list_items(
-            set_id, page=page, per_page=per_page, category=category, tag=tag, enabled=enabled
+            set_id,
+            page=page,
+            per_page=per_page,
+            category=category,
+            tag=tag,
+            enabled=enabled,
+            evaluation_method=evaluation_method,
         )
 
     def get_item(self, item_id: UUID) -> GoldenSetItemRecord:

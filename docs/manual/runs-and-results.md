@@ -23,6 +23,12 @@ A run evaluates every enabled test case in one active golden set against one or 
 
 Provider calls may incur costs. Starting a run creates immutable snapshots of selected cases, models, judge configuration, and quality gates. Subsequent edits to live configuration do not change that run's work or results.
 
+### Reusing a historical run configuration
+
+Select **Rerun** beside a run in the runs overview to open normal run configuration with its name, golden set, model profiles, judge override, note, and effective quality gates prefilled. Review and edit every field, then select **Start rerun**. Opening this form never creates or starts work and never changes historical run data.
+
+Rerun uses current active configuration records with same stable source IDs. If original golden set, model, or judge is inactive or unavailable, warning identifies missing selection. Choose an available replacement before starting; Thistlewarden never silently substitutes configuration.
+
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
 ### Automating runs from command line

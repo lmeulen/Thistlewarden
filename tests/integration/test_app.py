@@ -69,30 +69,70 @@ def test_index_renders_english_page_with_empty_dashboard(app) -> None:
     assert 'href="/golden-sets"' in page
     assert '<link rel="icon" href="/static/app-icon.svg" type="image/svg+xml">' in page
     assert 'class="brand" href="/"' in page
-    assert page.count('src="/static/app-icon.svg" alt="" width="32" height="32"') == 2
-    assert '<footer class="site-footer">' in page
-    assert '<strong class="footer-product">Thistlewarden</strong>' in page
+    assert page.count('src="/static/app-icon.svg" alt="" width="32" height="32"') == 1
+    footer = page.split('<footer class="site-footer">', 1)[1].split("</footer>", 1)[0]
+    assert "app-icon.svg" not in footer
+    assert '<strong class="footer-product">Thistlewarden</strong>' in footer
     assert "<span>Local single-user evaluator</span>" in page
 
 
-def test_header_links_open_github_and_manual_in_new_tabs(app) -> None:
+def test_settings_page_remains_available_but_is_not_in_top_navigation(app) -> None:
+    client = app.test_client()
+    dashboard = client.get("/").get_data(as_text=True)
+    header = dashboard.split("<header>", 1)[1].split("</header>", 1)[0]
+    settings = client.get("/settings")
+
+    assert settings.status_code == 200
+    assert "<h1>Settings</h1>" in settings.get_data(as_text=True)
+    legacy = client.get("/instellingen")
+    assert legacy.status_code == 308
+    assert legacy.headers["Location"].endswith("/settings")
+    assert 'href="/settings"' not in header
+    assert ">Settings</a>" not in header
+
+
+def test_header_links_open_github_and_local_manual(app) -> None:
     page = app.test_client().get("/").get_data(as_text=True)
     github = (
         '<a class="header-icon" href="https://github.com/lmeulen/Thistlewarden" '
         'target="_blank" rel="noopener noreferrer" title="GitHub project">'
     )
-    manual = (
-        '<a class="header-icon" href="https://github.com/lmeulen/Thistlewarden/blob/'
-        'master/docs/manual/README.md" target="_blank" rel="noopener noreferrer" '
-        'title="User manual">'
-    )
+    manual = '<a class="header-icon" href="/manual/" title="User manual">'
 
     assert github in page
     assert manual in page
     assert "GitHub project (opens in a new tab)" in page
-    assert "User manual (opens in a new tab)" in page
+    assert '<span class="sr-only">User manual</span>' in page
+    assert "master/docs/manual/README.md" not in page
     assert page.count('<svg viewBox="0 0 24 24" aria-hidden="true">') == 2
     assert page.index(github) < page.index(manual) < page.index('id="theme-toggle"')
+
+
+def test_local_manual_pages_assets_and_rejections(app) -> None:
+    client = app.test_client()
+
+    contents = client.get("/manual/")
+    assert contents.status_code == 200
+    text = contents.get_data(as_text=True)
+    assert "Local documentation packaged with this Thistlewarden version." in text
+    assert 'href="/manual/getting-started"' in text
+    assert 'href="/"' in text and "Back to application" in text
+    assert "https://github.com/lmeulen/Thistlewarden/blob" not in text
+
+    page = client.get("/manual/dashboard")
+    assert page.status_code == 200
+    assert "Dashboard" in page.get_data(as_text=True)
+    assert client.get("/manual/assets/dashboard.png").mimetype == "image/png"
+    assert client.get("/manual/not-a-page").status_code == 404
+    assert client.get("/manual/assets/not-an-image.txt").status_code == 404
+
+
+def test_dates_use_day_first_24_hour_format_with_seconds(app) -> None:
+    page = app.test_client().get("/").get_data(as_text=True)
+
+    assert "pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear()" in page
+    assert "pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())" in page
+    assert "toLocaleString" not in page
 
 
 def test_dark_theme_controls_and_persistence_hooks_render(app) -> None:
@@ -216,6 +256,7 @@ def test_index_renders_all_dashboard_statistics(app) -> None:
     assert ">62%<" in page
     assert "Average weighted score" in page
     assert ">0.71<" in page
+    assert 'class="panel latest-run-panel"' in page
     assert "Latest completed run" in page
     assert "Release candidate" in page
     assert ">0.75<" in page
@@ -223,7 +264,10 @@ def test_index_renders_all_dashboard_statistics(app) -> None:
     assert ">10%<" in page
     assert ">0.123<" in page
     assert "9/10 results known" in page
+    assert '<time data-utc="2026-01-02T01:00:00Z">2026-01-02T01:00:00Z</time>' in page
     assert 'href="/runs/10000000-0000-0000-0000-000000000001"' in page
+    css = app.test_client().get("/static/app.css").get_data(as_text=True)
+    assert ".latest-run-panel{margin-top:1rem}" in css
 
 
 def test_openapi_uses_product_name(app) -> None:

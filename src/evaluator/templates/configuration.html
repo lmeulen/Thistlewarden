@@ -1,33 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Configuration exchange · Thistlewarden{% endblock %}
+{% block title %}Backup and restore · Thistlewarden{% endblock %}
 {% block content %}
-<div class="heading">
+<div class="heading backup-heading">
   <div>
-    <h1>Configuration exchange</h1>
-    <p>Version 1.0. Exports never contain secret values.</p>
+    <h1>Backup and restore</h1>
+    <p>Download a configuration backup or restore configuration from an existing backup file.</p>
+    <p class="warning">Configuration backups exclude secret values, run history, and evaluation results. Add missing provider secrets after restoring.</p>
   </div>
-  <a class="button" href="{{ url_for('gui.configuration_download') }}">Download configuration</a>
+  <a class="button" href="{{ url_for('gui.configuration_download') }}">Download backup</a>
 </div>
 <section class="panel">
-  <h2>Import</h2>
+  <h2>Restore configuration</h2>
+  <p>Choose a Thistlewarden configuration backup in JSON format. Preview all changes before restoring.</p>
   <form method="post" action="{{ url_for('gui.configuration_import') }}" enctype="multipart/form-data" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>File<input type="file" name="file" accept=".json" required></label>
-    <label>Mode
+    <label>Backup file<input type="file" name="file" accept=".json" required></label>
+    <label>Restore mode
       <select name="mode">
-        <option value="merge">Merge</option>
-        <option value="replace">Replace and archive existing records</option>
+        <option value="merge">Merge backup with current configuration</option>
+        <option value="replace">Replace configuration and archive existing records</option>
       </select>
     </label>
     <label class="check wide warning">
-      <input type="checkbox" name="confirm_replace"> I confirm archiving when using replace mode.
+      <input type="checkbox" name="confirm_replace"> I understand that replace mode archives existing configuration records.
     </label>
-    <div class="actions wide"><button name="preview">Preview</button></div>
+    <div class="actions wide"><button name="preview">Preview restore</button></div>
   </form>
 </section>
 {% if plan %}
 <section class="panel">
-  <h2>Import preview</h2>
+  <h2>Restore preview</h2>
   <dl>
     <dt>Mode</dt><dd>{{ plan.mode }}</dd>
     <dt>New objects</dt><dd>{{ plan.creates }}</dd>
@@ -47,7 +49,7 @@
     <input type="hidden" name="confirm_replace" value="on">
     {% endif %}
     <div class="actions wide">
-      <button name="commit" class="secondary">Import preview</button>
+      <button name="commit" class="secondary">Restore this backup</button>
     </div>
   </form>
 </section>

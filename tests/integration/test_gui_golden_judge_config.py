@@ -57,6 +57,53 @@ def _create_set(client) -> str:
     return response.headers["Location"].rsplit("/", 1)[-1]
 
 
+def test_golden_set_testcases_can_be_filtered_by_test_type(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    service = app.extensions["golden_set_service"]
+    service.create_item(
+        UUID(set_id),
+        {
+            "case_id": "exact-case",
+            "prompt": "Exact prompt",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "answer"},
+        },
+    )
+    service.create_item(
+        UUID(set_id),
+        {
+            "case_id": "regex-case",
+            "prompt": "Regex prompt",
+            "evaluation_method": "regex",
+            "evaluator_config": {"pattern": "answer"},
+        },
+    )
+
+    filtered = client.get(f"/golden-sets/{set_id}?evaluation_method=regex").get_data(as_text=True)
+    assert 'class="testcase-heading-actions"' in filtered
+    assert 'role="group" aria-label="Export test cases"' in filtered
+    assert "<span>Export</span>" in filtered
+    assert re.search(r'class="button secondary"[^>]*>JSON</a>', filtered)
+    assert re.search(r'class="button secondary"[^>]*>CSV</a>', filtered)
+    assert '<label>Test type<select name="evaluation_method">' in filtered
+    assert '<option value="">All types</option>' in filtered
+    assert '<option value="regex" selected>Regular expression</option>' in filtered
+    assert "regex-case" in filtered
+    assert "exact-case" not in filtered
+    assert "Showing 1–1 of 1 test cases." in filtered
+
+    all_types = client.get(f"/golden-sets/{set_id}").get_data(as_text=True)
+    assert "regex-case" in all_types
+    assert "exact-case" in all_types
+    assert "Showing 1–2 of 2 test cases." in all_types
+
+    invalid = client.get(f"/golden-sets/{set_id}?evaluation_method=unknown").get_data(as_text=True)
+    assert "regex-case" in invalid
+    assert "exact-case" in invalid
+    assert 'value="unknown"' not in invalid
+
+
 def test_judge_page_can_delete_profile_with_confirmation(app) -> None:
     client = app.test_client()
     endpoint = client.post(
@@ -100,11 +147,15 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
     for path, text in (
         ("/golden-sets", "Golden sets"),
         ("/judges", "Judge execution profiles"),
-        ("/configuratie", "Configuration exchange"),
+        ("/backup", "Backup and restore"),
     ):
         response = client.get(path)
         assert response.status_code == 200
         assert text in response.get_data(as_text=True)
+    for legacy_path in ("/configuratie", "/configuration"):
+        legacy = client.get(legacy_path)
+        assert legacy.status_code == 308
+        assert legacy.headers["Location"].endswith("/backup")
     page = client.get("/").get_data(as_text=True)
     navigation = page[page.index('<nav aria-label="Main navigation">') : page.index("</nav>")]
     labels = (
@@ -113,13 +164,13 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
         "Golden sets",
         "Endpoints and models",
         "Judges",
-        "Settings",
         "Backup",
     )
     assert all(label in navigation for label in labels)
     assert [navigation.index(f">{label}</a>") for label in labels] == sorted(
         navigation.index(f">{label}</a>") for label in labels
     )
+    assert 'href="/backup">Backup</a>' in navigation
     assert ">Configuration</a>" not in navigation
 
 
@@ -652,7 +703,7 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
     assert "Judge execution profiles" in form
     assert "Rubrics, thresholds, and prompt templates" not in form
 
-    exported = client.get("/configuratie/export")
+    exported = client.get("/backup/download")
     assert exported.status_code == 200
     assert b"never-export-this" not in exported.data
     bundle = json.loads(exported.data)
@@ -691,9 +742,9 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
         },
     )
     assert rejected.status_code == 400
-    token = _csrf(client, "/configuratie")
+    token = _csrf(client, "/backup")
     preview = client.post(
-        "/configuratie/import",
+        "/backup/restore",
         data={
             "csrf_token": token,
             "mode": "merge",
@@ -702,14 +753,14 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
         content_type="multipart/form-data",
     )
     text = preview.get_data(as_text=True)
-    assert preview.status_code == 200 and "Import preview" in text
+    assert preview.status_code == 200 and "Restore preview" in text
     assert "Endpoints with missing secrets" in text
     assert 'name="preview_payload"' in text
-    assert "Import preview" in text
+    assert "Restore preview" in text
 
-    token = _csrf(client, "/configuratie")
+    token = _csrf(client, "/backup")
     privacy_browser_preview = client.post(
-        "/configuratie/import",
+        "/backup/restore",
         data={
             "csrf_token": token,
             "mode": "merge",
@@ -719,7 +770,7 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
         headers={"Origin": "null"},
     )
     assert privacy_browser_preview.status_code == 200
-    assert "Import preview" in privacy_browser_preview.get_data(as_text=True)
+    assert "Restore preview" in privacy_browser_preview.get_data(as_text=True)
 
 
 def test_configuration_preview_can_be_committed_without_reselecting_file(app) -> None:
@@ -732,9 +783,9 @@ def test_configuration_preview_can_be_committed_without_reselecting_file(app) ->
         "golden_sets": [],
         "golden_set_items": [],
     }
-    token = _csrf(client, "/configuratie")
+    token = _csrf(client, "/backup")
     preview = client.post(
-        "/configuratie/import",
+        "/backup/restore",
         data={
             "csrf_token": token,
             "mode": "merge",
@@ -746,9 +797,9 @@ def test_configuration_preview_can_be_committed_without_reselecting_file(app) ->
     assert preview.status_code == 200
     assert 'name="preview_payload"' in text
 
-    token = _csrf(client, "/configuratie")
+    token = _csrf(client, "/backup")
     committed = client.post(
-        "/configuratie/import",
+        "/backup/restore",
         data={
             "csrf_token": token,
             "mode": "merge",
@@ -758,4 +809,4 @@ def test_configuration_preview_can_be_committed_without_reselecting_file(app) ->
         follow_redirects=True,
     )
     assert committed.status_code == 200
-    assert "Configuration imported atomically" in committed.get_data(as_text=True)
+    assert "Configuration restored atomically" in committed.get_data(as_text=True)
