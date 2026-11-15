@@ -1034,3 +1034,39 @@ def test_bulk_apply_route_reports_exact_count(app) -> None:
     )
     assert "exactly 1 test case(s)" in applied.get_data(as_text=True)
     assert service.get_item(item.id).data.enabled is False
+
+
+def test_bulk_apply_rejects_external_return_redirect(app) -> None:
+    client = app.test_client()
+    set_id = UUID(_create_set(client))
+    service = app.extensions["golden_set_service"]
+    item = service.create_item(
+        set_id,
+        {
+            "case_id": "safe-redirect",
+            "prompt": "p",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "x"},
+        },
+    )
+    preview = service.preview_bulk_items(set_id, {"item_ids": [item.id], "action": "disable"})
+    token = _csrf(client, f"/golden-sets/{set_id}")
+    response = client.post(
+        f"/golden-sets/{set_id}/items/bulk-apply",
+        data={
+            "csrf_token": token,
+            "item_ids": str(item.id),
+            "action": "disable",
+            "expected_updated_at": json.dumps(
+                {
+                    str(item_id): value.isoformat()
+                    for item_id, value in preview.request.expected_updated_at.items()
+                }
+            ),
+            "return_query": "//evil.example/path?query=lost&enabled=true",
+        },
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].startswith(f"/golden-sets/{set_id}?")
+    assert "evil.example" not in response.headers["Location"]
+    assert response.headers["Location"].endswith("enabled=true#testcases")
