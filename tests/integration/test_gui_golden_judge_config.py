@@ -13,6 +13,7 @@ from uuid import UUID
 import pytest
 
 from evaluator import create_app
+from evaluator.api.errors import ApiError
 
 pytestmark = pytest.mark.integration
 
@@ -810,3 +811,226 @@ def test_configuration_preview_can_be_committed_without_reselecting_file(app) ->
     )
     assert committed.status_code == 200
     assert "Configuration restored atomically" in committed.get_data(as_text=True)
+
+
+def test_bulk_maintenance_search_preview_apply_and_stale_conflict(app) -> None:
+    client = app.test_client()
+    set_id = UUID(_create_set(client))
+    service = app.extensions["golden_set_service"]
+    first = service.create_item(
+        set_id,
+        {
+            "case_id": "needle-id",
+            "prompt": "ordinary",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "a"},
+        },
+    )
+    second = service.create_item(
+        set_id,
+        {
+            "case_id": "other",
+            "prompt": "contains Needle text",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "b"},
+        },
+    )
+    service.create_item(
+        set_id,
+        {
+            "case_id": "hidden",
+            "prompt": "different",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "c"},
+        },
+    )
+
+    page = client.get(f"/golden-sets/{set_id}?query=needle").get_data(as_text=True)
+    assert ">needle-id</a>" in page and ">other</a>" in page and ">hidden</a>" not in page
+    assert "Selection applies only to visible page" in page
+    token = _csrf(client, f"/golden-sets/{set_id}?query=needle")
+    preview_response = client.post(
+        f"/golden-sets/{set_id}/items/bulk-preview",
+        data={
+            "csrf_token": token,
+            "item_ids": [str(first.id), str(second.id)],
+            "action": "set_weight",
+            "bulk_weight": "2.5",
+        },
+    )
+    assert preview_response.status_code == 200
+    preview = preview_response.get_data(as_text=True)
+    assert (
+        "Affected test cases</dt><dd>2" in preview
+        and "contains Needle text" not in preview
+        and "ordinary" not in preview
+    )
+    version_match = re.search(r'name="expected_updated_at" value="([^"]+)"', preview)
+    assert version_match
+    service.update_item(first.id, {"weight": "3"})
+    token = re.search(r'name="csrf_token" value="([^"]+)"', preview).group(1)
+    stale = client.post(
+        f"/golden-sets/{set_id}/items/bulk-apply",
+        data={
+            "csrf_token": token,
+            "item_ids": [str(first.id), str(second.id)],
+            "action": "set_weight",
+            "bulk_weight": "2.5",
+            "expected_updated_at": html.unescape(version_match.group(1)),
+        },
+        follow_redirects=True,
+    ).get_data(as_text=True)
+    assert "changed after preview" in stale
+    assert service.get_item(first.id).data.weight == Decimal("3")
+    assert service.get_item(second.id).data.weight == Decimal("1.0")
+
+
+def test_bulk_move_duplicate_conflict_and_deterministic_order(app) -> None:
+    client = app.test_client()
+    source = UUID(_create_set(client))
+    token = _csrf(client, "/golden-sets/nieuw")
+    response = client.post(
+        "/golden-sets/nieuw",
+        data={"csrf_token": token, "name": "Destination", "version": "1", "active": "on"},
+    )
+    destination = UUID(response.headers["Location"].rsplit("/", 1)[-1])
+    service = app.extensions["golden_set_service"]
+    one = service.create_item(
+        source,
+        {
+            "case_id": "one",
+            "prompt": "one",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "1"},
+        },
+    )
+    two = service.create_item(
+        source,
+        {
+            "case_id": "two",
+            "prompt": "two",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "2"},
+        },
+    )
+    service.create_item(
+        destination,
+        {
+            "case_id": "two",
+            "prompt": "conflict",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "x"},
+        },
+    )
+    with pytest.raises(ApiError, match="Destination already contains"):
+        service.preview_bulk_items(
+            source,
+            {"item_ids": [one.id, two.id], "action": "move", "destination_set_id": destination},
+        )
+    assert [item.data.case_id for item in service._repository.list_all_items(source)] == [
+        "one",
+        "two",
+    ]
+    service.delete_item(service._repository.list_all_items(destination)[0].id)
+    preview = service.preview_bulk_items(
+        source, {"item_ids": [two.id], "action": "move", "destination_set_id": destination}
+    )
+    assert service.apply_bulk_items(source, preview.request.model_dump()) == 1
+    assert service.get_item(two.id).golden_set_id == destination
+    duplicate = service.preview_bulk_items(
+        destination, {"item_ids": [two.id], "action": "duplicate", "destination_set_id": source}
+    )
+    service.apply_bulk_items(destination, duplicate.request.model_dump())
+    source_items = service._repository.list_all_items(source)
+    assert [item.data.sort_order for item in source_items] == [0, 1]
+    copied = next(item for item in source_items if item.data.case_id == "two")
+    assert copied.id != two.id
+    reorder = service.preview_bulk_items(
+        source, {"item_ids": [copied.id], "action": "reorder", "start_order": 0}
+    )
+    service.apply_bulk_items(source, reorder.request.model_dump())
+    assert [item.data.case_id for item in service._repository.list_all_items(source)] == [
+        "two",
+        "one",
+    ]
+
+
+def test_bulk_field_actions_share_single_item_validation(app) -> None:
+    service = app.extensions["golden_set_service"]
+    set_id = service.create_set({"name": "Bulk fields", "version": "1"}).id
+    item = service.create_item(
+        set_id,
+        {
+            "case_id": "fields",
+            "prompt": "p",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "x"},
+            "tags": ["old"],
+        },
+    )
+
+    for action, extra in [
+        ("disable", {}),
+        ("enable", {}),
+        ("set_category", {"category": "safety"}),
+        ("add_tags", {"tags": ["new"]}),
+        ("remove_tags", {"tags": ["old"]}),
+        ("replace_tags", {"tags": ["final"]}),
+        ("set_weight", {"weight": "2.5"}),
+    ]:
+        preview = service.preview_bulk_items(
+            set_id, {"item_ids": [item.id], "action": action, **extra}
+        )
+        assert service.apply_bulk_items(set_id, preview.request.model_dump()) == 1
+        item = service.get_item(item.id)
+
+    assert item.data.enabled is True
+    assert item.data.category == "safety"
+    assert item.data.tags == ["final"]
+    assert item.data.weight == Decimal("2.5")
+    for payload in [
+        {"item_ids": [], "action": "enable"},
+        {"item_ids": [item.id], "action": "set_weight"},
+        {"item_ids": [item.id], "action": "add_tags", "tags": []},
+        {"item_ids": [item.id], "action": "set_weight", "weight": "0"},
+        {"item_ids": [item.id], "action": "move", "destination_set_id": set_id},
+    ]:
+        with pytest.raises(ApiError):
+            service.preview_bulk_items(set_id, payload)
+
+
+def test_bulk_apply_route_reports_exact_count(app) -> None:
+    client = app.test_client()
+    set_id = UUID(_create_set(client))
+    service = app.extensions["golden_set_service"]
+    item = service.create_item(
+        set_id,
+        {
+            "case_id": "route",
+            "prompt": "p",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "x"},
+        },
+    )
+    token = _csrf(client, f"/golden-sets/{set_id}")
+    preview_response = client.post(
+        f"/golden-sets/{set_id}/items/bulk-preview",
+        data={"csrf_token": token, "item_ids": str(item.id), "action": "disable"},
+    )
+    text = preview_response.get_data(as_text=True)
+    token = re.search(r'name="csrf_token" value="([^"]+)"', text).group(1)
+    versions = html.unescape(
+        re.search(r'name="expected_updated_at" value="([^"]+)"', text).group(1)
+    )
+    applied = client.post(
+        f"/golden-sets/{set_id}/items/bulk-apply",
+        data={
+            "csrf_token": token,
+            "item_ids": str(item.id),
+            "action": "disable",
+            "expected_updated_at": versions,
+        },
+        follow_redirects=True,
+    )
+    assert "exactly 1 test case(s)" in applied.get_data(as_text=True)
+    assert service.get_item(item.id).data.enabled is False
