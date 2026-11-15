@@ -15,7 +15,7 @@
   {% endif %}
   <div class="table-wrap">
     <table>
-      <thead><tr><th class="selection-column"><span class="sr-only">Select</span></th><th>Name</th><th>Status</th><th>Score</th><th>Quality gates</th><th>Progress</th><th>Created</th></tr></thead>
+      <thead><tr><th class="selection-column"><span class="sr-only">Select</span></th><th>Name</th><th>Status</th><th>Score</th><th>Quality gates</th><th>Progress</th><th>Created</th><th><span class="sr-only">Actions</span></th></tr></thead>
       <tbody>
       {% for run in runs %}
         <tr>
@@ -26,9 +26,10 @@
           <td><span class="badge status-{{ run.gate_status }}">{{ status_label(run.gate_status) }}</span></td>
           <td>{{ run.done_jobs }}/{{ run.total_jobs }} ({{ run.progress_percent }}%)</td>
           <td><time data-utc="{{ run.created_at }}">{{ run.created_at }}</time></td>
+          <td><a class="button secondary compact" href="{{ url_for('gui.run_new', rerun=run.id) }}">Rerun</a></td>
         </tr>
       {% else %}
-        <tr><td colspan="7">No runs yet.</td></tr>
+        <tr><td colspan="8">No runs yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>

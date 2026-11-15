@@ -35,13 +35,13 @@
     <a class="button" href="{{ url_for('gui.golden_sets_page') }}">View golden sets</a>
   </section>
 </div>
-<section class="panel" aria-labelledby="latest-run-title">
+<section class="panel latest-run-panel" aria-labelledby="latest-run-title">
   <h2 id="latest-run-title">Latest completed run</h2>
   {% if statistics.latest_run %}
     <div class="heading">
       <div>
         <h3>{{ statistics.latest_run.name }}</h3>
-        <p><span class="badge status-{{ statistics.latest_run.status }}">{{ status_label(statistics.latest_run.status) }}</span> · gates <span class="badge status-{{ statistics.latest_run.gate_status }}">{{ status_label(statistics.latest_run.gate_status) }}</span>{% if statistics.latest_run.completed_at %} · {{ statistics.latest_run.completed_at }}{% endif %}</p>
+        <p><span class="badge status-{{ statistics.latest_run.status }}">{{ status_label(statistics.latest_run.status) }}</span> · gates <span class="badge status-{{ statistics.latest_run.gate_status }}">{{ status_label(statistics.latest_run.gate_status) }}</span>{% if statistics.latest_run.completed_at %} · <time data-utc="{{ statistics.latest_run.completed_at }}">{{ statistics.latest_run.completed_at }}</time>{% endif %}</p>
       </div>
       <a href="{{ url_for('gui.run_detail', run_id=statistics.latest_run.id) }}">View run</a>
     </div>

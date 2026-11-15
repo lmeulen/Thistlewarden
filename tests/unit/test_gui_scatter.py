@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from evaluator.gui import _cost_score_scatter, _sort_model_comparison
+from evaluator.gui import _cost_score_scatter, _overview_model_charts, _sort_model_comparison
 
 
 def _aggregate(score: str, *, cost: str = "1", name: str = "Model") -> dict[str, Any]:
@@ -119,6 +119,30 @@ def test_model_comparison_sorts_every_column_and_keeps_missing_values_last() -> 
             ]
         )
         assert [item["model_snapshot_id"] for item in descending] == expected_descending
+
+
+def test_model_metric_cost_chart_uses_available_known_cost() -> None:
+    charts = _overview_model_charts(
+        [
+            {
+                "model": {"display_name": "Partially priced"},
+                "weighted_score": Decimal("0.8"),
+                "total_cost": None,
+                "known_total_cost": Decimal("0.125"),
+                "latency_mean": Decimal(10),
+                "total_tokens": 5,
+            }
+        ]
+    )
+
+    cost = next(chart for chart in charts if chart["key"] == "cost")
+    assert cost["axis_label"] == "Total known cost"
+    assert cost["axis_places"] == 4
+    assert cost["places"] == 6
+    assert cost["maximum"] == Decimal("0.125")
+    assert cost["bars"][0]["value"] == Decimal("0.125")
+    assert cost["bars"][0]["height"] == Decimal(200)
+    assert cost["omitted"] == 0
 
 
 def test_scatter_clamps_negative_costs_and_out_of_range_scores() -> None:

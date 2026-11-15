@@ -61,7 +61,7 @@ def _endpoint_form(token: str, **changes: object) -> dict[str, object]:
 
 def test_gui_renders_english_navigation_and_masks_settings_secrets(app) -> None:
     client = app.test_client()
-    page = client.get("/instellingen")
+    page = client.get("/settings")
     text = page.get_data(as_text=True)
     assert page.status_code == 200
     assert "Endpoints and models" in text
@@ -80,8 +80,8 @@ def test_gui_restart_required_setting_shows_desired_value_as_pending(app) -> Non
     client = app.test_client()
 
     response = client.post(
-        "/instellingen/max_model_profiles_per_run",
-        data={"csrf_token": _csrf(client, "/instellingen"), "value": "12"},
+        "/settings/max_model_profiles_per_run",
+        data={"csrf_token": _csrf(client, "/settings"), "value": "12"},
         follow_redirects=True,
     )
     text = response.get_data(as_text=True)
@@ -97,8 +97,8 @@ def test_gui_bootstrap_setting_update_is_rejected(app) -> None:
     client = app.test_client()
 
     response = client.post(
-        "/instellingen/port",
-        data={"csrf_token": _csrf(client, "/instellingen"), "value": "5100"},
+        "/settings/port",
+        data={"csrf_token": _csrf(client, "/settings"), "value": "5100"},
         follow_redirects=True,
     )
 

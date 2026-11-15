@@ -7,6 +7,7 @@ import json
 import logging
 import secrets
 from decimal import Decimal
+from io import BytesIO
 from typing import Any, Literal, cast
 from uuid import UUID
 
@@ -20,6 +21,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -37,6 +39,7 @@ from evaluator.gates import QualityGateService
 from evaluator.golden_sets import JUDGE_PRESETS, GoldenSetService, evaluator_config_examples
 from evaluator.judges import JudgeProfileService
 from evaluator.logging_config import log_event
+from evaluator.manual import manual_asset, manual_pages, render_manual_page
 from evaluator.models import ModelProfileService
 from evaluator.run_comparisons import ComparisonFilter, RunComparisonService
 from evaluator.run_exports import RunExportService, safe_filename
@@ -48,6 +51,39 @@ gui = Blueprint("gui", __name__)
 _LOG = logging.getLogger(__name__)
 _GUI_PAGE_SIZE = 100
 _RUN_SET_PAGE_SIZE = 25
+_TEST_CASE_TYPES = (
+    ("exact_match", "Exact match"),
+    ("contains", "Contains"),
+    ("regex", "Regular expression"),
+    ("numeric", "Numeric"),
+    ("json_schema", "JSON Schema"),
+    ("llm_judge", "LLM judge"),
+)
+_TEST_CASE_TYPE_VALUES = {value for value, _label in _TEST_CASE_TYPES}
+
+
+@gui.get("/manual/")
+@gui.get("/manual/<page>")
+def manual_page(page: str = "index") -> str:
+    try:
+        content = render_manual_page(page)
+    except FileNotFoundError:
+        abort(404)
+    return render_template(
+        "manual.html",
+        content=content,
+        current_page=page,
+        manual_pages=manual_pages(),
+    )
+
+
+@gui.get("/manual/assets/<name>")
+def manual_image(name: str) -> Response:
+    try:
+        content = manual_asset(name)
+    except FileNotFoundError:
+        abort(404)
+    return send_file(BytesIO(content), mimetype="image/png", max_age=3600)
 
 
 @gui.errorhandler(ApiError)
@@ -326,6 +362,11 @@ def dashboard() -> str:
 
 
 @gui.get("/instellingen")
+def legacy_settings_page() -> Response:
+    return redirect(url_for("gui.settings_page"), code=308)
+
+
+@gui.get("/settings")
 def settings_page() -> str:
     service: SettingsService = current_app.extensions["settings_service"]
     active: ResolvedSettings = service.active
@@ -335,7 +376,7 @@ def settings_page() -> str:
     )
 
 
-@gui.post("/instellingen/<name>")
+@gui.post("/settings/<name>")
 def update_setting(name: str) -> Response:
     service: SettingsService = current_app.extensions["settings_service"]
     try:
@@ -621,6 +662,9 @@ def golden_set_edit(set_id: UUID) -> str | Response:
     tag = (request.args.get("tag") or "").strip()[:200] or None
     enabled_value = (request.args.get("enabled") or "").strip().lower()
     enabled = {"true": True, "false": False}.get(enabled_value)
+    evaluation_method = (request.args.get("evaluation_method") or "").strip()
+    if evaluation_method not in _TEST_CASE_TYPE_VALUES:
+        evaluation_method = ""
     items, total = service.list_items(
         set_id,
         page=page,
@@ -628,6 +672,7 @@ def golden_set_edit(set_id: UUID) -> str | Response:
         category=category,
         tag=tag,
         enabled=enabled,
+        evaluation_method=evaluation_method or None,
     )
     details = _page_details(page, _GUI_PAGE_SIZE, total)
     if details["page"] != page:
@@ -639,6 +684,7 @@ def golden_set_edit(set_id: UUID) -> str | Response:
             category=category,
             tag=tag,
             enabled=enabled,
+            evaluation_method=evaluation_method or None,
         )
         details = _page_details(page, _GUI_PAGE_SIZE, total)
     return render_template(
@@ -646,7 +692,13 @@ def golden_set_edit(set_id: UUID) -> str | Response:
         golden_set=record,
         items=items,
         pagination=details,
-        item_filters={"category": category or "", "tag": tag or "", "enabled": enabled_value},
+        item_filters={
+            "category": category or "",
+            "tag": tag or "",
+            "enabled": enabled_value,
+            "evaluation_method": evaluation_method,
+        },
+        test_case_types=_TEST_CASE_TYPES,
         gates=_gate_service().defaults(set_id),
         judges=_judge_service().list_all(),
         selected_judge_id=_judge_service().golden_set_override(set_id),
@@ -883,6 +935,70 @@ def judge_delete(profile_id: UUID) -> Response:
     return redirect(url_for("gui.judges_page"))
 
 
+def _overview_model_charts(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    definitions = (
+        ("weighted_score", "score", "Score", "Weighted score", "", 4, Decimal(1)),
+        ("known_total_cost", "cost", "Cost", "Total known cost", "", 6, None),
+        ("latency_mean", "latency", "Latency", "Mean latency", " ms", 0, None),
+        (
+            "total_tokens",
+            "tokens",
+            "Total tokens",
+            "Total input and output tokens",
+            " tokens",
+            0,
+            None,
+        ),
+    )
+    charts = []
+    count = max(1, len(models))
+    chart_width = Decimal(max(800, 140 + count * 110))
+    slot = (chart_width - Decimal(140)) / Decimal(count)
+    for source, key, label, axis_label, suffix, places, fixed_max in definitions:
+        known = [Decimal(str(model[source])) for model in models if model[source] is not None]
+        maximum = fixed_max or (max(known) if known else Decimal(1))
+        if maximum <= 0:
+            maximum = Decimal(1)
+        bars = []
+        for index, model in enumerate(models):
+            value = model[source]
+            x = Decimal(70) + slot * Decimal(index) + slot * Decimal("0.15")
+            width = slot * Decimal("0.7")
+            height = (
+                Decimal(0)
+                if value is None
+                else min(Decimal(200), Decimal(str(value)) / maximum * Decimal(200))
+            )
+            bars.append(
+                {
+                    "model": model["model"].get("display_name") or "Model",
+                    "value": value,
+                    "x": x,
+                    "width": width,
+                    "y": Decimal(220) - height,
+                    "height": height,
+                    "label_x": x + width / Decimal(2),
+                }
+            )
+        charts.append(
+            {
+                "key": key,
+                "label": label,
+                "axis_label": axis_label,
+                "suffix": suffix,
+                "places": places,
+                "axis_places": 4 if key == "cost" else places,
+                "maximum": maximum,
+                "width": chart_width,
+                "axis_end": chart_width - Decimal(70),
+                "axis_center": chart_width / Decimal(2),
+                "bars": bars,
+                "omitted": len(models) - len(known),
+            }
+        )
+    return charts
+
+
 @gui.get("/runs")
 def runs_page() -> str:
     return render_template("runs.html", runs=_run_views().list_runs())
@@ -891,6 +1007,16 @@ def runs_page() -> str:
 @gui.route("/runs/nieuw", methods=["GET", "POST"])
 def run_new() -> str | Response:
     service = _golden_service()
+    defaults: dict[str, Any] = {}
+    rerun_source: UUID | None = None
+    rerun_warnings: list[str] = []
+    rerun_value = (request.args.get("rerun") or "").strip()
+    if request.method == "GET" and rerun_value:
+        try:
+            rerun_source = UUID(rerun_value)
+            defaults = _run_views().rerun_defaults(rerun_source)
+        except (ValueError, ApiError):
+            abort(404)
     set_page = _requested_page("set_page")
     set_query = (request.args.get("set_query") or "").strip()[:200]
     golden_sets, set_total = service.search_sets(
@@ -911,6 +1037,27 @@ def run_new() -> str | Response:
         set_pagination = _page_details(set_page, _RUN_SET_PAGE_SIZE, set_total)
     models = [model for model in _all_models() if model.data.active]
     judges = [judge for judge in _judge_service().list_all() if judge.data.active]
+    if defaults:
+        selected_set_id = defaults["golden_set_id"]
+        if not any(str(item.id) == selected_set_id for item in golden_sets):
+            try:
+                selected_set = service.get_set(UUID(selected_set_id))
+                if selected_set.data.active:
+                    golden_sets = [selected_set, *golden_sets]
+                else:
+                    rerun_warnings.append("Original golden set is no longer active.")
+            except ApiError:
+                rerun_warnings.append("Original golden set is no longer available.")
+        active_model_ids = {str(model.id) for model in models}
+        missing_models = set(defaults["model_profile_ids"]) - active_model_ids
+        if missing_models:
+            rerun_warnings.append(
+                f"{len(missing_models)} original model profile(s) are no longer active "
+                "or available."
+            )
+        judge_id = defaults["judge_profile_id"]
+        if judge_id and judge_id not in {str(judge.id) for judge in judges}:
+            rerun_warnings.append("Original judge profile is no longer active or available.")
     if request.method == "POST":
         gate_names = (
             "min_weighted_score",
@@ -950,6 +1097,9 @@ def run_new() -> str | Response:
         concurrency=settings.run_concurrency,
         max_profiles=settings.max_model_profiles_per_run,
         set_summaries=_run_views().golden_set_summaries(),
+        defaults=defaults,
+        rerun_source=rerun_source,
+        rerun_warnings=rerun_warnings,
     )
 
 
@@ -1097,6 +1247,13 @@ def run_detail(run_id: UUID) -> str:
     names = {model["id"]: model for model in models}
     for aggregate in aggregates:
         aggregate["model"] = names.get(aggregate["model_snapshot_id"], {})
+        input_tokens = aggregate["input_tokens"]
+        output_tokens = aggregate["output_tokens"]
+        aggregate["total_tokens"] = (
+            input_tokens + output_tokens
+            if input_tokens is not None and output_tokens is not None
+            else None
+        )
     gate_results = _gate_service().results(run_id)
     gates_by_model: dict[str, list[dict[str, Any]]] = {}
     for gate in gate_results["gates"]:
@@ -1122,6 +1279,8 @@ def run_detail(run_id: UUID) -> str:
         model_sort=model_sort,
         model_direction=model_direction,
         cost_score_scatter=_cost_score_scatter(aggregates),
+        model_charts=_overview_model_charts(aggregates),
+        model_count=len(aggregates),
         analysis=analysis,
         results=result_rows[:RESULT_PAGE_SIZE],
         query=query,
@@ -1282,11 +1441,17 @@ def run_export(run_id: UUID) -> str | Response:
 
 
 @gui.get("/configuratie")
+@gui.get("/configuration")
+def legacy_configuration_page() -> Response:
+    return redirect(url_for("gui.configuration_page"), code=308)
+
+
+@gui.get("/backup")
 def configuration_page() -> str:
     return render_template("configuration.html", plan=None, preview_payload=None)
 
 
-@gui.get("/configuratie/export")
+@gui.get("/backup/download")
 def configuration_download() -> Response:
     content = _config_service().export().model_dump_json(indent=2).encode()
     return Response(
@@ -1296,13 +1461,13 @@ def configuration_download() -> Response:
     )
 
 
-@gui.post("/configuratie/import")
+@gui.post("/backup/restore")
 def configuration_import() -> str | Response:
     upload = request.files.get("file")
     preview_payload = request.form.get("preview_payload")
     mode = request.form.get("mode", "merge")
     if (upload is None and not preview_payload) or mode not in {"merge", "replace"}:
-        flash("Choose a configuration file and import mode.", "error")
+        flash("Choose a configuration backup file and restore mode.", "error")
         return render_template("configuration.html", plan=None, preview_payload=None)
     try:
         payload = json.loads(preview_payload) if preview_payload else json.load(cast(Any, upload))
@@ -1314,7 +1479,7 @@ def configuration_import() -> str | Response:
         )
         if commit:
             flash(
-                "Configuration imported atomically. Add missing secrets through endpoints.",
+                "Configuration restored atomically. Add missing secrets through endpoints.",
                 "success",
             )
             return redirect(url_for("gui.configuration_page"))
