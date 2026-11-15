@@ -9,6 +9,7 @@ import secrets
 from decimal import Decimal
 from io import BytesIO
 from typing import Any, Literal, cast
+from urllib.parse import parse_qs, urlencode
 from uuid import UUID
 
 from flask import (
@@ -844,6 +845,22 @@ def golden_item_edit(item_id: UUID) -> str | Response:
     )
 
 
+def _golden_return_parameters(raw_query: str) -> dict[str, Any]:
+    values = parse_qs(raw_query[:2000], keep_blank_values=True)
+    parameters: dict[str, Any] = {}
+    page = values.get("page", [""])[0]
+    if page.isdigit() and int(page) > 1:
+        parameters["page"] = int(page)
+    for name in ("query", "category", "tag", "evaluation_method"):
+        value = values.get(name, [""])[0][:200]
+        if value:
+            parameters[name] = value
+    enabled = values.get("enabled", [""])[0]
+    if enabled in {"true", "false"}:
+        parameters["enabled"] = enabled
+    return parameters
+
+
 @gui.post("/golden-sets/<uuid:set_id>/items/bulk-preview")
 def golden_items_bulk_preview(set_id: UUID) -> str | Response:
     try:
@@ -861,7 +878,7 @@ def golden_items_bulk_preview(set_id: UUID) -> str | Response:
                 },
                 sort_keys=True,
             ),
-            return_query=request.form.get("return_query", "")[:2000],
+            return_query=urlencode(_golden_return_parameters(request.form.get("return_query", ""))),
         )
     except (ApiError, ValueError, json.JSONDecodeError) as exc:
         flash(_error_message(exc), "error")
@@ -870,7 +887,7 @@ def golden_items_bulk_preview(set_id: UUID) -> str | Response:
 
 @gui.post("/golden-sets/<uuid:set_id>/items/bulk-apply")
 def golden_items_bulk_apply(set_id: UUID) -> Response:
-    return_query = request.form.get("return_query", "")[:2000]
+    return_parameters = _golden_return_parameters(request.form.get("return_query", ""))
     try:
         count = _golden_service().apply_bulk_items(
             set_id, _bulk_item_payload(include_versions=True)
@@ -878,8 +895,14 @@ def golden_items_bulk_apply(set_id: UUID) -> Response:
         flash(f"Bulk change applied to exactly {count} test case(s).", "success")
     except (ApiError, ValueError, json.JSONDecodeError) as exc:
         flash(_error_message(exc), "error")
-    target = url_for("gui.golden_set_edit", set_id=set_id)
-    return redirect(f"{target}?{return_query}#testcases" if return_query else f"{target}#testcases")
+    return redirect(
+        url_for(
+            "gui.golden_set_edit",
+            set_id=set_id,
+            _anchor="testcases",
+            **return_parameters,
+        )
+    )
 
 
 @gui.post("/golden-sets/<uuid:set_id>/items/verwijderen")
