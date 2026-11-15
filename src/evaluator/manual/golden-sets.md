@@ -155,12 +155,16 @@ LLM judge preview is unavailable in this form because it needs run/model snapsho
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### Bulk selection and deletion
+### Bulk maintenance
 
-On golden-set page, select checkboxes beside one or more test cases, then select **Delete selection**. Browser asks for confirmation and requires at least one selected item. Use individual **Delete** controls for a single case.
+Use search, category, tag, test-type, and status filters together to find cases. Search matches case ID and prompt text before pagination. Selection is deliberately limited to visible page: changing page clears it, and hidden matching records are never changed implicitly.
 
-Deletion is permanent for current golden-set item. Before bulk deletion, export golden set or duplicate set if you might need material later. Cases referenced by historical data may not be deletable; when preservation is needed, disable case instead.
+Select cases, choose **Bulk action**, provide action-specific value, then select **Review bulk change**. Review shows exact affected count, destination where applicable, and changed fields without exposing prompts or answers. Confirm only after checking these details. Available actions enable or disable cases, set or clear category, add/remove/replace tags, set weight, move or duplicate to another golden set, and move selected cases to zero-based order position.
 
-After successful bulk deletion, remaining cases are renumbered internally to preserve contiguous order. Review set and run-size preview before starting next run.
+Bulk validation matches single-case editing. Whole operation is atomic: invalid value, stale preview, missing destination, duplicate case ID, historical reference, or ordering conflict changes nothing. Moving preserves case IDs and internal record IDs. Duplicating preserves case IDs and content but creates new internal record IDs. Both append to destination in current selected order and reject case-ID conflicts. Reordering keeps relative order of selected cases and maintains unique contiguous ordering.
+
+Select **Delete selection** for permanent removal; browser asks for confirmation. Individual **Delete** remains available for one case. Export or duplicate set first if material may be needed later. Prefer disabling when historical preservation or temporary quarantine is intended.
+
+All maintenance affects future runs only. Existing run snapshots and results remain unchanged. After broad changes, update golden-set version and record change rationale in description or team change record, then review run-size and quality-gate impact before next run.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)

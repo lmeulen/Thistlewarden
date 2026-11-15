@@ -460,6 +460,59 @@ class GoldenSetItemRecord(BaseModel):
     updated_at: datetime
 
 
+class GoldenItemBulkRequest(BaseModel):
+    """Validated, explicit bulk mutation over selected test-case IDs."""
+
+    model_config = ConfigDict(extra="forbid")
+    item_ids: list[UUID] = Field(min_length=1)
+    expected_updated_at: dict[UUID, datetime]
+    action: Literal[
+        "enable",
+        "disable",
+        "set_category",
+        "add_tags",
+        "remove_tags",
+        "replace_tags",
+        "set_weight",
+        "move",
+        "duplicate",
+        "reorder",
+    ]
+    category: str | None = Field(default=None, max_length=200)
+    tags: list[str] = Field(default_factory=list, max_length=100)
+    weight: Decimal | None = Field(default=None, gt=0)
+    destination_set_id: UUID | None = None
+    start_order: int | None = Field(default=None, ge=0)
+
+    @field_validator("tags")
+    @classmethod
+    def valid_tags(cls, values: list[str]) -> list[str]:
+        return _validate_tags(values)
+
+    @model_validator(mode="after")
+    def action_fields(self) -> GoldenItemBulkRequest:
+        required: dict[str, tuple[str, Any]] = {
+            "set_weight": ("weight", self.weight),
+            "move": ("destination_set_id", self.destination_set_id),
+            "duplicate": ("destination_set_id", self.destination_set_id),
+            "reorder": ("start_order", self.start_order),
+        }
+        if self.action in required and required[self.action][1] is None:
+            raise ValueError(f"{required[self.action][0]} is required for {self.action}")
+        if self.action in {"add_tags", "remove_tags", "replace_tags"} and not self.tags:
+            raise ValueError(f"tags are required for {self.action}")
+        return self
+
+
+class GoldenItemBulkPreview(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    request: GoldenItemBulkRequest
+    affected_count: int
+    action_label: str
+    destination_name: str | None = None
+    changed_fields: tuple[str, ...]
+
+
 class GoldenSetLimits(BaseModel):
     model_config = ConfigDict(frozen=True)
     max_items: int = Field(gt=0)
@@ -687,6 +740,7 @@ class SQLiteGoldenSetRepository:
         tag: str | None,
         enabled: bool | None,
         evaluation_method: str | None = None,
+        query: str | None = None,
     ) -> tuple[list[GoldenSetItemRecord], int]:
         clauses = ["golden_set_id = ?"]
         values: list[Any] = [str(set_id)]
@@ -702,6 +756,13 @@ class SQLiteGoldenSetRepository:
         if evaluation_method is not None:
             clauses.append("evaluation_method = ?")
             values.append(evaluation_method)
+        if query is not None:
+            clauses.append(
+                "(case_id LIKE ? ESCAPE '\\' COLLATE NOCASE "
+                "OR prompt LIKE ? ESCAPE '\\' COLLATE NOCASE)"
+            )
+            escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            values.extend((f"%{escaped}%", f"%{escaped}%"))
         where = " AND ".join(clauses)
         connection = self._factory.connect()
         try:
@@ -813,6 +874,164 @@ class SQLiteGoldenSetRepository:
                 )
         finally:
             connection.close()
+
+    def bulk_update_items(
+        self,
+        set_id: UUID,
+        request: GoldenItemBulkRequest,
+        *,
+        max_items: int,
+    ) -> int:
+        """Apply one bulk action atomically after rechecking preview versions."""
+        connection = self._factory.connect()
+        try:
+            with transaction(connection):
+                ids = [str(item_id) for item_id in request.item_ids]
+                placeholders = ",".join("?" for _ in ids)
+                rows = connection.execute(
+                    f"""SELECT * FROM golden_set_items
+                    WHERE golden_set_id=? AND id IN ({placeholders})
+                    ORDER BY sort_order,case_id""",
+                    (str(set_id), *ids),
+                ).fetchall()
+                if len(rows) != len(ids):
+                    raise NotFoundError("A selected test case was not found in this golden set.")
+                for row in rows:
+                    expected = request.expected_updated_at.get(UUID(row["id"]))
+                    if expected is None or _parse_time(row["updated_at"]) != expected:
+                        raise ConflictError(
+                            "A selected test case changed after preview. Review again."
+                        )
+
+                now = to_utc_iso(utc_now())
+                if request.action in {"enable", "disable"}:
+                    connection.execute(
+                        f"UPDATE golden_set_items SET enabled=?,updated_at=? "
+                        f"WHERE id IN ({placeholders})",
+                        (int(request.action == "enable"), now, *ids),
+                    )
+                elif request.action == "set_category":
+                    connection.execute(
+                        f"UPDATE golden_set_items SET category=?,updated_at=? "
+                        f"WHERE id IN ({placeholders})",
+                        (request.category, now, *ids),
+                    )
+                elif request.action == "set_weight":
+                    assert request.weight is not None
+                    connection.execute(
+                        f"UPDATE golden_set_items SET weight=?,updated_at=? "
+                        f"WHERE id IN ({placeholders})",
+                        (str(request.weight), now, *ids),
+                    )
+                elif request.action in {"add_tags", "remove_tags", "replace_tags"}:
+                    for row in rows:
+                        current = json.loads(row["tags_json"])
+                        if request.action == "add_tags":
+                            tags = list(dict.fromkeys([*current, *request.tags]))
+                        elif request.action == "remove_tags":
+                            tags = [tag for tag in current if tag not in request.tags]
+                        else:
+                            tags = request.tags
+                        connection.execute(
+                            "UPDATE golden_set_items SET tags_json=?,updated_at=? WHERE id=?",
+                            (json.dumps(tags), now, row["id"]),
+                        )
+                elif request.action == "reorder":
+                    assert request.start_order is not None
+                    all_rows = connection.execute(
+                        "SELECT id FROM golden_set_items WHERE golden_set_id=? "
+                        "ORDER BY sort_order,case_id",
+                        (str(set_id),),
+                    ).fetchall()
+                    selected = {row["id"] for row in rows}
+                    moving = [row["id"] for row in all_rows if row["id"] in selected]
+                    remaining = [row["id"] for row in all_rows if row["id"] not in selected]
+                    position = min(request.start_order, len(remaining))
+                    ordered = [*remaining[:position], *moving, *remaining[position:]]
+                    self._rewrite_orders(connection, ordered, now=now, touched=selected)
+                else:
+                    assert request.destination_set_id is not None
+                    destination = connection.execute(
+                        "SELECT id FROM golden_sets WHERE id=?", (str(request.destination_set_id),)
+                    ).fetchone()
+                    if destination is None:
+                        raise NotFoundError("Destination golden set not found.")
+                    if request.destination_set_id == set_id:
+                        raise ValidationApiError("Choose a different destination golden set.")
+                    destination_count = int(
+                        connection.execute(
+                            "SELECT COUNT(*) FROM golden_set_items WHERE golden_set_id=?",
+                            (str(request.destination_set_id),),
+                        ).fetchone()[0]
+                    )
+                    if destination_count + len(rows) > max_items:
+                        raise ConflictError(
+                            "Destination golden set would exceed its test-case limit."
+                        )
+                    if request.action == "move":
+                        for offset, row in enumerate(rows):
+                            connection.execute(
+                                """UPDATE golden_set_items SET golden_set_id=?,
+                                sort_order=?,updated_at=? WHERE id=?""",
+                                (
+                                    str(request.destination_set_id),
+                                    destination_count + offset,
+                                    now,
+                                    row["id"],
+                                ),
+                            )
+                        remaining = connection.execute(
+                            "SELECT id FROM golden_set_items WHERE golden_set_id=? "
+                            "ORDER BY sort_order,case_id",
+                            (str(set_id),),
+                        ).fetchall()
+                        self._rewrite_orders(
+                            connection, [row["id"] for row in remaining], now=now, touched=set()
+                        )
+                    else:
+                        for offset, row in enumerate(rows):
+                            values = list(row)
+                            values[0] = str(uuid4())
+                            values[1] = str(request.destination_set_id)
+                            values[12] = destination_count + offset
+                            values[13] = now
+                            values[14] = now
+                            connection.execute(
+                                "INSERT INTO golden_set_items "
+                                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                values,
+                            )
+            return len(rows)
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _rewrite_orders(
+        connection: sqlite3.Connection,
+        ordered_ids: list[str],
+        *,
+        now: str,
+        touched: set[str],
+    ) -> None:
+        if not ordered_ids:
+            return
+        maximum = int(
+            connection.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) FROM golden_set_items"
+            ).fetchone()[0]
+        )
+        connection.executemany(
+            "UPDATE golden_set_items SET sort_order=? WHERE id=?",
+            [(maximum + order + 1, item_id) for order, item_id in enumerate(ordered_ids)],
+        )
+        connection.executemany(
+            "UPDATE golden_set_items SET sort_order=?,updated_at="
+            "CASE WHEN ? THEN ? ELSE updated_at END WHERE id=?",
+            [
+                (order, int(item_id in touched), now, item_id)
+                for order, item_id in enumerate(ordered_ids)
+            ],
+        )
 
     def delete_items(self, set_id: UUID, item_ids: list[UUID]) -> int:
         if not item_ids:
@@ -1039,6 +1258,7 @@ class GoldenSetService:
         tag: str | None,
         enabled: bool | None,
         evaluation_method: str | None = None,
+        query: str | None = None,
     ) -> tuple[list[GoldenSetItemRecord], int]:
         self.get_set(set_id)
         self._pagination(page, per_page)
@@ -1050,6 +1270,7 @@ class GoldenSetService:
             tag=tag,
             enabled=enabled,
             evaluation_method=evaluation_method,
+            query=query.strip()[:200] if query else None,
         )
 
     def get_item(self, item_id: UUID) -> GoldenSetItemRecord:
@@ -1199,6 +1420,122 @@ class GoldenSetService:
             self._repository.save_item(record, previous_order)
         except sqlite3.IntegrityError as exc:
             raise ConflictError("case_id bestaat al binnen golden set.") from exc
+
+    def preview_bulk_items(self, set_id: UUID, payload: Any) -> GoldenItemBulkPreview:
+        self.get_set(set_id)
+        raw = dict(payload)
+        raw["item_ids"] = list(dict.fromkeys(raw.get("item_ids", [])))
+        raw["expected_updated_at"] = {}
+        request = cast(GoldenItemBulkRequest, self._validate(GoldenItemBulkRequest, raw))
+        if len(request.item_ids) > self._limits.max_items:
+            raise ValidationApiError("Too many test cases selected.")
+        records = [self.get_item(item_id) for item_id in request.item_ids]
+        if any(record.golden_set_id != set_id for record in records):
+            raise NotFoundError("A selected test case was not found in this golden set.")
+        expected = {record.id: record.updated_at for record in records}
+        request = request.model_copy(update={"expected_updated_at": expected})
+        self._validate_bulk_change(set_id, request, records)
+        labels = {
+            "enable": ("Enable", ("enabled",)),
+            "disable": ("Disable", ("enabled",)),
+            "set_category": ("Change category", ("category",)),
+            "add_tags": ("Add tags", ("tags",)),
+            "remove_tags": ("Remove tags", ("tags",)),
+            "replace_tags": ("Replace tags", ("tags",)),
+            "set_weight": ("Change weight", ("weight",)),
+            "move": ("Move", ("golden set", "order")),
+            "duplicate": ("Duplicate", ("golden set", "ID", "order")),
+            "reorder": ("Change order", ("order",)),
+        }
+        label, fields = labels[request.action]
+        destination = (
+            self.get_set(request.destination_set_id)
+            if request.destination_set_id is not None
+            else None
+        )
+        return GoldenItemBulkPreview(
+            request=request,
+            affected_count=len(records),
+            action_label=label,
+            destination_name=destination.data.name if destination else None,
+            changed_fields=fields,
+        )
+
+    def apply_bulk_items(self, set_id: UUID, payload: Any) -> int:
+        self.get_set(set_id)
+        request = cast(GoldenItemBulkRequest, self._validate(GoldenItemBulkRequest, payload))
+        if len(request.item_ids) != len(set(request.item_ids)):
+            raise ValidationApiError("Duplicate test-case selections are not allowed.")
+        if len(request.item_ids) > self._limits.max_items:
+            raise ValidationApiError("Too many test cases selected.")
+        records = [self.get_item(item_id) for item_id in request.item_ids]
+        if any(record.golden_set_id != set_id for record in records):
+            raise NotFoundError("A selected test case was not found in this golden set.")
+        self._validate_bulk_change(set_id, request, records)
+        try:
+            count = self._repository.bulk_update_items(
+                set_id, request, max_items=self._limits.max_items
+            )
+        except sqlite3.IntegrityError as exc:
+            raise ConflictError(
+                "Bulk change conflicts with an existing case ID, order, or historical reference."
+            ) from exc
+        log_semantic_event(
+            _LOG,
+            "golden_items_bulk_updated",
+            object_id=set_id,
+            action=request.action,
+            count=count,
+            source=request.destination_set_id,
+        )
+        return count
+
+    def _validate_bulk_change(
+        self,
+        set_id: UUID,
+        request: GoldenItemBulkRequest,
+        records: list[GoldenSetItemRecord],
+    ) -> None:
+        for record in records:
+            updates: dict[str, Any] = {}
+            if request.action in {"enable", "disable"}:
+                updates["enabled"] = request.action == "enable"
+            elif request.action == "set_category":
+                updates["category"] = request.category
+            elif request.action == "set_weight":
+                updates["weight"] = request.weight
+            elif request.action in {"add_tags", "remove_tags", "replace_tags"}:
+                if request.action == "add_tags":
+                    tags = list(dict.fromkeys([*record.data.tags, *request.tags]))
+                elif request.action == "remove_tags":
+                    tags = [tag for tag in record.data.tags if tag not in request.tags]
+                else:
+                    tags = request.tags
+                updates["tags"] = tags
+            if updates:
+                self._validate_item(record.data.model_copy(update=updates).model_dump())
+        if request.destination_set_id is not None:
+            if request.destination_set_id == set_id:
+                raise ValidationApiError("Choose a different destination golden set.")
+            self.get_set(request.destination_set_id)
+            if (
+                self._repository.count_items(request.destination_set_id) + len(records)
+                > self._limits.max_items
+            ):
+                raise ConflictError("Destination golden set would exceed its test-case limit.")
+            destination_case_ids = {
+                item.data.case_id.casefold()
+                for item in self._repository.list_all_items(request.destination_set_id)
+            }
+            conflicts = [
+                record.data.case_id
+                for record in records
+                if record.data.case_id.casefold() in destination_case_ids
+            ]
+            if conflicts:
+                raise ConflictError(
+                    f"Destination already contains {len(conflicts)} selected case ID(s)."
+                )
 
     def delete_items(self, set_id: UUID, item_ids: list[UUID]) -> int:
         self.get_set(set_id)

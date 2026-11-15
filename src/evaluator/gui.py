@@ -46,6 +46,7 @@ from evaluator.run_exports import RunExportService, safe_filename
 from evaluator.run_views import RESULT_PAGE_SIZE, ResultQuery, RunViewService
 from evaluator.runs import RunQueue
 from evaluator.settings import ResolvedSettings, SettingLifecycle, SettingsService
+from evaluator.time import to_utc_iso
 
 gui = Blueprint("gui", __name__)
 _LOG = logging.getLogger(__name__)
@@ -276,6 +277,22 @@ def _golden_set_payload() -> dict[str, Any]:
         "tags": _tags(),
         "active": "active" in request.form,
     }
+
+
+def _bulk_item_payload(*, include_versions: bool) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "item_ids": request.form.getlist("item_ids"),
+        "action": request.form.get("action", ""),
+        "category": request.form.get("category") or None,
+        "tags": _tags("bulk_tags"),
+        "weight": request.form.get("bulk_weight") or None,
+        "destination_set_id": request.form.get("destination_set_id") or None,
+        "start_order": request.form.get("start_order") or None,
+    }
+    payload["expected_updated_at"] = (
+        json.loads(request.form.get("expected_updated_at", "{}")) if include_versions else {}
+    )
+    return payload
 
 
 def _item_payload() -> dict[str, Any]:
@@ -660,6 +677,7 @@ def golden_set_edit(set_id: UUID) -> str | Response:
     page = _requested_page()
     category = (request.args.get("category") or "").strip()[:200] or None
     tag = (request.args.get("tag") or "").strip()[:200] or None
+    query = (request.args.get("query") or "").strip()[:200] or None
     enabled_value = (request.args.get("enabled") or "").strip().lower()
     enabled = {"true": True, "false": False}.get(enabled_value)
     evaluation_method = (request.args.get("evaluation_method") or "").strip()
@@ -673,6 +691,7 @@ def golden_set_edit(set_id: UUID) -> str | Response:
         tag=tag,
         enabled=enabled,
         evaluation_method=evaluation_method or None,
+        query=query,
     )
     details = _page_details(page, _GUI_PAGE_SIZE, total)
     if details["page"] != page:
@@ -685,6 +704,7 @@ def golden_set_edit(set_id: UUID) -> str | Response:
             tag=tag,
             enabled=enabled,
             evaluation_method=evaluation_method or None,
+            query=query,
         )
         details = _page_details(page, _GUI_PAGE_SIZE, total)
     return render_template(
@@ -697,8 +717,12 @@ def golden_set_edit(set_id: UUID) -> str | Response:
             "tag": tag or "",
             "enabled": enabled_value,
             "evaluation_method": evaluation_method,
+            "query": query or "",
         },
         test_case_types=_TEST_CASE_TYPES,
+        destination_sets=[
+            candidate for candidate in service.list_sets(1, 100)[0] if candidate.id != set_id
+        ],
         gates=_gate_service().defaults(set_id),
         judges=_judge_service().list_all(),
         selected_judge_id=_judge_service().golden_set_override(set_id),
@@ -818,6 +842,44 @@ def golden_item_edit(item_id: UUID) -> str | Response:
     return _render_golden_item_form(
         item=item, golden_set=_golden_service().get_set(item.golden_set_id)
     )
+
+
+@gui.post("/golden-sets/<uuid:set_id>/items/bulk-preview")
+def golden_items_bulk_preview(set_id: UUID) -> str | Response:
+    try:
+        preview = _golden_service().preview_bulk_items(
+            set_id, _bulk_item_payload(include_versions=False)
+        )
+        return render_template(
+            "golden_items_bulk_preview.html",
+            golden_set=_golden_service().get_set(set_id),
+            preview=preview,
+            expected_updated_at=json.dumps(
+                {
+                    str(item_id): to_utc_iso(value)
+                    for item_id, value in preview.request.expected_updated_at.items()
+                },
+                sort_keys=True,
+            ),
+            return_query=request.form.get("return_query", "")[:2000],
+        )
+    except (ApiError, ValueError, json.JSONDecodeError) as exc:
+        flash(_error_message(exc), "error")
+        return redirect(url_for("gui.golden_set_edit", set_id=set_id))
+
+
+@gui.post("/golden-sets/<uuid:set_id>/items/bulk-apply")
+def golden_items_bulk_apply(set_id: UUID) -> Response:
+    return_query = request.form.get("return_query", "")[:2000]
+    try:
+        count = _golden_service().apply_bulk_items(
+            set_id, _bulk_item_payload(include_versions=True)
+        )
+        flash(f"Bulk change applied to exactly {count} test case(s).", "success")
+    except (ApiError, ValueError, json.JSONDecodeError) as exc:
+        flash(_error_message(exc), "error")
+    target = url_for("gui.golden_set_edit", set_id=set_id)
+    return redirect(f"{target}?{return_query}#testcases" if return_query else f"{target}#testcases")
 
 
 @gui.post("/golden-sets/<uuid:set_id>/items/verwijderen")
