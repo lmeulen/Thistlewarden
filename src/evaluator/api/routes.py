@@ -18,8 +18,12 @@ from evaluator.costs import CostService, calculation_to_dict
 from evaluator.discovery import ModelDiscoveryService
 from evaluator.endpoints import EndpointService, endpoint_to_dict
 from evaluator.gates import QualityGateService
-from evaluator.golden_sets import GoldenSetService, golden_item_to_dict, golden_set_to_dict
-from evaluator.judges import JudgeProfileService, judge_profile_to_dict
+from evaluator.golden_set_service import (
+    GoldenSetService,
+    golden_item_to_dict,
+    golden_set_to_dict,
+)
+from evaluator.judging.profiles import JudgeProfileService, judge_profile_to_dict
 from evaluator.models import ModelProfileService, profile_to_dict
 from evaluator.run_comparisons import ComparisonFilter, RunComparisonService
 from evaluator.run_exports import RunExportService, safe_filename

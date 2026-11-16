@@ -14,9 +14,9 @@ from evaluator.api.errors import ConflictError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.endpoints import EndpointInput
 from evaluator.gates import QualityGates
-from evaluator.golden_sets import GoldenSetInput, GoldenSetItemInput
-from evaluator.judge_extensions import JudgeImplementationRegistry
-from evaluator.judges import JudgeProfileInput
+from evaluator.golden_set_contracts import GoldenSetInput, GoldenSetItemInput
+from evaluator.judging.extensions import JudgeImplementationRegistry
+from evaluator.judging.profiles import JudgeProfileInput
 from evaluator.logging_config import log_semantic_event
 from evaluator.models import ModelProfileInput
 from evaluator.time import to_utc_iso, utc_now
