@@ -419,6 +419,28 @@ def _migration_16(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_17(connection: sqlite3.Connection) -> None:
+    """Persist onboarding choices and successful readiness actions."""
+
+    connection.execute(
+        """CREATE TABLE onboarding_preferences (
+            id INTEGER PRIMARY KEY NOT NULL CHECK(id=1),
+            dismissed INTEGER NOT NULL CHECK(dismissed IN (0,1)),
+            updated_at TEXT NOT NULL
+        )"""
+    )
+    connection.execute(
+        """CREATE TABLE onboarding_events (
+            event_type TEXT NOT NULL CHECK(event_type IN (
+                'model_test_succeeded','evaluator_preview_succeeded','result_inspected'
+            )),
+            object_id TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(event_type,object_id)
+        )"""
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "create_settings", _migration_1),
     Migration(2, "add_settings_updated_at", _migration_2),
@@ -436,6 +458,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(14, "add_judge_inference_overrides", _migration_14),
     Migration(15, "add_versioned_judge_implementations", _migration_15),
     Migration(16, "add_endpoint_api_format", _migration_16),
+    Migration(17, "add_pilot_onboarding", _migration_17),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

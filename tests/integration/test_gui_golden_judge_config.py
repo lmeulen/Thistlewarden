@@ -42,9 +42,9 @@ def _csrf(client, path: str) -> str:
 
 
 def _create_set(client) -> str:
-    token = _csrf(client, "/golden-sets/nieuw")
+    token = _csrf(client, "/golden-sets/new")
     response = client.post(
-        "/golden-sets/nieuw",
+        "/golden-sets/new",
         data={
             "csrf_token": token,
             "name": "GUI set",
@@ -122,11 +122,11 @@ def test_judge_page_can_delete_profile_with_confirmation(app) -> None:
 
     page = client.get("/judges").get_data(as_text=True)
     assert "delete-judge-form" in page
-    assert f"/judges/{judge['id']}/verwijderen" in page
+    assert f"/judges/{judge['id']}/delete" in page
 
     token = _csrf(client, "/judges")
     denied = client.post(
-        f"/judges/{judge['id']}/verwijderen",
+        f"/judges/{judge['id']}/delete",
         data={"csrf_token": token},
         follow_redirects=True,
     )
@@ -135,7 +135,7 @@ def test_judge_page_can_delete_profile_with_confirmation(app) -> None:
 
     token = _csrf(client, "/judges")
     deleted = client.post(
-        f"/judges/{judge['id']}/verwijderen",
+        f"/judges/{judge['id']}/delete",
         data={"csrf_token": token, "confirm": "on"},
         follow_redirects=True,
     )
@@ -153,10 +153,10 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
         response = client.get(path)
         assert response.status_code == 200
         assert text in response.get_data(as_text=True)
-    for legacy_path in ("/configuratie", "/configuration"):
-        legacy = client.get(legacy_path)
-        assert legacy.status_code == 308
-        assert legacy.headers["Location"].endswith("/backup")
+    configuration = client.get("/configuration")
+    assert configuration.status_code == 308
+    assert configuration.headers["Location"].endswith("/backup")
+    assert client.get("/configuratie").status_code == 404
     page = client.get("/").get_data(as_text=True)
     navigation = page[page.index('<nav aria-label="Main navigation">') : page.index("</nav>")]
     labels = (
@@ -178,7 +178,7 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
 def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
     client = app.test_client()
     set_id = _create_set(client)
-    response = client.get(f"/golden-sets/{set_id}/items/nieuw")
+    response = client.get(f"/golden-sets/{set_id}/items/new")
     page = response.get_data(as_text=True)
     assert response.status_code == 200
     assert 'id="evaluation-method"' in page
@@ -320,7 +320,7 @@ def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
 def test_output_tester_uses_unsaved_fields_without_persistence(app) -> None:
     client = app.test_client()
     set_id = _create_set(client)
-    path = f"/golden-sets/{set_id}/items/nieuw"
+    path = f"/golden-sets/{set_id}/items/new"
     token = _csrf(client, path)
     page = client.get(path).get_data(as_text=True)
     assert 'id="test-output"' in page
@@ -372,7 +372,7 @@ def test_output_tester_rejects_invalid_config_and_llm_judge(app) -> None:
     client = app.test_client()
     set_id = _create_set(client)
     path = f"/golden-sets/{set_id}/items/verify"
-    token = _csrf(client, f"/golden-sets/{set_id}/items/nieuw")
+    token = _csrf(client, f"/golden-sets/{set_id}/items/new")
     base = {
         "csrf_token": token,
         "case_id": "preview",
@@ -430,9 +430,9 @@ def test_gui_saves_every_evaluator_method(
 ) -> None:
     client = app.test_client()
     set_id = _create_set(client)
-    token = _csrf(client, f"/golden-sets/{set_id}/items/nieuw")
+    token = _csrf(client, f"/golden-sets/{set_id}/items/new")
     response = client.post(
-        f"/golden-sets/{set_id}/items/nieuw",
+        f"/golden-sets/{set_id}/items/new",
         data={
             "csrf_token": token,
             "case_id": f"case-{method}",
@@ -454,7 +454,7 @@ def test_golden_set_delete_requires_name_and_removes_items(app) -> None:
     set_id = _create_set(client)
     token = _csrf(client, f"/golden-sets/{set_id}")
     client.post(
-        f"/golden-sets/{set_id}/items/nieuw",
+        f"/golden-sets/{set_id}/items/new",
         data={
             "csrf_token": token,
             "case_id": "delete-me",
@@ -473,7 +473,7 @@ def test_golden_set_delete_requires_name_and_removes_items(app) -> None:
 
     token = _csrf(client, f"/golden-sets/{set_id}")
     denied = client.post(
-        f"/golden-sets/{set_id}/verwijderen",
+        f"/golden-sets/{set_id}/delete",
         data={"csrf_token": token, "confirmation_name": "wrong"},
         follow_redirects=True,
     )
@@ -482,7 +482,7 @@ def test_golden_set_delete_requires_name_and_removes_items(app) -> None:
 
     token = _csrf(client, f"/golden-sets/{set_id}")
     deleted = client.post(
-        f"/golden-sets/{set_id}/verwijderen",
+        f"/golden-sets/{set_id}/delete",
         data={"csrf_token": token, "confirmation_name": "GUI set"},
         follow_redirects=True,
     )
@@ -509,7 +509,7 @@ def test_duplicate_set_and_quick_delete_item(app) -> None:
     assert "Duplicate" in listing and "duplicate-set-form" in listing
     token = _csrf(client, "/golden-sets")
     response = client.post(
-        f"/golden-sets/{set_id}/dupliceren",
+        f"/golden-sets/{set_id}/duplicate",
         data={"csrf_token": token, "name": "GUI set kopie"},
         follow_redirects=False,
     )
@@ -540,7 +540,7 @@ def test_duplicate_set_and_quick_delete_item(app) -> None:
     assert "Delete selection" in page
     token = _csrf(client, f"/golden-sets/{set_id}")
     deleted = client.post(
-        f"/golden-sets/{set_id}/items/verwijderen",
+        f"/golden-sets/{set_id}/items/delete",
         data={"csrf_token": token, "item_ids": [str(original.id), str(second.id)]},
         follow_redirects=True,
     )
@@ -600,7 +600,7 @@ def test_golden_set_and_case_pagination_reaches_101st_record(app) -> None:
 
     token = _csrf(client, f"/golden-sets/{set_id}?page=2")
     deleted = client.post(
-        f"/golden-items/{cases[-1].id}/verwijderen",
+        f"/golden-items/{cases[-1].id}/delete",
         data={"csrf_token": token},
         follow_redirects=True,
     )
@@ -620,13 +620,13 @@ def test_run_form_can_find_and_select_101st_golden_set(app) -> None:
         for index in range(1, 102)
     ]
 
-    page = client.get("/runs/nieuw?set_page=5").get_data(as_text=True)
+    page = client.get("/runs/new?set_page=5").get_data(as_text=True)
     assert "Showing 101–101 of 101 matching active golden sets." in page
     assert f'value="{records[-1].id}"' in page
     assert "Run set 101 · 1.0" in page
     assert "Page 5 of 5" in page
 
-    searched = client.get("/runs/nieuw?set_query=Run+set+101").get_data(as_text=True)
+    searched = client.get("/runs/new?set_query=Run+set+101").get_data(as_text=True)
     assert "Showing 1–1 of 1 matching active golden sets." in searched
     assert f'value="{records[-1].id}"' in searched
     assert 'name="set_query" value="Run set 101"' in searched
@@ -673,9 +673,9 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
         f"/api/v1/endpoints/{endpoint['id']}/models",
         json={"model_id": "m1", "display_name": "Model een"},
     ).get_json()["model"]
-    token = _csrf(client, "/judges/nieuw")
+    token = _csrf(client, "/judges/new")
     judge = client.post(
-        "/judges/nieuw",
+        "/judges/new",
         data={
             "csrf_token": token,
             "name": "Hoofdjudge",
@@ -888,9 +888,9 @@ def test_bulk_maintenance_search_preview_apply_and_stale_conflict(app) -> None:
 def test_bulk_move_duplicate_conflict_and_deterministic_order(app) -> None:
     client = app.test_client()
     source = UUID(_create_set(client))
-    token = _csrf(client, "/golden-sets/nieuw")
+    token = _csrf(client, "/golden-sets/new")
     response = client.post(
-        "/golden-sets/nieuw",
+        "/golden-sets/new",
         data={"csrf_token": token, "name": "Destination", "version": "1", "active": "on"},
     )
     destination = UUID(response.headers["Location"].rsplit("/", 1)[-1])

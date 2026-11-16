@@ -210,11 +210,11 @@ class RunComparisonService:
         }
         if candidate is not None and candidate["result_id"] is not None:
             base["candidate_result_path"] = (
-                f"/runs/{candidate['run_id']}/resultaten/{candidate['result_id']}"
+                f"/runs/{candidate['run_id']}/results/{candidate['result_id']}"
             )
         if baseline is not None and baseline["result_id"] is not None:
             base["baseline_result_path"] = (
-                f"/runs/{baseline['run_id']}/resultaten/{baseline['result_id']}"
+                f"/runs/{baseline['run_id']}/results/{baseline['result_id']}"
             )
         if baseline is None:
             return {

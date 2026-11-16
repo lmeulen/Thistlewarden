@@ -42,6 +42,7 @@ from evaluator.judges import JudgeProfileService
 from evaluator.logging_config import log_event
 from evaluator.manual import manual_asset, manual_pages, render_manual_page
 from evaluator.models import ModelProfileService
+from evaluator.onboarding import OnboardingService
 from evaluator.run_comparisons import ComparisonFilter, RunComparisonService
 from evaluator.run_exports import RunExportService, safe_filename
 from evaluator.run_views import RESULT_PAGE_SIZE, ResultQuery, RunViewService
@@ -122,6 +123,10 @@ def _model_service() -> ModelProfileService:
 
 def _model_tester() -> Any:
     return current_app.extensions["model_profile_tester"]
+
+
+def _onboarding_service() -> OnboardingService:
+    return cast(OnboardingService, current_app.extensions["onboarding_service"])
 
 
 def _discovery_service() -> ModelDiscoveryService:
@@ -377,12 +382,35 @@ def dashboard() -> str:
         if service is not None
         else DashboardStatistics()
     )
-    return render_template("index.html", statistics=statistics)
+    onboarding = (
+        _onboarding_service().state() if "onboarding_service" in current_app.extensions else None
+    )
+    return render_template("index.html", statistics=statistics, onboarding=onboarding)
 
 
-@gui.get("/instellingen")
-def legacy_settings_page() -> Response:
-    return redirect(url_for("gui.settings_page"), code=308)
+@gui.post("/onboarding/dismiss")
+def onboarding_dismiss() -> Response:
+    _onboarding_service().set_dismissed(True)
+    flash("Pilot guidance dismissed. You can restore it from the dashboard.", "success")
+    return redirect(url_for("gui.dashboard"))
+
+
+@gui.post("/onboarding/restore")
+def onboarding_restore() -> Response:
+    _onboarding_service().set_dismissed(False)
+    flash("Pilot guidance restored.", "success")
+    return redirect(url_for("gui.dashboard"))
+
+
+@gui.post("/onboarding/starter-set")
+def onboarding_starter_set() -> Response:
+    try:
+        record = OnboardingService.create_starter_set(_golden_service())
+        flash("Synthetic pilot golden set created. Review and edit it before use.", "success")
+        return redirect(url_for("gui.golden_set_edit", set_id=record.id))
+    except (ApiError, ValueError) as exc:
+        flash(_error_message(exc), "error")
+        return redirect(url_for("gui.dashboard"))
 
 
 @gui.get("/settings")
@@ -421,7 +449,7 @@ def endpoints_page() -> str:
     return render_template("endpoints.html", endpoints=_endpoint_service().list_all())
 
 
-@gui.route("/endpoints/nieuw", methods=["GET", "POST"])
+@gui.route("/endpoints/new", methods=["GET", "POST"])
 def endpoint_new() -> str | Response:
     if request.method == "POST":
         try:
@@ -446,7 +474,7 @@ def endpoint_edit(endpoint_id: UUID) -> str | Response:
     return render_template("endpoint_form.html", endpoint=service.get(endpoint_id))
 
 
-@gui.post("/endpoints/<uuid:endpoint_id>/verwijderen")
+@gui.post("/endpoints/<uuid:endpoint_id>/delete")
 def endpoint_delete(endpoint_id: UUID) -> Response:
     service = _endpoint_service()
     try:
@@ -461,7 +489,7 @@ def endpoint_delete(endpoint_id: UUID) -> Response:
     return redirect(url_for("gui.endpoints_page"))
 
 
-@gui.route("/endpoints/<uuid:endpoint_id>/ontdekken", methods=["GET", "POST"])
+@gui.route("/endpoints/<uuid:endpoint_id>/discover", methods=["GET", "POST"])
 def discover(endpoint_id: UUID) -> str | Response:
     try:
         candidates = _discovery_service().discover(endpoint_id)
@@ -479,7 +507,7 @@ def discover(endpoint_id: UUID) -> str | Response:
         return redirect(url_for("gui.endpoint_edit", endpoint_id=endpoint_id))
 
 
-@gui.route("/endpoints/<uuid:endpoint_id>/modellen/nieuw", methods=["GET", "POST"])
+@gui.route("/endpoints/<uuid:endpoint_id>/models/new", methods=["GET", "POST"])
 def model_new(endpoint_id: UUID) -> str | Response:
     service = _model_service()
     endpoint = _endpoint_service().get(endpoint_id)
@@ -543,7 +571,7 @@ def model_new(endpoint_id: UUID) -> str | Response:
     )
 
 
-@gui.route("/modellen/<uuid:profile_id>", methods=["GET", "POST"])
+@gui.route("/models/<uuid:profile_id>", methods=["GET", "POST"])
 def model_edit(profile_id: UUID) -> str | Response:
     service = _model_service()
     model = service.get(profile_id)
@@ -568,7 +596,7 @@ def model_edit(profile_id: UUID) -> str | Response:
     )
 
 
-@gui.post("/modellen/<uuid:profile_id>/testen")
+@gui.post("/models/<uuid:profile_id>/test")
 def model_test(profile_id: UUID) -> str:
     model = _model_service().get(profile_id)
     endpoint = _endpoint_service().get(model.endpoint_id)
@@ -577,6 +605,7 @@ def model_test(profile_id: UUID) -> str:
     try:
         result = _model_tester().test(model)
         if result.successful:
+            _onboarding_service().record_success("model_test_succeeded", profile_id)
             flash("Model call succeeded.", "success")
         else:
             test_error = {
@@ -642,7 +671,7 @@ def golden_sets_page() -> str:
     return render_template("golden_sets.html", golden_sets=records, pagination=details)
 
 
-@gui.post("/golden-sets/<uuid:set_id>/dupliceren")
+@gui.post("/golden-sets/<uuid:set_id>/duplicate")
 def golden_set_duplicate(set_id: UUID) -> Response:
     try:
         record = _golden_service().duplicate_set(set_id, request.form.get("name", ""))
@@ -653,7 +682,7 @@ def golden_set_duplicate(set_id: UUID) -> Response:
         return redirect(url_for("gui.golden_sets_page"))
 
 
-@gui.route("/golden-sets/nieuw", methods=["GET", "POST"])
+@gui.route("/golden-sets/new", methods=["GET", "POST"])
 def golden_set_new() -> str | Response:
     if request.method == "POST":
         try:
@@ -731,7 +760,7 @@ def golden_set_edit(set_id: UUID) -> str | Response:
     )
 
 
-@gui.post("/golden-sets/<uuid:set_id>/verwijderen")
+@gui.post("/golden-sets/<uuid:set_id>/delete")
 def golden_set_delete(set_id: UUID) -> Response:
     service = _golden_service()
     golden_set = service.get_set(set_id)
@@ -794,7 +823,7 @@ def _render_golden_item_form(*, item: Any, golden_set: Any) -> str:
     )
 
 
-@gui.route("/golden-sets/<uuid:set_id>/items/nieuw", methods=["GET", "POST"])
+@gui.route("/golden-sets/<uuid:set_id>/items/new", methods=["GET", "POST"])
 def golden_item_new(set_id: UUID) -> str | Response:
     if request.method == "POST":
         try:
@@ -828,6 +857,7 @@ def golden_item_verify(set_id: UUID) -> tuple[Response, int] | Response:
             else []
         )
         return jsonify({"ok": False, "message": message, "details": details}), 400
+    _onboarding_service().record_success("evaluator_preview_succeeded", set_id)
     return jsonify({"ok": True, **result.model_dump()})
 
 
@@ -906,7 +936,7 @@ def golden_items_bulk_apply(set_id: UUID) -> Response:
     )
 
 
-@gui.post("/golden-sets/<uuid:set_id>/items/verwijderen")
+@gui.post("/golden-sets/<uuid:set_id>/items/delete")
 def golden_items_delete(set_id: UUID) -> Response:
     try:
         item_ids = [UUID(value) for value in request.form.getlist("item_ids")]
@@ -917,7 +947,7 @@ def golden_items_delete(set_id: UUID) -> Response:
     return redirect(url_for("gui.golden_set_edit", set_id=set_id))
 
 
-@gui.post("/golden-items/<uuid:item_id>/verwijderen")
+@gui.post("/golden-items/<uuid:item_id>/delete")
 def golden_item_delete(item_id: UUID) -> Response:
     item = _golden_service().get_item(item_id)
     try:
@@ -972,7 +1002,7 @@ def judges_page() -> str:
     return render_template("judges.html", judges=_judge_service().list_all())
 
 
-@gui.route("/judges/nieuw", methods=["GET", "POST"])
+@gui.route("/judges/new", methods=["GET", "POST"])
 def judge_new() -> str | Response:
     if request.method == "POST":
         try:
@@ -1008,7 +1038,7 @@ def judge_edit(profile_id: UUID) -> str | Response:
     )
 
 
-@gui.post("/judges/<uuid:profile_id>/verwijderen")
+@gui.post("/judges/<uuid:profile_id>/delete")
 def judge_delete(profile_id: UUID) -> Response:
     if "confirm" not in request.form:
         flash("Explicitly confirm permanent deletion.", "error")
@@ -1090,7 +1120,7 @@ def runs_page() -> str:
     return render_template("runs.html", runs=_run_views().list_runs())
 
 
-@gui.route("/runs/nieuw", methods=["GET", "POST"])
+@gui.route("/runs/new", methods=["GET", "POST"])
 def run_new() -> str | Response:
     service = _golden_service()
     defaults: dict[str, Any] = {}
@@ -1431,16 +1461,16 @@ def run_status(run_id: UUID) -> Response:
     )
 
 
-@gui.get("/runs/<uuid:run_id>/resultaten/<uuid:result_id>")
+@gui.get("/runs/<uuid:run_id>/results/<uuid:result_id>")
 def run_result_detail(run_id: UUID, result_id: UUID) -> str:
-    return render_template(
-        "run_result.html",
-        run=_run_views().run(run_id),
-        result=_run_views().result(run_id, result_id),
-    )
+    run = _run_views().run(run_id)
+    result = _run_views().result(run_id, result_id)
+    if run["status"] in {"completed", "completed_with_errors"}:
+        _onboarding_service().record_success("result_inspected", result_id)
+    return render_template("run_result.html", run=run, result=result)
 
 
-@gui.post("/runs/<uuid:run_id>/naam")
+@gui.post("/runs/<uuid:run_id>/name")
 def run_rename(run_id: UUID) -> Response:
     try:
         _run_queue().rename(run_id, request.form.get("name", ""))
@@ -1450,7 +1480,7 @@ def run_rename(run_id: UUID) -> Response:
     return redirect(url_for("gui.run_detail", run_id=run_id))
 
 
-@gui.post("/runs/<uuid:run_id>/annuleren")
+@gui.post("/runs/<uuid:run_id>/cancel")
 def run_cancel(run_id: UUID) -> Response:
     if "confirm" not in request.form:
         flash("Explicitly confirm cancellation.", "error")
@@ -1463,7 +1493,7 @@ def run_cancel(run_id: UUID) -> Response:
     return redirect(url_for("gui.run_detail", run_id=run_id))
 
 
-@gui.post("/runs/<uuid:run_id>/mislukte-opnieuw")
+@gui.post("/runs/<uuid:run_id>/rerun-failures")
 def run_rerun_failures(run_id: UUID) -> Response:
     try:
         new_id = _run_queue().rerun_failures(run_id, request.form.get("name", ""))
@@ -1474,7 +1504,7 @@ def run_rerun_failures(run_id: UUID) -> Response:
         return redirect(url_for("gui.run_detail", run_id=run_id))
 
 
-@gui.post("/runs/verwijderen")
+@gui.post("/runs/delete")
 def runs_delete() -> Response:
     try:
         run_ids = [UUID(value) for value in request.form.getlist("run_ids")]
@@ -1486,7 +1516,7 @@ def runs_delete() -> Response:
     return redirect(url_for("gui.runs_page"))
 
 
-@gui.post("/runs/<uuid:run_id>/verwijderen")
+@gui.post("/runs/<uuid:run_id>/delete")
 def run_delete(run_id: UUID) -> Response:
     if "confirm" not in request.form:
         flash("Explicitly confirm permanent deletion.", "error")
@@ -1526,7 +1556,6 @@ def run_export(run_id: UUID) -> str | Response:
     )
 
 
-@gui.get("/configuratie")
 @gui.get("/configuration")
 def legacy_configuration_page() -> Response:
     return redirect(url_for("gui.configuration_page"), code=308)
@@ -1579,7 +1608,7 @@ def configuration_import() -> str | Response:
         return render_template("configuration.html", plan=None, preview_payload=None)
 
 
-@gui.post("/endpoints/<uuid:endpoint_id>/modellen/verwijderen")
+@gui.post("/endpoints/<uuid:endpoint_id>/models/delete")
 def models_delete(endpoint_id: UUID) -> Response:
     try:
         profile_ids = [UUID(value) for value in request.form.getlist("profile_ids")]
@@ -1593,7 +1622,7 @@ def models_delete(endpoint_id: UUID) -> Response:
     return redirect(url_for("gui.endpoints_page"))
 
 
-@gui.post("/modellen/<uuid:profile_id>/verwijderen")
+@gui.post("/models/<uuid:profile_id>/delete")
 def model_delete(profile_id: UUID) -> Response:
     try:
         _model_service().delete(profile_id)
