@@ -81,10 +81,10 @@ def test_api_and_gui_endpoint_mutations_emit_one_post_commit_service_event(app, 
     assert "endpoint_id=" in api_events[0].getMessage()
 
     caplog.clear()
-    token = csrf_token(client, "/endpoints/nieuw")
+    token = csrf_token(client, "/endpoints/new")
     with caplog.at_level(logging.INFO):
         gui_response = client.post(
-            "/endpoints/nieuw",
+            "/endpoints/new",
             data={
                 "csrf_token": token,
                 "name": "GUI endpoint",

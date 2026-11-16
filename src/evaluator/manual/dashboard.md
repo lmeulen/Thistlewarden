@@ -30,6 +30,25 @@ It has three cards:
 
 A new installation displays zero for every value. This is normal until you configure endpoints, profiles, golden sets, and runs.
 
+## First-pilot guidance
+
+New or incomplete installations show an ordered **Run your first pilot evaluation** checklist above dashboard statistics. Its state comes from application records and successful actions stored in local database, so progress survives browser changes and application restarts. It does not depend on browser storage.
+
+Checklist covers:
+
+1. adding an active provider endpoint;
+2. successfully testing an active model profile;
+3. creating or importing an active golden set with an enabled test case;
+4. successfully previewing a deterministic evaluator;
+5. starting a run with exactly one model; and
+6. opening a result from a completed run.
+
+Each incomplete step links to its primary action and explains its blocker. A completed historical workflow prevents onboarding from being imposed on an existing installation.
+
+Select **Dismiss guidance** to hide checklist. Dashboard then offers **Restore pilot guidance** until workflow is complete. Both choices are stored in local database.
+
+Checklist optionally creates **Synthetic pilot examples**, an editable and removable golden set with three deterministic cases. This action creates no endpoint, credential, provider call, paid call, or judge call. Starter examples demonstrate workflow only; they do not establish model quality or production readiness. Starting pilot run remains normal run flow, including cost preview and sensitive-data warning.
+
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
 ## Interpreting totals and active-item counts

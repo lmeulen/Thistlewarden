@@ -84,11 +84,30 @@ def test_settings_page_remains_available_but_is_not_in_top_navigation(app) -> No
 
     assert settings.status_code == 200
     assert "<h1>Settings</h1>" in settings.get_data(as_text=True)
-    legacy = client.get("/instellingen")
-    assert legacy.status_code == 308
-    assert legacy.headers["Location"].endswith("/settings")
+    assert client.get("/instellingen").status_code == 404
     assert 'href="/settings"' not in header
     assert ">Settings</a>" not in header
+
+
+def test_gui_routes_use_only_english_path_segments(app) -> None:
+    dutch_segments = {
+        "annuleren",
+        "configuratie",
+        "dupliceren",
+        "instellingen",
+        "mislukte-opnieuw",
+        "modellen",
+        "naam",
+        "nieuw",
+        "ontdekken",
+        "resultaten",
+        "testen",
+        "verwijderen",
+    }
+    route_segments = {
+        segment for rule in app.url_map.iter_rules() for segment in rule.rule.split("/")
+    }
+    assert route_segments.isdisjoint(dutch_segments)
 
 
 def test_header_links_open_github_and_local_manual(app) -> None:

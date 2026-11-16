@@ -70,6 +70,7 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (14, "add_judge_inference_overrides"),
             (15, "add_versioned_judge_implementations"),
             (16, "add_endpoint_api_format"),
+            (17, "add_pilot_onboarding"),
         ]
     finally:
         connection.close()
@@ -166,7 +167,7 @@ def test_migration_16_defaults_existing_endpoints_to_openai(tmp_path: Path) -> N
     finally:
         connection.close()
 
-    assert MigrationManager(factory).migrate() == 16
+    assert MigrationManager(factory).migrate() == LATEST_SCHEMA_VERSION
     connection = factory.connect()
     try:
         row = connection.execute("SELECT api_format FROM endpoints").fetchone()

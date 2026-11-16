@@ -1,5 +1,32 @@
 {% extends "base.html" %}{% block content %}
-<h1>Thistlewarden</h1><p>Local evaluation of language models.</p>
+<h1>Thistlewarden</h1><p>Local evaluation of language models. Build repeatable test cases, run a small pilot against one model, and inspect auditable quality, performance, and cost results.</p>
+{% if onboarding and onboarding.show_checklist %}
+<section class="panel onboarding" aria-labelledby="onboarding-title">
+  <div class="heading">
+    <div><h2 id="onboarding-title">Run your first pilot evaluation</h2><p>Follow these ordered steps with non-sensitive examples. A pilot demonstrates the workflow; it does not establish production readiness or model quality.</p></div>
+    <form method="post" action="{{ url_for('gui.onboarding_dismiss') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary compact">Dismiss guidance</button></form>
+  </div>
+  <p aria-live="polite"><strong>{{ onboarding.completed_count }} of {{ onboarding.steps|length }} steps complete</strong></p>
+  <ol class="onboarding-steps">
+  {% for step in onboarding.steps %}
+    <li class="onboarding-step{% if step.complete %} is-complete{% endif %}">
+      <div><h3>{{ step.title }}</h3><p class="onboarding-status"><strong>Status:</strong> {{ 'Complete' if step.complete else 'Not complete' }}</p>{% if not step.complete %}<p>{{ step.blocker }}</p>{% endif %}</div>
+      {% if not step.complete %}<a class="button" href="{{ step.action_url }}">{{ step.action_label }}</a>{% endif %}
+    </li>
+  {% endfor %}
+  </ol>
+  {% if not onboarding.steps[2].complete %}
+  <aside class="starter-option" aria-labelledby="starter-title">
+    <h3 id="starter-title">Optional synthetic starter content</h3>
+    <p>Creates three clearly labeled synthetic, deterministic test cases. Content is editable and removable. No credential, endpoint, provider call, paid call, or judge call is created or executed.</p>
+    <form method="post" action="{{ url_for('gui.onboarding_starter_set') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Create synthetic starter golden set</button></form>
+  </aside>
+  {% endif %}
+  <p><a href="{{ url_for('gui.manual_page', page='getting-started') }}">Read pilot evaluation guidance</a></p>
+</section>
+{% elif onboarding and onboarding.dismissed and not onboarding.complete %}
+<section class="panel onboarding-restore" aria-labelledby="onboarding-restore-title"><div class="heading"><div><h2 id="onboarding-restore-title">Pilot guidance hidden</h2><p>Restore record-derived readiness steps whenever you need them.</p></div><form method="post" action="{{ url_for('gui.onboarding_restore') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Restore pilot guidance</button></form></div></section>
+{% endif %}
 <div class="cards dashboard-cards">
   <section aria-labelledby="evaluate-title">
     <h2 id="evaluate-title">Evaluate</h2>

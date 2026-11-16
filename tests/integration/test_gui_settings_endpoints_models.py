@@ -108,7 +108,7 @@ def test_gui_bootstrap_setting_update_is_rejected(app) -> None:
 
 
 def test_gui_csrf_blocks_mutation(app) -> None:
-    response = app.test_client().post("/endpoints/nieuw", data=_endpoint_form("invalid"))
+    response = app.test_client().post("/endpoints/new", data=_endpoint_form("invalid"))
     assert response.status_code == 400
     connection = app.extensions["database_factory"].connect()
     try:
@@ -174,7 +174,7 @@ def test_endpoint_delete_requires_matching_name(app) -> None:
 
     token = _csrf(client, path)
     rejected = client.post(
-        f"{path}/verwijderen",
+        f"{path}/delete",
         data={"csrf_token": token, "confirmation_name": "wrong name"},
         follow_redirects=True,
     )
@@ -186,7 +186,7 @@ def test_endpoint_delete_requires_matching_name(app) -> None:
 
     token = _csrf(client, path)
     deleted = client.post(
-        f"{path}/verwijderen",
+        f"{path}/delete",
         data={"csrf_token": token, "confirmation_name": "Provider to delete"},
         follow_redirects=True,
     )
@@ -275,7 +275,7 @@ def test_endpoint_page_bulk_deletes_selected_models_only(app) -> None:
     assert all(f'value="{model.id}"' in text for model in models)
 
     response = client.post(
-        f"/endpoints/{endpoint.id}/modellen/verwijderen",
+        f"/endpoints/{endpoint.id}/models/delete",
         data={
             "csrf_token": _csrf(client, "/endpoints"),
             "profile_ids": [str(models[0].id), str(models[2].id)],
@@ -308,14 +308,14 @@ def test_bulk_model_delete_rejects_empty_or_cross_endpoint_selection(app) -> Non
     token = _csrf(client, "/endpoints")
 
     empty = client.post(
-        f"/endpoints/{endpoints[0].id}/modellen/verwijderen",
+        f"/endpoints/{endpoints[0].id}/models/delete",
         data={"csrf_token": token},
         follow_redirects=True,
     )
     assert "Select at least one model profile." in empty.get_data(as_text=True)
 
     cross_endpoint = client.post(
-        f"/endpoints/{endpoints[0].id}/modellen/verwijderen",
+        f"/endpoints/{endpoints[0].id}/models/delete",
         data={"csrf_token": token, "profile_ids": str(models[1].id)},
         follow_redirects=True,
     )
@@ -355,8 +355,7 @@ def test_new_model_can_copy_profile_and_select_discovered_model(app, monkeypatch
 
     client = app.test_client()
     path = (
-        f"/endpoints/{endpoint.id}/modellen/nieuw"
-        f"?copy_from={source.id}&discover=1&model_id=new-model"
+        f"/endpoints/{endpoint.id}/models/new?copy_from={source.id}&discover=1&model_id=new-model"
     )
     response = client.get(path)
     text = response.get_data(as_text=True)
@@ -384,7 +383,7 @@ def test_new_model_rejects_copy_source_from_other_endpoint(app) -> None:
         first.id, {"model_id": "m", "display_name": "Niet toegestaan"}
     )
 
-    response = app.test_client().get(f"/endpoints/{second.id}/modellen/nieuw?copy_from={source.id}")
+    response = app.test_client().get(f"/endpoints/{second.id}/models/new?copy_from={source.id}")
     text = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "Copy source does not belong to this endpoint" in text
@@ -422,12 +421,12 @@ def test_saved_model_can_be_tested_with_result_metrics(app, monkeypatch) -> None
 
     monkeypatch.setattr(app.extensions["model_profile_tester"], "test", fake_test)
     client = app.test_client()
-    path = f"/modellen/{profile.id}"
+    path = f"/models/{profile.id}"
     page = client.get(path).get_data(as_text=True)
     assert "Test model" in page and "Save changes first" in page
-    assert client.post(f"{path}/testen").status_code == 400
+    assert client.post(f"{path}/test").status_code == 400
 
-    response = client.post(f"{path}/testen", data={"csrf_token": _csrf(client, path)})
+    response = client.post(f"{path}/test", data={"csrf_token": _csrf(client, path)})
     text = response.get_data(as_text=True)
     assert response.status_code == 200
     assert tested == [profile]
@@ -460,8 +459,8 @@ def test_failed_model_test_shows_safe_error(app, monkeypatch) -> None:
         ),
     )
     client = app.test_client()
-    path = f"/modellen/{profile.id}"
-    response = client.post(f"{path}/testen", data={"csrf_token": _csrf(client, path)})
+    path = f"/models/{profile.id}"
+    response = client.post(f"{path}/test", data={"csrf_token": _csrf(client, path)})
     text = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "Model call failed. Review test result below" in text
@@ -506,8 +505,8 @@ def test_model_test_provider_exception_is_visible(app, monkeypatch) -> None:
 
     monkeypatch.setattr(app.extensions["model_profile_tester"], "test", rejected)
     client = app.test_client()
-    path = f"/modellen/{profile.id}"
-    response = client.post(f"{path}/testen", data={"csrf_token": _csrf(client, path)})
+    path = f"/models/{profile.id}"
+    response = client.post(f"{path}/test", data={"csrf_token": _csrf(client, path)})
     text = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "PROVIDER_CLIENT_ERROR" in text
@@ -529,8 +528,8 @@ def test_unexpected_model_test_exception_is_visible_without_detail(app, monkeypa
 
     monkeypatch.setattr(app.extensions["model_profile_tester"], "test", broken)
     client = app.test_client()
-    path = f"/modellen/{profile.id}"
-    response = client.post(f"{path}/testen", data={"csrf_token": _csrf(client, path)})
+    path = f"/models/{profile.id}"
+    response = client.post(f"{path}/test", data={"csrf_token": _csrf(client, path)})
     text = response.get_data(as_text=True)
     assert response.status_code == 200
     assert "INTERNAL_ERROR" in text
@@ -540,8 +539,8 @@ def test_unexpected_model_test_exception_is_visible_without_detail(app, monkeypa
 
 def test_gui_creates_endpoint_preserves_blank_secrets_and_creates_model(app) -> None:
     client = app.test_client()
-    token = _csrf(client, "/endpoints/nieuw")
-    created = client.post("/endpoints/nieuw", data=_endpoint_form(token), follow_redirects=True)
+    token = _csrf(client, "/endpoints/new")
+    created = client.post("/endpoints/new", data=_endpoint_form(token), follow_redirects=True)
     text = created.get_data(as_text=True)
     assert created.status_code == 200
     assert "Endpoint created" in text
@@ -586,9 +585,9 @@ def test_gui_creates_endpoint_preserves_blank_secrets_and_creates_model(app) -> 
     finally:
         connection.close()
 
-    token = _csrf(client, f"/endpoints/{endpoint_id}/modellen/nieuw")
+    token = _csrf(client, f"/endpoints/{endpoint_id}/models/new")
     model = client.post(
-        f"/endpoints/{endpoint_id}/modellen/nieuw",
+        f"/endpoints/{endpoint_id}/models/new",
         data={
             "csrf_token": token,
             "model_id": "fixture-model",

@@ -34,6 +34,7 @@ from evaluator.judges import (
 from evaluator.logging_config import configure_logging, log_event
 from evaluator.migrations import MigrationManager
 from evaluator.models import ModelProfileService, SQLiteModelProfileRepository
+from evaluator.onboarding import OnboardingService
 from evaluator.provider import OpenAIProviderClient, ProviderHeaderResolver
 from evaluator.rate_limits import CentralEndpointLimiter, ProviderCallExecutor, RetryPolicy
 from evaluator.repositories import SQLiteSettingsRepository
@@ -161,6 +162,7 @@ def create_app(
         )
         cost_service = CostService(SQLiteCostRepository(database_factory), model_profile_repository)
         dashboard_service = DashboardService(database_factory)
+        onboarding_service = OnboardingService(database_factory)
         judge_profile_service = JudgeProfileService(
             SQLiteJudgeProfileRepository(database_factory), judge_registry
         )
@@ -301,6 +303,7 @@ def create_app(
         app.extensions["cost_service"] = cost_service
     if dashboard_service is not None:
         app.extensions["dashboard_service"] = dashboard_service
+        app.extensions["onboarding_service"] = onboarding_service
     if golden_set_service is not None:
         app.extensions["golden_set_service"] = golden_set_service
     if model_discovery_service is not None:

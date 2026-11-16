@@ -63,9 +63,9 @@ def csrf(client, path: str) -> str:
 
 def create_run(client, app, name="GUI run"):
     golden, model = app.config["FIXTURE_IDS"]
-    token = csrf(client, "/runs/nieuw")
+    token = csrf(client, "/runs/new")
     response = client.post(
-        "/runs/nieuw",
+        "/runs/new",
         data={
             "csrf_token": token,
             "name": name,
@@ -111,11 +111,11 @@ def test_run_can_be_renamed_from_detail_page(app) -> None:
     run_id = create_run(client, app, "Original run")
     page = client.get(f"/runs/{run_id}").get_data(as_text=True)
     assert 'aria-label="Rename run"' in page
-    assert f'action="/runs/{run_id}/naam"' in page
+    assert f'action="/runs/{run_id}/name"' in page
     token = csrf(client, f"/runs/{run_id}")
 
     response = client.post(
-        f"/runs/{run_id}/naam",
+        f"/runs/{run_id}/name",
         data={"csrf_token": token, "name": "  Renamed & reviewed  "},
         follow_redirects=True,
     )
@@ -132,10 +132,10 @@ def test_run_rename_validates_name_and_csrf_without_mutation(app) -> None:
     run_id = create_run(client, app, "Stable name")
     token = csrf(client, f"/runs/{run_id}")
 
-    missing_csrf = client.post(f"/runs/{run_id}/naam", data={"name": "Changed"})
+    missing_csrf = client.post(f"/runs/{run_id}/name", data={"name": "Changed"})
     assert missing_csrf.status_code == 400
     invalid = client.post(
-        f"/runs/{run_id}/naam",
+        f"/runs/{run_id}/name",
         data={"csrf_token": token, "name": "   "},
         follow_redirects=True,
     )
@@ -146,7 +146,7 @@ def test_run_rename_validates_name_and_csrf_without_mutation(app) -> None:
 
 
 def test_new_run_preview_targets_creation_form_and_uses_english(app) -> None:
-    text = app.test_client().get("/runs/nieuw").get_data(as_text=True)
+    text = app.test_client().get("/runs/new").get_data(as_text=True)
     assert 'id="run-create-form"' in text
     assert '<fieldset class="golden-set-picker"><legend>Golden set</legend>' in text
     assert '<fieldset class="run-details-panel"><legend>Run details</legend>' in text
@@ -166,9 +166,9 @@ def test_new_run_preview_targets_creation_form_and_uses_english(app) -> None:
 def test_rerun_opens_editable_prefilled_form_without_starting(app) -> None:
     client = app.test_client()
     golden, model = app.config["FIXTURE_IDS"]
-    token = csrf(client, "/runs/nieuw")
+    token = csrf(client, "/runs/new")
     created = client.post(
-        "/runs/nieuw",
+        "/runs/new",
         data={
             "csrf_token": token,
             "name": "Historical configuration",
@@ -183,9 +183,9 @@ def test_rerun_opens_editable_prefilled_form_without_starting(app) -> None:
     run_id = created.headers["Location"].rsplit("/", 1)[-1]
 
     overview = client.get("/runs").get_data(as_text=True)
-    assert f'href="/runs/nieuw?rerun={run_id}"' in overview
+    assert f'href="/runs/new?rerun={run_id}"' in overview
     before = len(app.extensions["run_view_service"].list_runs())
-    form = client.get(f"/runs/nieuw?rerun={run_id}")
+    form = client.get(f"/runs/new?rerun={run_id}")
     text = form.get_data(as_text=True)
 
     assert form.status_code == 200
@@ -203,7 +203,7 @@ def test_rerun_opens_editable_prefilled_form_without_starting(app) -> None:
     rerun_token = re.search(r'name="csrf_token" value="([^"]+)"', text)
     assert rerun_token
     submitted = client.post(
-        "/runs/nieuw",
+        "/runs/new",
         data={
             "csrf_token": rerun_token.group(1),
             "name": "Edited rerun",
@@ -325,7 +325,7 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         ).fetchone()[0]
     finally:
         connection.close()
-    detail = client.get(f"/runs/{run_id}/resultaten/{result_id}").get_data(as_text=True)
+    detail = client.get(f"/runs/{run_id}/results/{result_id}").get_data(as_text=True)
     assert "secret prompt" in detail and "Candidate answer" in detail and "yes" in detail
     assert 'class="evaluation-panel"' in detail
     assert 'class="evaluation-body"' in detail
@@ -399,7 +399,7 @@ def test_guardrail_is_distinct_in_ui_aggregates_and_export(app) -> None:
         ).fetchone()[0]
     finally:
         connection.close()
-    detail = client.get(f"/runs/{run_id}/resultaten/{result_id}").get_data(as_text=True)
+    detail = client.get(f"/runs/{run_id}/results/{result_id}").get_data(as_text=True)
     assert "Provider guardrail intervention" in detail
     assert "blocked by provider policy" in detail
     assert "Partial candidate answer" in detail and "partial output" in detail
@@ -430,8 +430,8 @@ def test_completed_runs_compare_filter_link_and_export(app) -> None:
     text = page.get_data(as_text=True)
     assert "Regressions</span><strong>1" in text
     assert "case-one" in text and "Model M" in text
-    assert f"/runs/{baseline_id}/resultaten/" in text
-    assert f"/runs/{candidate_id}/resultaten/" in text
+    assert f"/runs/{baseline_id}/results/" in text
+    assert f"/runs/{candidate_id}/results/" in text
     export = client.get(f"/runs/{candidate_id}/compare/{baseline_id}/export")
     payload = json.loads(export.data)
     assert export.status_code == 200
@@ -449,13 +449,13 @@ def test_completed_runs_compare_filter_link_and_export(app) -> None:
 def test_cancel_delete_and_export_require_csrf_and_confirmation(app) -> None:
     client = app.test_client()
     run_id = create_run(client, app, "Cancel me")
-    assert client.post(f"/runs/{run_id}/annuleren").status_code == 400
+    assert client.post(f"/runs/{run_id}/cancel").status_code == 400
     token = csrf(client, f"/runs/{run_id}")
     no_confirm = client.post(
-        f"/runs/{run_id}/annuleren", data={"csrf_token": token}, follow_redirects=True
+        f"/runs/{run_id}/cancel", data={"csrf_token": token}, follow_redirects=True
     )
     assert "Explicitly confirm cancellation" in no_confirm.get_data(as_text=True)
-    client.post(f"/runs/{run_id}/annuleren", data={"csrf_token": token, "confirm": "on"})
+    client.post(f"/runs/{run_id}/cancel", data={"csrf_token": token, "confirm": "on"})
     export = client.get(f"/runs/{run_id}/export")
     assert "sensitive prompts" in export.get_data(as_text=True)
     token = csrf(client, f"/runs/{run_id}/export")
@@ -469,7 +469,7 @@ def test_cancel_delete_and_export_require_csrf_and_confirmation(app) -> None:
         downloaded.status_code == 200 and json.loads(downloaded.data)["run"]["name"] == "Cancel me"
     )
     token = csrf(client, f"/runs/{run_id}")
-    client.post(f"/runs/{run_id}/verwijderen", data={"csrf_token": token, "confirm": "on"})
+    client.post(f"/runs/{run_id}/delete", data={"csrf_token": token, "confirm": "on"})
     assert client.get(f"/runs/{run_id}").status_code == 404
 
 
@@ -491,12 +491,12 @@ def test_bulk_delete_runs_with_select_all_control(app) -> None:
     assert "Permanently delete selected runs?" in text
 
     token = csrf(client, "/runs")
-    empty = client.post("/runs/verwijderen", data={"csrf_token": token}, follow_redirects=True)
+    empty = client.post("/runs/delete", data={"csrf_token": token}, follow_redirects=True)
     assert "Select one or more valid, completed runs." in empty.get_data(as_text=True)
 
     token = csrf(client, "/runs")
     deleted = client.post(
-        "/runs/verwijderen",
+        "/runs/delete",
         data={"csrf_token": token, "run_ids": [first, second]},
         follow_redirects=True,
     )
@@ -516,7 +516,7 @@ def test_rerun_failed_jobs_from_gui(app) -> None:
     complete_run(app, run_id, status="error")
     token = csrf(client, f"/runs/{run_id}")
     response = client.post(
-        f"/runs/{run_id}/mislukte-opnieuw",
+        f"/runs/{run_id}/rerun-failures",
         data={"csrf_token": token, "name": "Retry"},
         follow_redirects=False,
     )
