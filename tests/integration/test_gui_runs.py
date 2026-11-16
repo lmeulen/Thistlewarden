@@ -238,6 +238,7 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     text = page.get_data(as_text=True)
     assert (
         page.status_code == 200
+        and '<div class="run-detail-blocks"><div id="run-status"' in text
         and "Run overview" in text
         and "Model performance" in text
         and "Results by judge type" in text
@@ -313,6 +314,8 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         < text.index("Model comparison")
         < text.index("Model performance")
     )
+    css = client.get("/static/app.css").get_data(as_text=True)
+    assert ".run-detail-blocks{display:grid;gap:1rem}" in css
     excluded = client.get(f"/runs/{run_id}?judge_type=llm_judge").get_data(as_text=True)
     assert "No matching results." in excluded
     connection = app.extensions["database_factory"].connect()
