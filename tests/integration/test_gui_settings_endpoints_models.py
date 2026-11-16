@@ -537,6 +537,25 @@ def test_unexpected_model_test_exception_is_visible_without_detail(app, monkeypa
     assert sensitive_detail not in text
 
 
+def test_endpoints_overview_shows_api_key_status_without_exposing_secrets(app) -> None:
+    service = app.extensions["endpoint_service"]
+    with_key = _endpoint_form("unused", name="Endpoint with key")
+    without_key = _endpoint_form("unused", name="Endpoint without key", api_key="")
+    for payload in (with_key, without_key):
+        payload.pop("csrf_token")
+        payload["extra_headers"] = []
+        service.create(payload)
+
+    response = app.test_client().get("/endpoints")
+    text = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert text.count("API key set") == 1
+    assert text.count("API key not set") == 1
+    assert "gui-fixture-secret" not in text
+    assert "********" not in text
+
+
 def test_gui_creates_endpoint_preserves_blank_secrets_and_creates_model(app) -> None:
     client = app.test_client()
     token = _csrf(client, "/endpoints/new")
