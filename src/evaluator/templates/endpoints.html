@@ -13,6 +13,11 @@
     <div>
       <h2><a href="{{ url_for('gui.endpoint_edit', endpoint_id=endpoint.id) }}">{{ endpoint.data.name }}</a></h2>
       <p>{{ 'Anthropic-compatible' if endpoint.data.api_format == 'anthropic' else 'OpenAI-compatible' }} · <code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p>
+      {% if endpoint.has_api_key %}
+      <p><span class="badge status-passed">API key set</span></p>
+      {% else %}
+      <p><span class="badge status-indeterminate">API key not set</span></p>
+      {% endif %}
     </div>
     <a href="{{ url_for('gui.model_new', endpoint_id=endpoint.id) }}">Add model</a>
   </div>

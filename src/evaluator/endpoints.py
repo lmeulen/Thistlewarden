@@ -161,6 +161,12 @@ class EndpointRecord:
     created_at: datetime
     updated_at: datetime
 
+    @property
+    def has_api_key(self) -> bool:
+        """Report key presence without exposing secret material or its identifier."""
+
+        return self.api_key_secret_id is not None
+
 
 def _parse_utc(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
