@@ -8,7 +8,8 @@ from typing import Literal
 from uuid import UUID
 
 from evaluator.database import SQLiteConnectionFactory, transaction
-from evaluator.golden_sets import GoldenSetRecord, GoldenSetService
+from evaluator.golden_set_contracts import GoldenSetRecord
+from evaluator.golden_set_service import GoldenSetService
 from evaluator.time import to_utc_iso, utc_now
 
 

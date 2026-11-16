@@ -8,7 +8,8 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from evaluator.golden_sets import GoldenSetItemRecord, validate_evaluator_config
+from evaluator.evaluators.contracts import validate_evaluator_config
+from evaluator.golden_set_contracts import GoldenSetItemRecord
 
 
 class EvaluationResult(BaseModel):

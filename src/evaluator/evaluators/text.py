@@ -5,13 +5,13 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import cast
 
-from evaluator.evaluators.core import EvaluationResult, normalize_text
-from evaluator.golden_sets import (
+from evaluator.evaluators.contracts import (
     ContainsConfig,
     ExactMatchConfig,
-    GoldenSetItemRecord,
     validate_evaluator_config,
 )
+from evaluator.evaluators.core import EvaluationResult, normalize_text
+from evaluator.golden_set_contracts import GoldenSetItemRecord
 
 
 class ExactMatchEvaluator:

@@ -23,14 +23,14 @@ from evaluator.discovery import ModelDiscoveryClient, ModelDiscoveryService
 from evaluator.endpoints import EndpointService, SQLiteEndpointRepository
 from evaluator.evaluation_preview import EvaluationPreviewService
 from evaluator.gates import QualityGateService
-from evaluator.golden_sets import GoldenSetLimits, GoldenSetService, SQLiteGoldenSetRepository
+from evaluator.golden_set_contracts import GoldenSetLimits
+from evaluator.golden_set_repository import SQLiteGoldenSetRepository
+from evaluator.golden_set_service import GoldenSetService
 from evaluator.gui import csrf_token, gui
-from evaluator.judge_extensions import JudgeImplementationRegistry, RegistryHook
-from evaluator.judges import (
-    JudgeProfileService,
-    SQLiteJudgeProfileRepository,
-    register_builtin_judge,
-)
+from evaluator.judging.builtin import register_builtin_judge
+from evaluator.judging.execution import JudgeCaller
+from evaluator.judging.extensions import JudgeImplementationRegistry, RegistryHook
+from evaluator.judging.profiles import JudgeProfileService, SQLiteJudgeProfileRepository
 from evaluator.logging_config import configure_logging, log_event
 from evaluator.migrations import MigrationManager
 from evaluator.models import ModelProfileService, SQLiteModelProfileRepository
@@ -58,12 +58,7 @@ from evaluator.settings import (
 )
 from evaluator.streaming import OpenAIStreamingClient
 from evaluator.web_security import install_web_security
-from evaluator.worker_runtime import (
-    JudgeCaller,
-    ModelProfileTester,
-    StreamingTargetCaller,
-    WorkerRuntime,
-)
+from evaluator.worker_runtime import ModelProfileTester, StreamingTargetCaller, WorkerRuntime
 from evaluator.workers import WorkerPipeline
 
 

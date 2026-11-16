@@ -9,8 +9,9 @@ from typing import Any, cast
 
 from jsonschema import Draft202012Validator
 
+from evaluator.evaluators.contracts import JsonSchemaConfig, validate_evaluator_config
 from evaluator.evaluators.core import EvaluationResult
-from evaluator.golden_sets import GoldenSetItemRecord, JsonSchemaConfig, validate_evaluator_config
+from evaluator.golden_set_contracts import GoldenSetItemRecord
 
 _CODE_FENCE = re.compile(
     r"\A\s*```(?P<label>[A-Za-z0-9_-]*)[ \t]*\r?\n(?P<body>.*?)\r?\n```\s*\Z", re.DOTALL

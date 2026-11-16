@@ -22,8 +22,8 @@ from evaluator.api.errors import (
 )
 from evaluator.evaluators import EvaluationResult, EvaluatorRegistry
 from evaluator.gates import QualityGateService
-from evaluator.golden_sets import GoldenSetItemInput, GoldenSetItemRecord
-from evaluator.judge_extensions import JudgeExtensionError
+from evaluator.golden_set_contracts import GoldenSetItemInput, GoldenSetItemRecord
+from evaluator.judging.extensions import JudgeExtensionError
 from evaluator.logging_config import log_context, log_event
 from evaluator.provider import ProviderGuardrailError
 from evaluator.runs import JobLease, LeaseLost, RunQueue

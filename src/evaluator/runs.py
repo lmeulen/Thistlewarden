@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.gates import QualityGates
-from evaluator.judge_extensions import JudgeImplementationRegistry, JudgeImplementationUnavailable
+from evaluator.judging.extensions import JudgeImplementationRegistry, JudgeImplementationUnavailable
 from evaluator.logging_config import log_semantic_event
 from evaluator.time import Clock, SystemClock, to_utc_iso
 
