@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 import time
 from datetime import UTC, datetime
@@ -14,7 +15,7 @@ from evaluator.endpoints import EndpointInput, EndpointRecord
 from evaluator.models import ModelProfileInput
 from evaluator.provider import ProviderHeaderResolver
 from evaluator.rate_limits import CentralEndpointLimiter, ProviderCallExecutor, RetryPolicy
-from evaluator.streaming import OpenAIStreamingClient, SseParser
+from evaluator.streaming import OpenAIStreamingClient, SseParser, _AnthropicAccumulator
 
 pytestmark = pytest.mark.unit
 
@@ -122,6 +123,96 @@ def _executor() -> ProviderCallExecutor:
     policy = RetryPolicy(jitter_ratio=0)
     policy.sleep = lambda seconds, cancelled=None: None  # type: ignore[method-assign]
     return ProviderCallExecutor(CentralEndpointLimiter(), policy)
+
+
+def test_anthropic_stream_maps_text_stop_and_usage() -> None:
+    chunks = [
+        b'data: {"type":"message_start","message":{"usage":'
+        b'{"input_tokens":3,"output_tokens":0}}}\n\n',
+        b'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}\n\n',
+        b'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},'
+        b'"usage":{"output_tokens":2}}\n\n',
+        b'data: {"type":"message_stop"}\n\n',
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["stream"] is True
+        assert "stream_options" not in payload
+        assert payload["system"] == "system"
+        return httpx.Response(200, headers={"request-id": "a-1"}, stream=Chunks(chunks))
+
+    client = OpenAIStreamingClient(
+        ProviderHeaderResolver(FakeEndpoints(), FakeSecrets(), {}),  # type: ignore[arg-type]
+        max_response_bytes=10000,
+        clock=FakeClock([1.0, 1.1, 1.2]),
+        transport=httpx.MockTransport(handler),
+    )
+    result = client.complete(
+        _endpoint(api_format="anthropic"),
+        ModelProfileInput(model_id="claude", display_name="Claude", max_tokens=32),
+        prompt="prompt",
+        system_prompt="system",
+    )
+    assert result.successful and result.content == "hello"
+    assert result.finish_reason == "end_turn" and result.provider_request_id == "a-1"
+    assert result.usage is not None
+    assert (result.usage.prompt_tokens, result.usage.completion_tokens) == (3, 2)
+
+
+def test_anthropic_accumulator_handles_optional_events_and_rejects_invalid_data() -> None:
+    accumulator = _AnthropicAccumulator(FakeClock([1.1]), 1.0, 100)
+    accumulator.event('{"type":"ping"}')
+    accumulator.event('{"type":"content_block_start"}')
+    accumulator.event('{"type":"content_block_stop"}')
+    accumulator.event('{"type":"message_start","message":{}}')
+    accumulator.event('{"type":"content_block_delta","delta":{"type":"input_json_delta"}}')
+    accumulator.event('{"type":"message_delta","delta":{}}')
+    accumulator.event('{"type":"message_stop"}')
+    assert accumulator.done
+
+    invalid_events = (
+        "{}",
+        '{"type":"message_start","message":[]}',
+        '{"type":"content_block_delta","delta":[]}',
+        '{"type":"content_block_delta","delta":{"type":"text_delta","text":1}}',
+        '{"type":"message_delta","delta":[]}',
+        '{"type":"message_delta","delta":{"stop_reason":1}}',
+        '{"type":"message_delta","delta":{},"usage":[]}',
+        '{"type":"message_delta","delta":{},"usage":{"output_tokens":-1}}',
+        '{"type":"future_event"}',
+    )
+    for event in invalid_events:
+        with pytest.raises(ValueError):
+            _AnthropicAccumulator(FakeClock([]), 1.0, 100).event(event)
+
+
+def test_anthropic_accumulator_enforces_answer_limit() -> None:
+    accumulator = _AnthropicAccumulator(FakeClock([]), 1.0, 2)
+    with pytest.raises(OverflowError):
+        accumulator.event(
+            '{"type":"content_block_delta","delta":{"type":"text_delta","text":"long"}}'
+        )
+
+
+def test_anthropic_stream_rejects_provider_error_event() -> None:
+    chunks = [b'data: {"type":"error","error":{"type":"overloaded_error"}}\n\n']
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, stream=Chunks(chunks))
+
+    client = OpenAIStreamingClient(
+        ProviderHeaderResolver(FakeEndpoints(), FakeSecrets(), {}),  # type: ignore[arg-type]
+        max_response_bytes=10000,
+        clock=FakeClock([1.0, 2.0]),
+        transport=httpx.MockTransport(handler),
+    )
+    result = client.complete(
+        _endpoint(api_format="anthropic"),
+        ModelProfileInput(model_id="claude", display_name="Claude", max_tokens=32),
+        prompt="prompt",
+    )
+    assert not result.successful and result.error_code == "invalid_stream"
 
 
 def test_timeout_before_response_data_retries_until_exhausted() -> None:

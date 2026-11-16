@@ -245,6 +245,7 @@ def _headers_from_form() -> list[HeaderInput]:
 def _endpoint_payload() -> dict[str, Any]:
     return {
         "name": request.form.get("name", ""),
+        "api_format": request.form.get("api_format", "openai"),
         "completions_url": request.form.get("completions_url", ""),
         "models_url": _optional("models_url"),
         "api_key": request.form.get("api_key") or None,

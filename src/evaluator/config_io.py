@@ -347,7 +347,12 @@ class ConfigurationExchangeService:
         for x in b.endpoints:
             d = x.data
             c.execute(
-                f"{verb} INTO endpoints VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                f"{verb} INTO endpoints("
+                "id,name,completions_url,models_url,api_key_secret_id,api_key_header,"
+                "api_key_prefix,timeout_seconds,max_retries,requests_per_minute,"
+                "tokens_per_minute,max_concurrency,active,trusted_internal_http,"
+                "security_warning_confirmed,created_at,updated_at,api_format"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     rid(x.id),
                     d["name"],
@@ -366,6 +371,7 @@ class ConfigurationExchangeService:
                     int(d.get("security_warning_confirmed", False)),
                     now,
                     now,
+                    d.get("api_format", "openai"),
                 ),
             )
             for h in d.get("extra_headers", []):

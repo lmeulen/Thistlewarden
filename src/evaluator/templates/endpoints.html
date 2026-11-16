@@ -11,7 +11,7 @@
   <div class="heading">
     <div>
       <h2><a href="{{ url_for('gui.endpoint_edit', endpoint_id=endpoint.id) }}">{{ endpoint.data.name }}</a></h2>
-      <p><code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p>
+      <p>{{ 'Anthropic-compatible' if endpoint.data.api_format == 'anthropic' else 'OpenAI-compatible' }} · <code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p>
     </div>
     <a href="{{ url_for('gui.model_new', endpoint_id=endpoint.id) }}">Add model</a>
   </div>

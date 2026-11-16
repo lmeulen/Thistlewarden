@@ -30,7 +30,8 @@ def app(tmp_path: Path):
 def _payload(name: str = "Primary") -> dict[str, object]:
     return {
         "name": name,
-        "completions_url": "https://api.example.com/v1/chat/completions",
+        "api_format": "anthropic",
+        "completions_url": "https://api.example.com/v1/messages",
         "models_url": "https://api.example.com/v1/models",
         "api_key": "fixture-api-secret",
         "api_key_header": "Authorization",
@@ -55,6 +56,7 @@ def test_endpoint_crud_masks_secrets_and_keeps_plaintext_out_of_database(app) ->
     assert created.status_code == 201
     endpoint = created.get_json()["endpoint"]
     endpoint_id = endpoint["id"]
+    assert endpoint["api_format"] == "anthropic"
     assert endpoint["api_key"] == "********"
     headers = {item["name"]: item for item in endpoint["extra_headers"]}
     assert headers["X-Private"] == {"name": "X-Private", "value": "********", "secret": True}
@@ -77,6 +79,13 @@ def test_endpoint_crud_masks_secrets_and_keeps_plaintext_out_of_database(app) ->
     deleted = client.delete(f"/api/v1/endpoints/{endpoint_id}")
     assert deleted.status_code == 204
     assert client.get(f"/api/v1/endpoints/{endpoint_id}").status_code == 404
+
+
+def test_endpoint_rejects_unknown_api_format(app) -> None:
+    payload = _payload()
+    payload["api_format"] = "unknown"
+    response = app.test_client().post("/api/v1/endpoints", json=payload)
+    assert response.status_code == 400
 
 
 def test_patch_without_or_with_blank_api_key_preserves_existing_secret(app) -> None:

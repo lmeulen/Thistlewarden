@@ -532,6 +532,11 @@ def build_openapi_document() -> dict[str, Any]:
                     "required": ["name", "completions_url"],
                     "properties": {
                         "name": {"type": "string", "maxLength": 200},
+                        "api_format": {
+                            "type": "string",
+                            "enum": ["openai", "anthropic"],
+                            "default": "openai",
+                        },
                         "completions_url": {"type": "string", "format": "uri"},
                         "models_url": {"type": ["string", "null"], "format": "uri"},
                         "api_key": {"type": ["string", "null"], "writeOnly": True},

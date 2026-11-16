@@ -106,7 +106,7 @@ class RunQueue:
                 for profile_id in data.model_profile_ids:
                     row = connection.execute(
                         """SELECT m.*,e.completions_url,e.name AS endpoint_name,
-                        e.api_key_header FROM model_profiles m JOIN endpoints e
+                        e.api_key_header,e.api_format FROM model_profiles m JOIN endpoints e
                         ON e.id=m.endpoint_id
                         WHERE m.id=? AND m.active=1 AND e.active=1""",
                         (str(profile_id),),
@@ -136,7 +136,7 @@ class RunQueue:
                 ):
                     judge_model = connection.execute(
                         """SELECT m.*,e.completions_url,e.name AS endpoint_name,
-                        e.api_key_header FROM model_profiles m JOIN endpoints e
+                        e.api_key_header,e.api_format FROM model_profiles m JOIN endpoints e
                         ON e.id=m.endpoint_id WHERE m.id=? AND m.active=1 AND e.active=1""",
                         (judge_snapshot[1]["model_profile_id"],),
                     ).fetchone()

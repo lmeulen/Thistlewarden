@@ -162,6 +162,38 @@ def build_chat_completion_request(
     }
 
 
+def build_anthropic_completion_request(
+    profile: ModelProfileInput,
+    *,
+    prompt: str,
+    system_prompt: str | None = None,
+) -> dict[str, Any]:
+    if profile.max_tokens is None:
+        raise ProviderClientError(
+            "Anthropic-compatible models require a configured maximum output token count."
+        )
+    if profile.max_tokens_field_path != "max_tokens":
+        raise ProviderClientError(
+            "Anthropic-compatible models support only the max_tokens output-token field."
+        )
+    parameters = compose_inference_parameters(profile)
+    max_tokens = parameters.pop("max_tokens", None)
+    if max_tokens is None or not isinstance(max_tokens, int):
+        raise ProviderClientError(
+            "Anthropic-compatible models require max_tokens as a top-level integer."
+        )
+    body: dict[str, Any] = {
+        "model": profile.model_id,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        **parameters,
+        "stream": False,
+    }
+    if system_prompt is not None:
+        body["system"] = system_prompt
+    return body
+
+
 def parse_completion_response(content: bytes, headers: Mapping[str, str]) -> CompletionResult:
     try:
         payload = json.loads(content)
@@ -197,6 +229,62 @@ def parse_completion_response(content: bytes, headers: Mapping[str, str]) -> Com
     )
     return CompletionResult(
         message_content or "",
+        usage,
+        request_id,
+        finish_reason,
+        successful=not guarded,
+        evaluate=not guarded,
+        error_code="provider_guardrail" if guarded else None,
+        outcome_category="provider_guardrail" if guarded else "normal",
+        provider_evidence=evidence,
+    )
+
+
+def parse_anthropic_completion_response(
+    content: bytes, headers: Mapping[str, str]
+) -> CompletionResult:
+    try:
+        payload = json.loads(content)
+        blocks = payload["content"]
+        if not isinstance(blocks, list):
+            raise TypeError
+        parts: list[str] = []
+        for block in blocks:
+            if not isinstance(block, dict):
+                raise TypeError
+            if block.get("type") != "text":
+                raise TypeError
+            text = block.get("text")
+            if not isinstance(text, str):
+                raise TypeError
+            parts.append(text)
+        finish_reason = payload.get("stop_reason")
+        if finish_reason is not None and not isinstance(finish_reason, str):
+            raise TypeError
+        usage_value = payload.get("usage")
+        usage = None
+        if usage_value is not None:
+            if not isinstance(usage_value, dict):
+                raise TypeError
+            input_tokens = usage_value.get("input_tokens")
+            output_tokens = usage_value.get("output_tokens")
+            if not isinstance(input_tokens, int) or not isinstance(output_tokens, int):
+                raise TypeError
+            usage = ProviderUsage(
+                prompt_tokens=input_tokens,
+                completion_tokens=output_tokens,
+                total_tokens=input_tokens + output_tokens,
+            )
+    except (json.JSONDecodeError, KeyError, TypeError, ValidationError) as exc:
+        raise InvalidProviderResponseError(
+            "Provider response does not match the Anthropic Messages contract."
+        ) from exc
+    lowered = {key.lower(): value for key, value in headers.items()}
+    request_id = next((lowered[name] for name in _REQUEST_ID_HEADERS if lowered.get(name)), None)
+    guarded = is_guardrail_signal(finish_reason=finish_reason, provider_code=None)
+    evidence = ProviderEvidence(finish_reason=finish_reason, provider_request_id=request_id)
+    return CompletionResult(
+        "".join(parts),
         usage,
         request_id,
         finish_reason,
@@ -282,7 +370,11 @@ class OpenAIProviderClient:
     ) -> CompletionResult:
         if self._transport is None:
             validate_destination(endpoint, endpoint.data.completions_url)
-        body = build_chat_completion_request(profile, prompt=prompt, system_prompt=system_prompt)
+        body = (
+            build_anthropic_completion_request(profile, prompt=prompt, system_prompt=system_prompt)
+            if endpoint.data.api_format == "anthropic"
+            else build_chat_completion_request(profile, prompt=prompt, system_prompt=system_prompt)
+        )
         encoded = simplejson.dumps(body, use_decimal=True, allow_nan=False).encode()
         timeout = httpx.Timeout(float(endpoint.data.timeout_seconds))
         try:
@@ -295,6 +387,8 @@ class OpenAIProviderClient:
             ) as response:
                 self._classify_status(response)
                 content = self._read_limited(response)
+                if endpoint.data.api_format == "anthropic":
+                    return parse_anthropic_completion_response(content, response.headers)
                 return parse_completion_response(content, response.headers)
         except httpx.TimeoutException as exc:
             raise TimeoutError() from exc
