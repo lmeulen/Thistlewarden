@@ -41,8 +41,7 @@ from evaluator.evaluation_preview import EvaluationPreviewService
 from evaluator.evaluators.contracts import evaluator_config_examples
 from evaluator.gates import QualityGateService
 from evaluator.golden_set_service import GoldenSetService
-from evaluator.judges import JUDGE_PRESETS
-from evaluator.judges import JudgeProfileService
+from evaluator.judges import JUDGE_PRESETS, JudgeProfileService
 from evaluator.logging_config import log_event
 from evaluator.manual import manual_asset, manual_pages, render_manual_page
 from evaluator.models import ModelProfileService

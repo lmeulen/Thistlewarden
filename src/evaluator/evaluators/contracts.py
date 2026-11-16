@@ -18,7 +18,7 @@ from pydantic import (
     model_validator,
 )
 
-from evaluator.judges import (
+from evaluator.judging.presets import (
     JUDGE_PRESETS,
     JudgePreset,
     RubricCriterion,
