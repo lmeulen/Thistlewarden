@@ -169,9 +169,11 @@ def test_anthropic_accumulator_handles_optional_events_and_rejects_invalid_data(
     accumulator.event('{"type":"content_block_delta","delta":{"type":"input_json_delta"}}')
     accumulator.event('{"type":"message_delta","delta":{}}')
     accumulator.event('{"type":"message_stop"}')
+    accumulator.event("[DONE]")
     assert accumulator.done
 
     invalid_events = (
+        "[DONE]",
         "{}",
         '{"type":"message_start","message":[]}',
         '{"type":"content_block_delta","delta":[]}',

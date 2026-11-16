@@ -202,6 +202,10 @@ class _AnthropicAccumulator(_Accumulator):
     """Accumulate native Anthropic Messages SSE data events."""
 
     def event(self, data: str) -> None:
+        if data == "[DONE]":
+            if not self.done:
+                raise ValueError("Anthropic done marker received before message_stop")
+            return
         payload = json.loads(data)
         event_type = payload.get("type")
         if not isinstance(event_type, str):

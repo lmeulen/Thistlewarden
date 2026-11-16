@@ -238,7 +238,16 @@ def test_endpoint_model_list_scrolls_at_twenty_models(app) -> None:
                 {"model_id": f"model-{index}", "display_name": f"Model {index}"},
             )
 
-    text = app.test_client().get("/endpoints").get_data(as_text=True)
+    client = app.test_client()
+    text = client.get("/endpoints").get_data(as_text=True)
+    assert '<div class="endpoint-list">' in text
+    assert text.count('<details class="endpoint-models">') == 2
+    assert "<summary>Models (19)</summary>" in text
+    assert "<summary>Models (20)</summary>" in text
+    assert '<details class="endpoint-models" open>' not in text
+    css = client.get("/static/app.css").get_data(as_text=True)
+    assert ".endpoint-list{display:grid;gap:1rem}" in css
+    assert ".endpoint-models{margin-top:1rem}" in css
     short_panel = text[text.index("Provider 19") : text.index("Provider 20")]
     long_panel = text[text.index("Provider 20") :]
     assert "model-list-scroll" not in short_panel
