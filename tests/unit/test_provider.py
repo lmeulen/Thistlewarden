@@ -24,7 +24,9 @@ from evaluator.provider import (
     ProviderGuardrailError,
     ProviderHeaderResolver,
     attach_provider_diagnostic,
+    build_anthropic_completion_request,
     build_chat_completion_request,
+    parse_anthropic_completion_response,
     parse_completion_response,
 )
 
@@ -116,6 +118,106 @@ def test_request_body_composes_messages_optional_fields_reasoning_and_custom() -
         "reasoning": {"effort": "high"},
         "stream": False,
     }
+
+
+def test_anthropic_request_and_response_contract() -> None:
+    profile = ModelProfileInput(
+        model_id="claude", display_name="Claude", max_tokens=128, temperature=Decimal("0.2")
+    )
+    body = build_anthropic_completion_request(profile, prompt="user", system_prompt="system")
+    assert body == {
+        "model": "claude",
+        "messages": [{"role": "user", "content": "user"}],
+        "system": "system",
+        "max_tokens": 128,
+        "temperature": Decimal("0.2"),
+        "stream": False,
+    }
+    result = parse_anthropic_completion_response(
+        b'{"content":[{"type":"text","text":"hello"},{"type":"text","text":" world"}],'
+        b'"stop_reason":"end_turn","usage":{"input_tokens":4,"output_tokens":2}}',
+        {"request-id": "anthropic-1"},
+    )
+    assert result.content == "hello world"
+    assert result.finish_reason == "end_turn"
+    assert result.provider_request_id == "anthropic-1"
+    assert result.usage is not None and result.usage.total_tokens == 6
+
+
+def test_anthropic_refusal_is_a_guardrail_and_non_text_blocks_are_rejected() -> None:
+    result = parse_anthropic_completion_response(b'{"content":[],"stop_reason":"refusal"}', {})
+    assert not result.successful and result.error_code == "provider_guardrail"
+    with pytest.raises(InvalidProviderResponseError):
+        parse_anthropic_completion_response(
+            b'{"content":[{"type":"tool_use","id":"secret"}],"stop_reason":"tool_use"}',
+            {},
+        )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"not-json",
+        b"{}",
+        b'{"content":{}}',
+        b'{"content":[1]}',
+        b'{"content":[{"type":"text","text":1}]}',
+        b'{"content":[],"stop_reason":1}',
+        b'{"content":[],"usage":[]}',
+        b'{"content":[],"usage":{"input_tokens":1}}',
+    ],
+)
+def test_anthropic_response_rejects_invalid_contract(payload: bytes) -> None:
+    with pytest.raises(InvalidProviderResponseError):
+        parse_anthropic_completion_response(payload, {})
+
+
+def test_anthropic_client_dispatches_by_endpoint_format() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["system"] == "system"
+        assert payload["messages"] == [{"role": "user", "content": "prompt"}]
+        return httpx.Response(
+            200,
+            json={
+                "content": [{"type": "text", "text": "ok"}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 2, "output_tokens": 1},
+            },
+        )
+
+    endpoint = _endpoint()
+    endpoint = EndpointRecord(
+        endpoint.id,
+        endpoint.data.model_copy(update={"api_format": "anthropic"}),
+        None,
+        endpoint.created_at,
+        endpoint.updated_at,
+    )
+    result = _client(handler).complete(
+        endpoint,
+        ModelProfileInput(model_id="claude", display_name="Claude", max_tokens=32),
+        prompt="prompt",
+        system_prompt="system",
+    )
+    assert result.content == "ok"
+
+
+def test_anthropic_requires_max_tokens() -> None:
+    with pytest.raises(ProviderClientError, match="maximum output token"):
+        build_anthropic_completion_request(
+            ModelProfileInput(model_id="claude", display_name="Claude"), prompt="p"
+        )
+    with pytest.raises(ProviderClientError, match="only the max_tokens"):
+        build_anthropic_completion_request(
+            ModelProfileInput(
+                model_id="claude",
+                display_name="Claude",
+                max_tokens=10,
+                max_tokens_field_path="generation.max_tokens",
+            ),
+            prompt="p",
+        )
 
 
 def test_response_parser_normalizes_refusal_without_retaining_refusal_text() -> None:

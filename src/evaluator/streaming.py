@@ -21,6 +21,7 @@ from evaluator.provider import (
     ProviderHeaderResolver,
     ProviderUsage,
     attach_provider_diagnostic,
+    build_anthropic_completion_request,
     build_chat_completion_request,
 )
 from evaluator.provider_outcomes import ProviderEvidence, is_guardrail_signal
@@ -197,6 +198,86 @@ class _Accumulator:
         )
 
 
+class _AnthropicAccumulator(_Accumulator):
+    """Accumulate native Anthropic Messages SSE data events."""
+
+    def event(self, data: str) -> None:
+        if data == "[DONE]":
+            if not self.done:
+                raise ValueError("Anthropic done marker received before message_stop")
+            return
+        payload = json.loads(data)
+        event_type = payload.get("type")
+        if not isinstance(event_type, str):
+            raise ValueError("Anthropic event type must be a string")
+        if event_type in {"ping", "content_block_start", "content_block_stop"}:
+            return
+        if event_type == "message_start":
+            message = payload.get("message")
+            if not isinstance(message, dict):
+                raise ValueError("message_start requires a message")
+            usage = message.get("usage")
+            if usage is not None:
+                if not isinstance(usage, dict):
+                    raise ValueError("usage must be an object")
+                input_tokens = usage.get("input_tokens", 0)
+                output_tokens = usage.get("output_tokens", 0)
+                self.usage = ProviderUsage(
+                    prompt_tokens=input_tokens,
+                    completion_tokens=output_tokens,
+                    total_tokens=input_tokens + output_tokens,
+                )
+            return
+        if event_type == "content_block_delta":
+            delta = payload.get("delta")
+            if not isinstance(delta, dict):
+                raise ValueError("content delta must be an object")
+            if delta.get("type") != "text_delta":
+                return
+            text = delta.get("text")
+            if not isinstance(text, str):
+                raise ValueError("text delta must be a string")
+            encoded_size = len(text.encode())
+            if self.answer_bytes + encoded_size > self.max_bytes:
+                raise OverflowError("answer size limit")
+            now = self.clock.monotonic()
+            if self.first_content_at is None:
+                self.first_content_at = now
+            self.last_content_at = now
+            self.answer_bytes += encoded_size
+            self.parts.append(text)
+            return
+        if event_type == "message_delta":
+            delta = payload.get("delta")
+            if not isinstance(delta, dict):
+                raise ValueError("message delta must be an object")
+            stop_reason = delta.get("stop_reason")
+            if stop_reason is not None:
+                if not isinstance(stop_reason, str):
+                    raise ValueError("stop_reason must be a string")
+                self.finish_reason = stop_reason
+            usage = payload.get("usage")
+            if usage is not None:
+                if not isinstance(usage, dict):
+                    raise ValueError("usage must be an object")
+                output_tokens = usage.get("output_tokens")
+                if not isinstance(output_tokens, int) or output_tokens < 0:
+                    raise ValueError("output_tokens must be nonnegative")
+                input_tokens = 0 if self.usage is None else self.usage.prompt_tokens
+                self.usage = ProviderUsage(
+                    prompt_tokens=input_tokens,
+                    completion_tokens=output_tokens,
+                    total_tokens=input_tokens + output_tokens,
+                )
+            return
+        if event_type == "message_stop":
+            self.done = True
+            return
+        if event_type == "error":
+            raise ValueError("Anthropic stream reported an error")
+        raise ValueError("unsupported Anthropic stream event")
+
+
 def _elapsed_ms(end: float, start: float) -> Decimal:
     return (Decimal(str(end)) - Decimal(str(start))) * Decimal(1000)
 
@@ -240,12 +321,24 @@ class OpenAIStreamingClient:
     ) -> StreamingCompletionResult:
         if self._transport is None:
             validate_destination(endpoint, endpoint.data.completions_url)
-        body = build_chat_completion_request(profile, prompt=prompt, system_prompt=system_prompt)
-        body["stream"] = True
-        body["stream_options"] = {"include_usage": True}
+        if endpoint.data.api_format == "anthropic":
+            body = build_anthropic_completion_request(
+                profile, prompt=prompt, system_prompt=system_prompt
+            )
+            body["stream"] = True
+        else:
+            body = build_chat_completion_request(
+                profile, prompt=prompt, system_prompt=system_prompt
+            )
+            body["stream"] = True
+            body["stream_options"] = {"include_usage": True}
         encoded = simplejson.dumps(body, use_decimal=True, allow_nan=False).encode()
         started = self._clock.monotonic()
-        accumulator = _Accumulator(self._clock, started, self._max_answer_bytes)
+        accumulator = (
+            _AnthropicAccumulator(self._clock, started, self._max_answer_bytes)
+            if endpoint.data.api_format == "anthropic"
+            else _Accumulator(self._clock, started, self._max_answer_bytes)
+        )
         parser = SseParser()
         request_id: str | None = None
         wire_bytes = 0

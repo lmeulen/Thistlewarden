@@ -11,7 +11,7 @@ OutcomeCategory = Literal[
 ]
 OutcomeStage = Literal["target", "judge", "evaluator", "pipeline"]
 
-_GUARDRAIL_FINISH_REASONS = frozenset({"content_filter"})
+_GUARDRAIL_FINISH_REASONS = frozenset({"content_filter", "refusal"})
 _GUARDRAIL_CODES = frozenset(
     {
         "content_filter",

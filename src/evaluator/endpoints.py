@@ -8,7 +8,7 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
@@ -71,10 +71,14 @@ class HeaderInput(BaseModel):
         return validate_header_name(value)
 
 
+EndpointApiFormat = Literal["openai", "anthropic"]
+
+
 class EndpointInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
+    api_format: EndpointApiFormat = "openai"
     completions_url: str
     models_url: str | None = None
     api_key: str | None = Field(default=None, max_length=16_384)
@@ -132,6 +136,7 @@ class EndpointPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    api_format: EndpointApiFormat | None = None
     completions_url: str | None = None
     models_url: str | None = None
     api_key: str | None = Field(default=None, max_length=16_384)
@@ -202,6 +207,7 @@ class SQLiteEndpointRepository:
         ]
         data = EndpointInput(
             name=row["name"],
+            api_format=row["api_format"],
             completions_url=row["completions_url"],
             models_url=row["models_url"],
             api_key=_MASK if row["api_key_secret_id"] else None,
@@ -240,15 +246,16 @@ class SQLiteEndpointRepository:
                 connection.execute(
                     """
                     INSERT INTO endpoints(
-                        id, name, completions_url, models_url, api_key_secret_id,
+                        id, name, api_format, completions_url, models_url, api_key_secret_id,
                         api_key_header, api_key_prefix, timeout_seconds, max_retries,
                         requests_per_minute, tokens_per_minute, max_concurrency, active,
                         trusted_internal_http, security_warning_confirmed, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(endpoint_id),
                         data.name,
+                        data.api_format,
                         data.completions_url,
                         data.models_url,
                         str(api_key_secret_id) if api_key_secret_id else None,
@@ -296,8 +303,9 @@ class SQLiteEndpointRepository:
                 cursor = connection.execute(
                     """
                     UPDATE endpoints SET
-                        name = ?, completions_url = ?, models_url = ?, api_key_secret_id = ?,
-                        api_key_header = ?, api_key_prefix = ?, timeout_seconds = ?,
+                        name = ?, api_format = ?, completions_url = ?, models_url = ?,
+                        api_key_secret_id = ?, api_key_header = ?, api_key_prefix = ?,
+                        timeout_seconds = ?,
                         max_retries = ?, requests_per_minute = ?, tokens_per_minute = ?,
                         max_concurrency = ?, active = ?, trusted_internal_http = ?,
                         security_warning_confirmed = ?, updated_at = ?
@@ -305,6 +313,7 @@ class SQLiteEndpointRepository:
                     """,
                     (
                         data.name,
+                        data.api_format,
                         data.completions_url,
                         data.models_url,
                         str(api_key_secret_id) if api_key_secret_id else None,

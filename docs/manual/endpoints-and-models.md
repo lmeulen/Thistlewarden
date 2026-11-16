@@ -8,7 +8,7 @@
 
 ### Adding an endpoint
 
-An endpoint defines one OpenAI-compatible provider connection. Create an endpoint before creating model profiles. It stores connection details shared by every model profile under that provider.
+An endpoint defines one provider connection using either OpenAI-compatible or Anthropic-compatible wire format. Create an endpoint before creating model profiles. It stores connection details shared by every model profile under that logical endpoint.
 
 ![Endpoint and model-profile overview with synthetic demonstration entries](images/endpoints.png)
 
@@ -17,24 +17,32 @@ An endpoint defines one OpenAI-compatible provider connection. Create an endpoin
 1. Open **Endpoints** from the navigation bar or dashboard.
 2. Select **Add endpoint**.
 3. Enter a clear, unique **Name**, such as `Development provider` or `Local inference server`.
-4. Enter the required **Completions URL**. This must be the provider's full HTTP(S) URL for chat completions, not its website or management console.
-5. Enter **Models URL** when the provider exposes a model-list endpoint and you want to use model discovery. Leave it empty if model discovery is unavailable or you will enter model IDs manually.
-6. Enter the API key and authentication settings required by the provider. See [Authentication and headers](#authentication-and-headers).
+4. Select **API format**: **OpenAI-compatible** for Chat Completions or **Anthropic-compatible** for native Messages requests and events.
+5. Enter the required **Completions URL**. This must be the provider's full HTTP(S) inference URL, not its website or management console.
+6. Enter **Models URL** when the provider exposes a model-list endpoint and you want to use model discovery. Leave it empty if model discovery is unavailable or you will enter model IDs manually.
+7. Enter the API key and authentication settings required by the provider. See [Authentication and headers](#authentication-and-headers).
 
 | Field | First-run need | Safe guidance |
 |---|---|---|
 | Name | Required | Use a non-secret label, such as `Development provider`. |
-| Completions URL | Required | Copy the provider's complete chat-completions API URL. |
+| API format | Required | Select protocol implemented by completions URL. Existing endpoints default to OpenAI-compatible. |
+| Completions URL | Required | Copy provider's complete Chat Completions or Messages API URL. |
 | API key | Usually required | Paste only approved provider credential; it is not shown after save. |
 | Models URL | Optional | Add only when provider supports model discovery. |
 | Timeout, retries, rate limits | Optional | Keep defaults until provider documents different limits. |
 | Extra headers / trusted HTTP | Advanced | Configure only when provider documentation requires them. |
-7. Review timeout, retry, and rate-limit values. Defaults are suitable for an initial connection; use provider-specific limits when known.
-8. Leave **Active** selected when the endpoint should be available for new model profiles and runs.
-9. Select **Save**.
-10. After saving, select **Test connection and discover models** to verify access and retrieve available models, if supported.
+8. Review timeout, retry, and rate-limit values. Defaults are suitable for an initial connection; use provider-specific limits when known.
+9. Leave **Active** selected when the endpoint should be available for new model profiles and runs.
+10. Select **Save**.
+11. After saving, select **Test connection and discover models** to verify access and retrieve available models, if supported.
 
-Use separate endpoints when provider URLs, credentials, rate limits, or trust boundaries differ. For example, use different endpoints for a development provider account and a production provider account, even if they serve the same model names.
+Use separate endpoints when API formats, provider URLs, credentials, rate limits, or trust boundaries differ. When one provider exposes both OpenAI and Anthropic APIs, create two logical endpoints—even when they share host and credential—and attach each model to endpoint matching its wire protocol.
+
+### Anthropic-compatible limits
+
+Anthropic-compatible endpoints use native Messages requests. System prompts are sent in top-level `system`; generated text comes from text content blocks. Native SSE events provide target-response streaming and usage collection. Every Anthropic model profile must configure **Max. output tokens** using standard `max_tokens` field path. Text generation is supported; image/document input, tool use, prompt caching, extended thinking, beta event types, and provider-specific content blocks are not currently supported. Unsupported or malformed events fail safely rather than being interpreted as text.
+
+Authentication remains endpoint-configurable. Use provider-documented API-key header, prefix, and additional headers such as `anthropic-version`; Thistlewarden does not assume direct Anthropic authentication for gateways. Model discovery still requires configured Models URL returning supported `{\"data\":[{\"id\":...}]}` shape. Add model profiles manually when Anthropic endpoint has no compatible discovery API.
 
 ### URL requirements
 

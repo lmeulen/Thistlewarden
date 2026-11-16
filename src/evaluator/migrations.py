@@ -410,6 +410,15 @@ def _migration_15(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_16(connection: sqlite3.Connection) -> None:
+    """Select provider wire protocol explicitly per logical endpoint."""
+
+    connection.execute(
+        "ALTER TABLE endpoints ADD COLUMN api_format TEXT NOT NULL DEFAULT 'openai' "
+        "CHECK(api_format IN ('openai','anthropic'))"
+    )
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "create_settings", _migration_1),
     Migration(2, "add_settings_updated_at", _migration_2),
@@ -426,6 +435,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(13, "drop_legacy_llm_judge_test_cases", _migration_13),
     Migration(14, "add_judge_inference_overrides", _migration_14),
     Migration(15, "add_versioned_judge_implementations", _migration_15),
+    Migration(16, "add_endpoint_api_format", _migration_16),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

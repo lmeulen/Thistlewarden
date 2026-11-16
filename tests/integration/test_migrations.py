@@ -69,6 +69,7 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (13, "drop_legacy_llm_judge_test_cases"),
             (14, "add_judge_inference_overrides"),
             (15, "add_versioned_judge_implementations"),
+            (16, "add_endpoint_api_format"),
         ]
     finally:
         connection.close()
@@ -116,7 +117,7 @@ def test_migration_15_versions_profiles_and_historical_snapshots(tmp_path: Path)
     finally:
         connection.close()
 
-    assert MigrationManager(factory).migrate() == 15
+    assert MigrationManager(factory, migrations=MIGRATIONS[:15]).migrate() == 15
     connection = factory.connect()
     try:
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(judge_profiles)")}
@@ -133,6 +134,47 @@ def test_migration_15_versions_profiles_and_historical_snapshots(tmp_path: Path)
     assert snapshot["implementation_id"] == "openai-compatible"
     assert snapshot["implementation_version"] == "1.0"
     assert snapshot["implementation_config"] == {}
+
+
+def test_migration_16_defaults_existing_endpoints_to_openai(tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "app.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:15]).migrate()
+    connection = factory.connect()
+    try:
+        connection.execute(
+            """INSERT INTO endpoints(
+                id,name,completions_url,api_key_header,api_key_prefix,timeout_seconds,
+                max_retries,active,trusted_internal_http,security_warning_confirmed,
+                created_at,updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                "00000000-0000-0000-0000-000000000070",
+                "Existing",
+                "https://example.test/v1/chat/completions",
+                "Authorization",
+                "Bearer ",
+                60,
+                2,
+                1,
+                0,
+                0,
+                "2026-01-01T00:00:00Z",
+                "2026-01-01T00:00:00Z",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert MigrationManager(factory).migrate() == 16
+    connection = factory.connect()
+    try:
+        row = connection.execute("SELECT api_format FROM endpoints").fetchone()
+        assert row["api_format"] == "openai"
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute("UPDATE endpoints SET api_format='unknown'")
+    finally:
+        connection.close()
 
 
 def test_version_one_to_two_preserves_existing_data(tmp_path: Path) -> None:

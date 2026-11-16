@@ -6,16 +6,19 @@
   <a class="button" href="{{ url_for('gui.endpoint_new') }}">Add endpoint</a>
 </div>
 {% if not endpoints %}<p class="empty">No endpoints configured yet.</p>{% endif %}
+{% if endpoints %}<div class="endpoint-list">{% endif %}
 {% for endpoint in endpoints %}
 <section class="panel">
   <div class="heading">
     <div>
       <h2><a href="{{ url_for('gui.endpoint_edit', endpoint_id=endpoint.id) }}">{{ endpoint.data.name }}</a></h2>
-      <p><code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p>
+      <p>{{ 'Anthropic-compatible' if endpoint.data.api_format == 'anthropic' else 'OpenAI-compatible' }} · <code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p>
     </div>
     <a href="{{ url_for('gui.model_new', endpoint_id=endpoint.id) }}">Add model</a>
   </div>
   {% set models = model_service.list_for_endpoint(endpoint.id) %}
+  <details class="endpoint-models">
+    <summary>Models ({{ models|length }})</summary>
   {% if models %}
   <form method="post" action="{{ url_for('gui.models_delete', endpoint_id=endpoint.id) }}" class="bulk-model-delete" data-confirm="Delete selected model profiles from {{ endpoint.data.name }}?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -36,8 +39,10 @@
     </ul>
   </form>
   {% else %}<p>No model profiles.</p>{% endif %}
+  </details>
 </section>
 {% endfor %}
+{% if endpoints %}</div>{% endif %}
 <script nonce="{{ csp_nonce() }}">
 document.querySelectorAll('.bulk-model-delete').forEach(function (form) {
   const selectAll = form.querySelector('.select-all-models');

@@ -3,6 +3,8 @@
 <form method="post" class="form-grid"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {% set d = endpoint.data if endpoint else none %}
 <label>Name<input name="name" required maxlength="200" value="{{ d.name if d else '' }}"></label>
+<label>API format<select name="api_format"><option value="openai" {% if not d or d.api_format == 'openai' %}selected{% endif %}>OpenAI-compatible</option><option value="anthropic" {% if d and d.api_format == 'anthropic' %}selected{% endif %}>Anthropic-compatible</option></select></label>
+<p class="help wide">Create separate logical endpoints when one provider exposes both API formats. Models belong to endpoint matching their wire protocol.</p>
 <label class="wide">Completions-URL<input type="url" name="completions_url" required value="{{ d.completions_url if d else '' }}"></label>
 <label class="wide">Models URL<input type="url" name="models_url" value="{{ d.models_url or '' if d else '' }}"></label>
 <label>API-key<input type="password" name="api_key" autocomplete="new-password" aria-describedby="secret-help"></label><p id="secret-help" class="help wide">Leave blank to preserve existing secret. Stored value is never displayed.</p>
