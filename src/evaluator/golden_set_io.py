@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Literal
 
-from evaluator.golden_sets import GoldenSetInput, GoldenSetItemInput
+from evaluator.golden_set_contracts import GoldenSetInput, GoldenSetItemInput
 
 CSV_COLUMNS = (
     "case_id",

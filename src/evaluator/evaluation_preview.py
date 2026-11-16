@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from evaluator.api.errors import ValidationApiError
 from evaluator.evaluators import EvaluatorRegistry
-from evaluator.golden_sets import GoldenSetItemInput, GoldenSetItemRecord
+from evaluator.golden_set_contracts import GoldenSetItemInput, GoldenSetItemRecord
 from evaluator.time import utc_now
 
 

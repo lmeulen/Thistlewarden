@@ -7,13 +7,9 @@ from typing import cast
 
 import regex
 
+from evaluator.evaluators.contracts import NumericConfig, RegexConfig, validate_evaluator_config
 from evaluator.evaluators.core import EvaluationResult
-from evaluator.golden_sets import (
-    GoldenSetItemRecord,
-    NumericConfig,
-    RegexConfig,
-    validate_evaluator_config,
-)
+from evaluator.golden_set_contracts import GoldenSetItemRecord
 
 _REGEX_TIMEOUT_SECONDS = 0.05
 
