@@ -16,7 +16,14 @@ Choose one assessment method before publishing:
 
 Switching assessment methods in editor does not overwrite text already entered in current form. Saving and reopening an existing separate-assessment draft preserves its instructions. Calibrate edited prompts with known fully acceptable, borderline, partial, and unacceptable answers before publishing.
 
-Thistlewarden always owns and adds fixed prompt parts: safety boundaries, quoted testcase data, code-owned metric definitions, and strict JSON response contract. Your instructions are evaluation data inside that wrapper; they cannot change metric IDs, score ranges, aggregation, provider settings, or output schema. Publish the next Judge version for any semantic change, including changes to default or customized metric instructions; editor proposes next minor version and shows published history. Existing drafts are not rewritten when code-owned defaults change. Existing published versions and run snapshots remain unchanged.
+Choose an output mode independently from assessment method:
+
+- **Strict JSON only** requires only final JSON. It has lowest output-token, latency, and cost overhead and preserves behavior of Judges published before output modes existed.
+- **Concise analysis, then final JSON** permits bounded evidence notes and a brief self-check before one result enclosed by fixed Thistlewarden boundaries. Only JSON inside that single boundary is parsed. Missing, repeated, malformed, oversized, or truncated boundaries fail without recovering a partial score. Preceding analysis is not stored, displayed, exported, or logged.
+
+Concise visible analysis is not private chain-of-thought. Thistlewarden does not ask models to reveal hidden reasoning. A provider-native reasoning model may keep reasoning private and return only compatible visible notes and final JSON. Deliberation consumes output budget and can increase latency and cost; configure enough output tokens, calibrate with chosen model, and monitor reported output and reasoning-token usage.
+
+Thistlewarden always owns and adds fixed prompt parts: safety boundaries, quoted testcase data, code-owned metric definitions, and response contract. Your instructions are evaluation data inside that wrapper; they cannot change metric IDs, score ranges, aggregation, provider settings, result boundaries, or output schema. Publish next Judge version for any semantic change, including output mode or changes to default or customized metric instructions; editor proposes next minor version and shows published history. Existing drafts are not rewritten when code-owned defaults change. Existing published versions and run snapshots remain unchanged.
 
 ### Creating an LLM judge profile
 
@@ -51,9 +58,11 @@ Avoid changing a commonly used judge profile without a tracked change decision. 
 
 ### Prompt contract
 
-Application wraps user-authored Judge instructions in a fixed request contract. It sends original prompt, optional expected value, Judge metrics, optional item context, and candidate answer as quoted untrusted evaluation data. It instructs judge model to return one JSON object only, with score, passed flag, reason, and exactly one result for each enabled metric.
+Application wraps user-authored Judge instructions in a fixed request contract. It sends original prompt, optional expected value, Judge metrics, optional item context, and candidate answer as quoted untrusted evaluation data. Strict mode requires one JSON object only. Deliberation mode requires concise notes followed by exactly one JSON object inside standalone core-owned final-result boundaries. Result contains score, passed flag, reason, and exactly one result for each enabled metric.
 
-Judge-model settings cannot supply or override prompts. Change evaluation instructions under **Judges** → **Evaluation rules** and publish a new Judge version. Core-owned safety boundaries and output contract cannot be overridden.
+Parser never searches arbitrary prose for a JSON object and never infers or repairs scores from notes. Delimiter-like text inside quoted testcase data cannot select a result. Core validates final fields, metric IDs, score ranges, reason and output sizes, then independently calculates weighted score and pass/fail. Output-token truncation is an error, not a partial result.
+
+Judge-model settings cannot supply or override prompts. Change evaluation instructions or output mode under **Judges** → **Evaluation rules** and publish a new Judge version. Core-owned safety boundaries and output contract cannot be overridden.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 

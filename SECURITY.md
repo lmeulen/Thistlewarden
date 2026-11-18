@@ -4,10 +4,10 @@
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x beta | Yes |
+| 0.2.x beta | Yes |
 | Earlier versions | No |
 
-Security fixes are provided for the latest 0.1.x beta release only.
+Security fixes are provided for the latest 0.2.x beta release only.
 
 ## Supported boundary
 

@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from evaluator.judging.presets import JUDGE_PRESETS
 
 JudgeMode = Literal["single_prompt", "per_metric"]
+JudgeOutputMode = Literal["json_only", "deliberation_then_json"]
 JudgeOrigin = Literal["builtin", "local"]
 JudgeLifecycle = Literal["draft", "published", "archived"]
 
@@ -87,6 +88,7 @@ class JudgeDefinitionInput(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=20_000)
     mode: JudgeMode
+    output_mode: JudgeOutputMode = "json_only"
     threshold: Decimal = Field(ge=0, le=1)
     general_instructions: str | None = Field(default=None, min_length=1, max_length=20_000)
     metrics: tuple[JudgeMetricConfiguration, ...] = Field(min_length=1)
@@ -153,6 +155,10 @@ def semantic_hash(data: JudgeDefinitionInput) -> str:
     """Hash canonical semantic content; excludes identity and lifecycle."""
 
     payload = data.model_dump(mode="json", round_trip=True)
+    # Preserve hashes created before output modes existed. Missing historical
+    # fields deserialize as json_only and retain their original semantic identity.
+    if data.output_mode == "json_only":
+        payload.pop("output_mode", None)
     encoded = json.dumps(
         payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode()

@@ -218,6 +218,7 @@ class JudgeCaller:
             instructions = None
             metric_instructions: dict[str, str] = {}
             mode = "single_prompt"
+            output_mode = "json_only"
         else:
             definition = JudgeDefinitionInput.model_validate(definition_snapshot["data"])
             if definition_snapshot.get("semantic_hash") != semantic_hash(definition):
@@ -249,6 +250,7 @@ class JudgeCaller:
                 if metric.instructions is not None
             }
             mode = definition.mode
+            output_mode = definition.output_mode
         configuration = self._registry.validate_configuration(
             implementation_id,
             implementation_version,
@@ -263,6 +265,7 @@ class JudgeCaller:
             instructions=instructions,
             metric_instructions=metric_instructions,
             mode=mode,
+            output_mode=output_mode,
             configuration=configuration,
         )
         provider = _CoreJudgeProvider(

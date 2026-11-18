@@ -45,6 +45,7 @@ def _payload() -> dict[str, object]:
         "name": request.form.get("name", ""),
         "description": request.form.get("description", "").strip() or None,
         "mode": mode,
+        "output_mode": request.form.get("output_mode", "json_only"),
         "threshold": request.form.get("threshold", "0.7"),
         "general_instructions": (request.form.get("general_instructions", "").strip() or None),
         "metrics": metrics,
