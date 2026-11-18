@@ -4,9 +4,13 @@
 <section class="panel onboarding" aria-labelledby="onboarding-title">
   <div class="heading">
     <div><h2 id="onboarding-title">Run your first pilot evaluation</h2><p>Follow these ordered steps with non-sensitive examples. A pilot demonstrates the workflow; it does not establish production readiness or model quality.</p></div>
-    <form method="post" action="{{ url_for('gui.onboarding_dismiss') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary compact">Dismiss guidance</button></form>
+    <div class="actions" aria-label="Pilot guidance actions">
+      <form method="post" action="{{ url_for('gui.onboarding_complete') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="compact">Mark as done</button></form>
+      <form method="post" action="{{ url_for('gui.onboarding_dismiss') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary compact">Dismiss guidance</button></form>
+    </div>
   </div>
   <p aria-live="polite"><strong>{{ onboarding.completed_count }} of {{ onboarding.steps|length }} steps complete</strong></p>
+  <p><small><strong>Mark as done</strong> hides this guidance only. It does not complete setup, bypass blockers, create records, or indicate evaluation success.</small></p>
   <ol class="onboarding-steps">
   {% for step in onboarding.steps %}
     <li class="onboarding-step{% if step.complete %} is-complete{% endif %}">
@@ -24,8 +28,8 @@
   {% endif %}
   <p><a href="{{ url_for('gui.manual_page', page='getting-started') }}">Read pilot evaluation guidance</a></p>
 </section>
-{% elif onboarding and onboarding.dismissed and not onboarding.complete %}
-<section class="panel onboarding-restore" aria-labelledby="onboarding-restore-title"><div class="heading"><div><h2 id="onboarding-restore-title">Pilot guidance hidden</h2><p>Restore record-derived readiness steps whenever you need them.</p></div><form method="post" action="{{ url_for('gui.onboarding_restore') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>Restore pilot guidance</button></form></div></section>
+{% elif onboarding and (onboarding.dismissed or onboarding.manually_completed) and not onboarding.complete %}
+<section class="panel onboarding-restore" aria-labelledby="onboarding-restore-title"><div class="heading"><div><h2 id="onboarding-restore-title">{% if onboarding.manually_completed %}Pilot guidance marked as done{% else %}Pilot guidance hidden{% endif %}</h2><p>{% if onboarding.manually_completed %}This presentation preference did not change setup or evaluation status. Reopen guidance to see current record-derived progress.{% else %}Restore record-derived readiness steps whenever you need them.{% endif %}</p></div><form method="post" action="{{ url_for('gui.onboarding_restore') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button>{% if onboarding.manually_completed %}Reopen pilot guidance{% else %}Restore pilot guidance{% endif %}</button></form></div></section>
 {% endif %}
 <div class="cards dashboard-cards">
   <section aria-labelledby="evaluate-title">

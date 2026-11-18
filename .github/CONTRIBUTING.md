@@ -106,10 +106,10 @@ Package ownership:
 - `evaluator.ui` owns Flask GUI routes and templates; `evaluator.api` owns HTTP API routes.
 - `evaluator.evaluators.contracts`, `evaluator.golden_set_contracts`, and `evaluator.judging.presets` own shared evaluator, golden-set, and immutable judge contracts.
 - `evaluator.golden_set_repository` owns golden-set SQLite persistence; `evaluator.golden_set_service` owns golden-set application workflows.
-- `evaluator.judging` owns judge profiles, trusted extension contracts, built-in judge behavior, and judge execution.
-- `evaluator.app` is a composition root and may wire all required layers. Compatibility facades (`evaluator.gui`, `evaluator.golden_sets`, `evaluator.judges`, and `evaluator.judge_extensions`) preserve existing import surfaces; new internal code imports focused modules.
+- `evaluator.judging` is sole internal judge implementation namespace. It owns judge profiles, trusted extension contracts, built-in judge behavior, and judge execution.
+- `evaluator.app` is a composition root and may wire all required layers. Compatibility facades (`evaluator.gui`, `evaluator.golden_sets`, and `evaluator.judge_extensions`) preserve existing import surfaces; new internal code imports focused modules. `evaluator.judge_extensions` remains supported public API for trusted external judge packages.
 
-`tests/unit/test_architecture_boundaries.py` enforces stable boundaries without a runtime dependency: non-UI domain, repository, provider, and persistence modules cannot import `evaluator.ui` or `evaluator.gui`; shared contracts cannot import Flask, GUI modules, SQLite persistence implementations, or concrete provider clients. Keep exceptions out of shared layers. If a temporary exception becomes necessary, make it narrow, explain it inline, and link it to follow-up work before adding it to the guard.
+`tests/unit/test_architecture_boundaries.py` enforces stable boundaries without a runtime dependency: non-UI domain, repository, provider, and persistence modules cannot import `evaluator.ui` or `evaluator.gui`; shared contracts cannot import Flask, GUI modules, SQLite persistence implementations, or concrete provider clients; repository Python code cannot import removed `evaluator.judges` path. Keep exceptions out of shared layers. If a temporary exception becomes necessary, make it narrow, explain it inline, and link it to follow-up work before adding it to the guard.
 
 ## Pull requests
 

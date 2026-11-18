@@ -27,6 +27,7 @@ class OnboardingStep:
 class OnboardingState:
     steps: tuple[OnboardingStep, ...]
     dismissed: bool
+    manually_completed: bool
     existing_workflow: bool = False
 
     @property
@@ -35,7 +36,12 @@ class OnboardingState:
 
     @property
     def show_checklist(self) -> bool:
-        return not self.dismissed and not self.complete and not self.existing_workflow
+        return (
+            not self.dismissed
+            and not self.manually_completed
+            and not self.complete
+            and not self.existing_workflow
+        )
 
     @property
     def completed_count(self) -> int:
@@ -80,7 +86,9 @@ class OnboardingService:
                     ) AS workflow_completed,
                     EXISTS(SELECT 1 FROM onboarding_events) AS onboarding_started,
                     COALESCE((SELECT dismissed FROM onboarding_preferences WHERE id=1),0)
-                        AS dismissed
+                        AS dismissed,
+                    COALESCE((SELECT manually_completed FROM onboarding_preferences WHERE id=1),0)
+                        AS manually_completed
                 """
             ).fetchone()
             if row is None:  # pragma: no cover - aggregate SELECT always returns one row
@@ -154,6 +162,7 @@ class OnboardingService:
             return OnboardingState(
                 steps=steps,
                 dismissed=bool(row["dismissed"]),
+                manually_completed=bool(row["manually_completed"]),
                 existing_workflow=historical and not bool(row["onboarding_started"]),
             )
         finally:
@@ -184,10 +193,31 @@ class OnboardingService:
         try:
             with transaction(connection):
                 connection.execute(
-                    """INSERT INTO onboarding_preferences(id,dismissed,updated_at) VALUES(1,?,?)
+                    """INSERT INTO onboarding_preferences(
+                        id,dismissed,manually_completed,updated_at
+                    ) VALUES(1,?,0,?)
                     ON CONFLICT(id) DO UPDATE SET dismissed=excluded.dismissed,
                         updated_at=excluded.updated_at""",
                     (int(dismissed), now),
+                )
+        finally:
+            connection.close()
+
+    def set_manually_completed(self, completed: bool) -> None:
+        """Change guidance presentation without changing record-derived progress."""
+        now = to_utc_iso(utc_now())
+        connection = self._factory.connect()
+        try:
+            with transaction(connection):
+                connection.execute(
+                    """INSERT INTO onboarding_preferences(
+                        id,dismissed,manually_completed,updated_at
+                    ) VALUES(1,0,?,?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        dismissed=0,
+                        manually_completed=excluded.manually_completed,
+                        updated_at=excluded.updated_at""",
+                    (int(completed), now),
                 )
         finally:
             connection.close()

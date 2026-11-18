@@ -3,12 +3,17 @@ from __future__ import annotations
 import base64
 import os
 import re
+from html import unescape
 from pathlib import Path
 
 import pytest
 
 from evaluator import create_app
-from evaluator.judging.definitions import JudgeDefinitionInput, semantic_hash
+from evaluator.judging.definitions import (
+    DEFAULT_PER_METRIC_PROMPTS,
+    JudgeDefinitionInput,
+    semantic_hash,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -62,6 +67,19 @@ def test_judge_rule_form_switches_instruction_fields_by_assessment_method(app) -
     assert "Appended automatically" in content
     assert "Return one JSON object only" in content
     assert "One sequential judge call per metric" in content
+
+
+def test_new_per_metric_defaults_are_complete_editable_and_mode_switch_safe(app) -> None:
+    content = app.test_client().get("/judge-rules/new").get_data(as_text=True)
+    for metric_id, prompt in DEFAULT_PER_METRIC_PROMPTS.items():
+        textarea = content.split(f'name="instructions_{metric_id}"', 1)[1].split("</textarea>", 1)[
+            0
+        ]
+        assert prompt in unescape(textarea)
+    assert content.count("Editable starting point.") == len(DEFAULT_PER_METRIC_PROMPTS)
+    assert "Review and calibrate it before publishing" in content
+    assert "element.querySelector('textarea').disabled = !perMetric" in content
+    assert "element.querySelector('textarea').value" not in content
 
 
 def test_new_judge_uses_recommended_ten_metrics_for_both_modes(app) -> None:
@@ -140,6 +158,40 @@ def test_recommended_ten_metrics_can_be_saved_in_per_metric_mode(app) -> None:
         metric.metric_id: str(metric.weight) for metric in saved.draft.metrics if metric.enabled
     }
     assert saved_weights == selected
+
+
+def test_custom_per_metric_instruction_survives_save_reload_and_publish(app) -> None:
+    client = app.test_client()
+    page = client.get("/judge-rules/new").get_data(as_text=True)
+    token = page.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+    custom = "Check domain facts against supplied evidence; preserve this exact guidance."
+    response = client.post(
+        "/judge-rules/new",
+        data={
+            "csrf_token": token,
+            "name": "Custom separate judge",
+            "mode": "per_metric",
+            "threshold": "0.7",
+            "metrics": ["correctness"],
+            "weight_correctness": "1",
+            "instructions_correctness": custom,
+        },
+    )
+    assert response.status_code == 302
+    location = response.headers["Location"]
+    definition_id = location.rsplit("/", 1)[-1]
+
+    editor = client.get(location).get_data(as_text=True)
+    assert custom in editor
+    assert DEFAULT_PER_METRIC_PROMPTS["correctness"] not in editor
+    publish_token = editor.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
+    published = client.post(
+        f"/judge-rules/{definition_id}/publish",
+        data={"csrf_token": publish_token, "version": "1.0"},
+    )
+    assert published.status_code == 302
+    version = app.extensions["judge_definition_service"].get_version(definition_id, "1.0")
+    assert version.data.metrics[0].instructions == custom
 
 
 def test_judge_definition_draft_publish_and_immutable_version(app) -> None:

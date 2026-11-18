@@ -45,6 +45,8 @@ SHARED_CONTRACTS = (
 )
 
 UI_IMPORTS = {"evaluator.gui", "evaluator.ui"}
+REMOVED_IMPORTS = {"evaluator.judges"}
+
 CONTRACT_IMPORTS = {
     "flask",
     "sqlite3",
@@ -95,6 +97,17 @@ def test_shared_contracts_are_framework_and_implementation_free() -> None:
     assert not violations, "Shared-contract dependency violation:\n" + "\n".join(violations)
 
 
+def test_repository_does_not_restore_or_import_removed_judge_facade() -> None:
+    assert not (SOURCE_ROOT / "judges.py").exists()
+    violations: list[str] = []
+    for root in (ROOT / "src", ROOT / "tests"):
+        for candidate in root.rglob("*.py"):
+            for imported in sorted(_imports(candidate)):
+                if _matches(imported, REMOVED_IMPORTS):
+                    violations.append(f"{candidate.relative_to(ROOT)} imports {imported}")
+    assert not violations, "Removed-import violation:\n" + "\n".join(violations)
+
+
 def test_boundary_guard_detects_direct_and_nested_forbidden_imports(tmp_path: Path) -> None:
     source = tmp_path / "contract.py"
     source.write_text(
@@ -104,3 +117,4 @@ def test_boundary_guard_detects_direct_and_nested_forbidden_imports(tmp_path: Pa
     imported = _imports(source)
     assert _matches("evaluator.ui", UI_IMPORTS)
     assert any(_matches(name, CONTRACT_IMPORTS) for name in imported)
+    assert _matches("evaluator.judges.profiles", REMOVED_IMPORTS)

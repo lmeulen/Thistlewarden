@@ -12,7 +12,7 @@ from evaluator.judge_extensions import (
     JudgePresetSnapshot,
     JudgeProviderResult,
 )
-from evaluator.judges import (
+from evaluator.judging.builtin import (
     OpenAICompatibleJudge,
     build_judge_prompt,
     parse_judge_output,

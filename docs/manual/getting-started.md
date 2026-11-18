@@ -153,6 +153,8 @@ Protect the computer, database, backups, and exported files according to the sen
 
 **How to read first result:** **Passed** means evaluator checked output and condition was met. **Failed** means evaluator checked output but condition was not met. **Error** means provider, judge, or processing prevented normal evaluation. Fix errors before deciding model quality.
 
+Dashboard guidance tracks these actions from saved records. If you do not need checklist, select **Mark as done**. This hides guidance across reloads and restarts but does not complete setup, bypass any blocker, create records, or indicate evaluation success. Use **Reopen pilot guidance** on dashboard to restore checklist with current record-derived progress.
+
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
 ### Current limits

@@ -73,7 +73,34 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (17, "add_pilot_onboarding"),
             (18, "add_versioned_judge_definitions"),
             (19, "backfill_versioned_judge_definitions"),
+            (20, "add_manual_onboarding_completion"),
         ]
+    finally:
+        connection.close()
+
+
+def test_migration_20_adds_unset_manual_onboarding_completion(tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "app.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:19]).migrate()
+    connection = factory.connect()
+    try:
+        connection.execute(
+            "INSERT INTO onboarding_preferences(id,dismissed,updated_at) VALUES(1,1,?)",
+            ("2026-11-18T00:00:00Z",),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert MigrationManager(factory).migrate() == LATEST_SCHEMA_VERSION
+    connection = factory.connect()
+    try:
+        row = connection.execute(
+            "SELECT dismissed,manually_completed FROM onboarding_preferences WHERE id=1"
+        ).fetchone()
+        assert tuple(row) == (1, 0)
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:
         connection.close()
 
@@ -93,7 +120,7 @@ def test_migration_19_backfills_judge_definitions_after_historical_version_18(
     finally:
         connection.close()
 
-    assert MigrationManager(factory).migrate() == 19
+    assert MigrationManager(factory, migrations=MIGRATIONS[:19]).migrate() == 19
     connection = factory.connect()
     try:
         tables = {

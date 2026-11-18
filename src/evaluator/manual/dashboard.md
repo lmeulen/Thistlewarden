@@ -45,7 +45,9 @@ Checklist covers:
 
 Each incomplete step links to its primary action and explains its blocker. A completed historical workflow prevents onboarding from being imposed on an existing installation.
 
-Select **Dismiss guidance** to hide checklist. Dashboard then offers **Restore pilot guidance** until workflow is complete. Both choices are stored in local database.
+Select **Dismiss guidance** to hide checklist temporarily. Dashboard then offers **Restore pilot guidance** until workflow is complete.
+
+Select **Mark as done** when you no longer need start guidance. This persistent presentation preference hides checklist across browser reloads and application restarts. It does not complete any record-derived step, create endpoint/model/test/run records, bypass validation or blockers, or indicate setup, readiness, or evaluation success. Dashboard shows **Pilot guidance marked as done** and offers **Reopen pilot guidance**. Reopening displays current record-derived progress. Dismiss, mark-as-done, restore, and reopen choices are stored in local database.
 
 Checklist optionally creates **Synthetic pilot examples**, an editable and removable golden set with three deterministic cases. This action creates no endpoint, credential, provider call, paid call, or judge call. Starter examples demonstrate workflow only; they do not establish model quality or production readiness. Starting pilot run remains normal run flow, including cost preview and sensitive-data warning.
 

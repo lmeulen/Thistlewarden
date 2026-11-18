@@ -45,10 +45,20 @@ def onboarding_dismiss() -> Response:
     return redirect(url_for("gui.dashboard"))
 
 
+@gui.post("/onboarding/complete")
+def onboarding_complete() -> Response:
+    _onboarding_service().set_manually_completed(True)
+    flash(
+        "Pilot guidance marked as done. Setup and evaluation status were not changed.",
+        "success",
+    )
+    return redirect(url_for("gui.dashboard"))
+
+
 @gui.post("/onboarding/restore")
 def onboarding_restore() -> Response:
-    _onboarding_service().set_dismissed(False)
-    flash("Pilot guidance restored.", "success")
+    _onboarding_service().set_manually_completed(False)
+    flash("Pilot guidance restored with its record-derived progress.", "success")
     return redirect(url_for("gui.dashboard"))
 
 
