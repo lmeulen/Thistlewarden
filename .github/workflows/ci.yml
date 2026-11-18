@@ -101,6 +101,7 @@ jobs:
           path: coverage.xml
           if-no-files-found: warn
           retention-days: 14
+      # Repository Actions policy allowlists this exact Codecov commit; update both together.
       # Trusted runs use CODECOV_TOKEN when configured. Fork pull requests receive no secret
       # and use Codecov's public tokenless path. Reporting stays non-blocking because Pytest is
       # the quality gate and a third-party outage must not replace or hide its exit status.
