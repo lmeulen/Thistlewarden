@@ -48,6 +48,29 @@ def test_product_branding_is_consistent() -> None:
         assert "LLMEvaluator" + " Evaluator" not in text, path
 
 
+def test_readme_badges_match_user_facing_project_metadata() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    badge_row = readme.splitlines()[2]
+
+    assert badge_row.count("[![") == 5
+    assert (
+        "[![CI status]"
+        "(https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml/"
+        "badge.svg?branch=master)]"
+        "(https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml?"
+        "query=branch%3Amaster)"
+    ) in badge_row
+    assert "[![Python 3.12 or newer]" in badge_row
+    assert "](https://img.shields.io/badge/Python-3.12%2B-3776AB)](#requirements)" in badge_row
+    assert "[![License: Apache 2.0]" in badge_row
+    assert "](LICENSE)" in badge_row
+    assert "[![User manual]" in badge_row
+    assert "](docs/manual/README.md)" in badge_row
+    assert "[![Security policy]" in badge_row
+    assert "](SECURITY.md)" in badge_row
+    assert "certified" not in badge_row.casefold()
+
+
 def test_generated_and_sensitive_directories_are_excluded_from_release_contexts() -> None:
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
