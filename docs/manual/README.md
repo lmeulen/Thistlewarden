@@ -37,6 +37,7 @@ Use this manual to connect models, build evaluations, run comparisons, and under
 - [Configuration reference](../configuration.md) — Review environment variables, runtime limits, and schedules.
 - [Release guide](../release.md) — Run release checks and offline end-to-end verification.
 - [Develop custom LLM judges](../judge-extensions.md) — Implement, register, configure, test, and version trusted local judge extensions.
+- [Recreate manual screenshots](screenshots.md) — Use deterministic synthetic data and consistent capture settings.
 
 ## Get help
 

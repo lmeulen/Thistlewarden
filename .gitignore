@@ -34,6 +34,7 @@ docs/archive/
 reviews/
 scripts/*
 !scripts/e2e_release.py
+!scripts/prepare_manual_screenshot_fixture.py
 testsets/
 issues.txt
 issues.md
