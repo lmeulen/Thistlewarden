@@ -104,6 +104,18 @@ def test_per_metric_requires_prompt_for_each_enabled_metric() -> None:
         )
 
 
+def test_output_mode_defaults_to_json_only_and_changes_new_semantic_hash() -> None:
+    historical = _single()
+    explicit = JudgeDefinitionInput.model_validate(
+        historical.model_dump(exclude={"output_mode"}) | {"output_mode": "json_only"}
+    )
+    deliberating = historical.model_copy(update={"output_mode": "deliberation_then_json"})
+    assert historical.output_mode == "json_only"
+    assert semantic_hash(historical) == semantic_hash(explicit)
+    assert semantic_hash(deliberating) != semantic_hash(historical)
+    assert "output_mode" not in historical.model_dump(mode="json", exclude_defaults=True)
+
+
 def test_published_version_hashes_complete_semantics() -> None:
     data = _single()
     version = JudgeDefinitionVersion(

@@ -144,6 +144,7 @@ class JudgeEvaluationRequest(BaseModel):
     instructions: str | None = None
     metric_instructions: Mapping[str, str] = Field(default_factory=dict)
     mode: Literal["single_prompt", "per_metric"] = "single_prompt"
+    output_mode: Literal["json_only", "deliberation_then_json"] = "json_only"
     configuration: Mapping[str, Any] = Field(default_factory=dict)
 
 

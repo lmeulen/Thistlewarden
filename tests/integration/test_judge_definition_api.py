@@ -38,6 +38,7 @@ def _payload(name: str = "My quality judge") -> dict[str, object]:
         "name": name,
         "description": "Review answers.",
         "mode": "single_prompt",
+        "output_mode": "deliberation_then_json",
         "threshold": "0.75",
         "general_instructions": "Assess each metric fairly.",
         "metrics": [
@@ -52,6 +53,7 @@ def test_judge_rule_form_switches_instruction_fields_by_assessment_method(app) -
     assert page.status_code == 200
     content = page.get_data(as_text=True)
     assert content.count('type="radio" name="mode"') == 2
+    assert content.count('type="radio" name="output_mode"') == 2
     assert 'role="radiogroup"' in content
     assert "One assessment for all metrics" in content
     assert "Separate assessment per metric" in content
@@ -67,6 +69,9 @@ def test_judge_rule_form_switches_instruction_fields_by_assessment_method(app) -
     assert "Appended automatically" in content
     assert "Return one JSON object only" in content
     assert "One sequential judge call per metric" in content
+    assert "Strict JSON only" in content
+    assert "Concise analysis, then final JSON" in content
+    assert "does not retain preceding analysis" in content
 
 
 def test_new_per_metric_defaults_are_complete_editable_and_mode_switch_safe(app) -> None:
@@ -211,6 +216,7 @@ def test_judge_definition_draft_publish_and_immutable_version(app) -> None:
     judge = created.get_json()["judge"]
     assert judge["lifecycle"] == "draft"
     assert judge["draft"]["threshold"] == "0.75"
+    assert judge["draft"]["output_mode"] == "deliberation_then_json"
 
     published = client.post(f"/api/v1/judges/{judge['id']}/publish")
     assert published.status_code == 201
@@ -279,6 +285,7 @@ def test_gui_publishes_next_immutable_version_and_shows_history(app) -> None:
     first = client.get(f"/api/v1/judges/{judge['id']}/versions/1.0").get_json()["judge_version"]
     second = client.get(f"/api/v1/judges/{judge['id']}/versions/1.1").get_json()["judge_version"]
     assert first["data"]["threshold"] == "0.75"
+    assert first["data"]["output_mode"] == "deliberation_then_json"
     assert second["data"]["threshold"] == "0.8"
 
 

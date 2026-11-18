@@ -32,6 +32,18 @@
         <span><strong>Separate assessment per metric</strong><small>One sequential judge call per metric. Supports focused instructions for each metric.</small></span>
       </label>
     </div>
+    <h3>Choose output mode</h3>
+    <div class="judge-mode-options" role="radiogroup" aria-label="Judge output mode">
+      <label class="judge-mode-option">
+        <input type="radio" name="output_mode" value="json_only" {% if not judge or judge.draft.output_mode == 'json_only' %}checked{% endif %}>
+        <span><strong>Strict JSON only</strong><small>Lowest output overhead. Judge must return only final structured result.</small></span>
+      </label>
+      <label class="judge-mode-option">
+        <input type="radio" name="output_mode" value="deliberation_then_json" {% if judge and judge.draft.output_mode == 'deliberation_then_json' %}checked{% endif %}>
+        <span><strong>Concise analysis, then final JSON</strong><small>Allows bounded evidence notes before delimited result. May use more tokens, time, and cost.</small></span>
+      </label>
+    </div>
+    <p class="judge-mode-notice">Concise visible analysis is not provider-private reasoning. Thistlewarden validates only final JSON and does not retain preceding analysis.</p>
   </section>
 
   <section class="panel judge-rule-step" aria-labelledby="judge-prompt-heading">
@@ -95,12 +107,15 @@
   var singlePrompt = document.getElementById('single-prompt-editor');
   var perMetricIntro = document.getElementById('per-metric-intro');
   var fixedOutput = document.getElementById('fixed-output-requirements');
+  var outputModes = document.querySelectorAll('input[name="output_mode"]');
   var metricInstructions = document.querySelectorAll('.metric-instructions');
   var metricCheckboxes = document.querySelectorAll('input[name="metrics"]');
   function selectedMode() { return document.querySelector('input[name="mode"]:checked').value; }
   function updateFixedOutput() {
+    var outputMode = document.querySelector('input[name="output_mode"]:checked').value;
     var metricIds = Array.from(metricCheckboxes).filter(function (element) { return element.checked; }).map(function (element) { return element.value; });
-    fixedOutput.value = 'Return one JSON object only (no Markdown or extra fields):\n' + JSON.stringify({score: '0..1', passed: 'boolean', reason: 'non-empty string', criteria: metricIds.map(function (id) { return {id: id, score: '0..1', reason: 'non-empty string'}; })}, null, 2);
+    var prefix = outputMode === 'json_only' ? 'Return one JSON object only (no Markdown or extra fields):\n' : 'Write concise evidence notes, then put final JSON only between the fixed Thistlewarden result boundaries:\n';
+    fixedOutput.value = prefix + JSON.stringify({score: '0..1', passed: 'boolean', reason: 'non-empty string', criteria: metricIds.map(function (id) { return {id: id, score: '0..1', reason: 'non-empty string'}; })}, null, 2);
   }
   function updateInstructions() {
     var perMetric = selectedMode() === 'per_metric';
@@ -114,6 +129,7 @@
   }
   modes.forEach(function (element) { element.addEventListener('change', updateInstructions); });
   metricCheckboxes.forEach(function (element) { element.addEventListener('change', updateFixedOutput); });
+  outputModes.forEach(function (element) { element.addEventListener('change', updateFixedOutput); });
   updateInstructions();
   updateFixedOutput();
 })();

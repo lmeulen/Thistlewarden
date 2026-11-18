@@ -34,10 +34,19 @@ class FakeJudgeClient:
         criteria = [
             {"id": item["id"], "score": "1", "reason": "Correct."} for item in data["rubric"]
         ]
+        final_json = json.dumps(
+            {"score": "1", "passed": True, "reason": "Pass.", "criteria": criteria}
+        )
+        content = (
+            "Sensitive transient evidence notes.\n"
+            "<<<THISTLEWARDEN_FINAL_ASSESSMENT>>>\n"
+            f"{final_json}\n"
+            "<<<END_THISTLEWARDEN_FINAL_ASSESSMENT>>>"
+            if "<<<THISTLEWARDEN_FINAL_ASSESSMENT>>>" in prompt
+            else final_json
+        )
         return CompletionResult(
-            content=json.dumps(
-                {"score": "1", "passed": True, "reason": "Pass.", "criteria": criteria}
-            ),
+            content=content,
             usage=ProviderUsage(prompt_tokens=1, completion_tokens=1, total_tokens=2),
             provider_request_id="fake-judge",
             finish_reason="stop",
@@ -192,6 +201,7 @@ def test_run_snapshots_published_judge_definition_semantics(tmp_path: Path) -> N
         {
             "name": "Snapshot judge",
             "mode": "single_prompt",
+            "output_mode": "deliberation_then_json",
             "threshold": "0.75",
             "general_instructions": "Assess factual accuracy.",
             "metrics": [{"metric_id": "correctness", "weight": "3"}],
@@ -232,6 +242,7 @@ def test_run_snapshots_published_judge_definition_semantics(tmp_path: Path) -> N
         },
         separators=(",", ":"),
     )
+    assert snapshot["judge_definition"]["data"]["output_mode"] == "deliberation_then_json"
     assert snapshot["judge_definition"] == {
         "id": definition.id,
         "version": "1.0",
@@ -291,6 +302,9 @@ def test_published_judge_snapshot_executes_single_and_per_metric_modes(tmp_path:
             {
                 "name": mode,
                 "mode": mode,
+                "output_mode": (
+                    "deliberation_then_json" if mode == "single_prompt" else "json_only"
+                ),
                 "threshold": "0.5",
                 "general_instructions": "Assess answer." if mode == "single_prompt" else None,
                 "metrics": metrics,
@@ -343,6 +357,8 @@ def test_published_judge_snapshot_executes_single_and_per_metric_modes(tmp_path:
         connection.close()
     assert Decimal(results["single_prompt"]["metadata"]["judge_cost"]) > 0
     assert len(results["single_prompt"]["metadata"]["provider_calls"]) == 1
+    assert "raw_output" not in results["single_prompt"]["metadata"]
+    assert "Sensitive transient evidence notes." not in json.dumps(results["single_prompt"])
     assert len(results["per_metric"]["metadata"]["provider_calls"]) == 2
     assert results["per_metric"]["metadata"]["mode"] == "per_metric"
 
