@@ -10,7 +10,7 @@ Local single-user web application for reproducible evaluation of OpenAI-compatib
 
 ## Status
 
-**Version 0.2.1 is a beta release.** It adds versioned Judge output modes for strict JSON or bounded deliberation followed by delimited final JSON, while retaining immutable Judge definitions, reproducible snapshots, deterministic evaluation, streaming metrics, quality gates, exports, and configuration exchange.
+**Version 0.2.2 is a beta release.** It adds bounded-memory run exports, one canonical packaged user manual, and refreshed reproducible GUI screenshots, while retaining immutable Judge definitions, reproducible snapshots, deterministic evaluation, streaming metrics, quality gates, and configuration exchange.
 
 Thistlewarden is designed for one trusted user on one computer. It has no user authentication or tenant isolation. Keep it bound to loopback; do not expose it directly to a LAN or the internet. See the [security policy](SECURITY.md) for the supported deployment boundary.
 
@@ -144,7 +144,8 @@ Offline Docker E2E uses `compose.e2e.yaml`, `evaluator.mock_provider`, `examples
 - [Configuration](docs/configuration.md) — settings and schedules
 - [Release guide](docs/release.md) — release gate, Docker E2E and rollback
 - [Security policy](SECURITY.md) — threat model and security policy
-- [0.2.1 beta release notes](docs/release-notes-0.2.1.md) — current changes, upgrade notes, and known limitations
+- [0.2.2 beta release notes](docs/release-notes-0.2.2.md) — current changes, upgrade notes, and known limitations
+- [0.2.1 beta release notes](docs/release-notes-0.2.1.md) — Judge output modes and bounded deliberation
 - [0.2.0 beta release notes](docs/release-notes-0.2.0.md) — versioned Judges and onboarding
 - [0.1.0 beta release notes](docs/release-notes-0.1.0.md) — first public beta
 - [Contributing](.github/CONTRIBUTING.md) — development setup and contribution rules

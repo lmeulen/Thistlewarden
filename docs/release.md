@@ -45,7 +45,7 @@ Manual release addition: restart evaluator during second E2E run and verify `rec
 - Runtime dependencies are exact pins in `pyproject.toml`; `requirements.txt` mirrors runtime and dev gates.
 - Never publish `.env`, database, WAL, exports, backups or compose logs containing user content.
 - Tag only after Python and Docker jobs pass on the exact release commit.
-- Version `0.2.1` is published as a beta; release notes must preserve that maturity label.
+- Version `0.2.2` is published as a beta; release notes must preserve that maturity label.
 
 ## Upgrade proof
 
