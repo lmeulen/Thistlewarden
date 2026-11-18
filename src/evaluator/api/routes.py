@@ -23,6 +23,11 @@ from evaluator.golden_set_service import (
     golden_item_to_dict,
     golden_set_to_dict,
 )
+from evaluator.judging.definition_service import (
+    JudgeDefinitionService,
+    judge_definition_to_dict,
+    judge_definition_version_to_dict,
+)
 from evaluator.judging.profiles import JudgeProfileService, judge_profile_to_dict
 from evaluator.models import ModelProfileService, profile_to_dict
 from evaluator.run_comparisons import ComparisonFilter, RunComparisonService
@@ -119,6 +124,13 @@ def _cost_service() -> CostService:
     service = current_app.extensions.get("cost_service")
     if not isinstance(service, CostService):
         raise RuntimeError("Cost service is unavailable")
+    return service
+
+
+def _judge_definition_service() -> JudgeDefinitionService:
+    service = current_app.extensions.get("judge_definition_service")
+    if not isinstance(service, JudgeDefinitionService):
+        raise RuntimeError("Judge definition service is unavailable")
     return service
 
 
@@ -281,6 +293,43 @@ def delete_model_profile(profile_id: UUID) -> tuple[str, int]:
 
     _model_profile_service().delete(profile_id)
     return "", 204
+
+
+@api_v1.get("/judges")
+def list_judges() -> Response:
+    judges = [judge_definition_to_dict(x) for x in _judge_definition_service().list_all()]
+    return jsonify({"judges": judges})
+
+
+@api_v1.post("/judges")
+def create_judge() -> Response | tuple[Response, int]:
+    record = _judge_definition_service().create(_json_object())
+    return jsonify({"judge": judge_definition_to_dict(record)}), 201
+
+
+@api_v1.get("/judges/<definition_id>")
+def get_judge(definition_id: str) -> Response:
+    judge = _judge_definition_service().get(definition_id)
+    return jsonify({"judge": judge_definition_to_dict(judge)})
+
+
+@api_v1.patch("/judges/<definition_id>/draft")
+def update_judge_draft(definition_id: str) -> Response:
+    record = _judge_definition_service().update_draft(definition_id, _json_object())
+    return jsonify({"judge": judge_definition_to_dict(record)})
+
+
+@api_v1.post("/judges/<definition_id>/publish")
+def publish_judge(definition_id: str) -> Response | tuple[Response, int]:
+    version = request.args.get("version", "1.0")
+    result = _judge_definition_service().publish(definition_id, version)
+    return jsonify({"judge_version": judge_definition_version_to_dict(result)}), 201
+
+
+@api_v1.get("/judges/<definition_id>/versions/<version>")
+def get_judge_version(definition_id: str, version: str) -> Response:
+    result = _judge_definition_service().get_version(definition_id, version)
+    return jsonify({"judge_version": judge_definition_version_to_dict(result)})
 
 
 @api_v1.get("/judge-profiles")

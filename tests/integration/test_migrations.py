@@ -71,7 +71,41 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (15, "add_versioned_judge_implementations"),
             (16, "add_endpoint_api_format"),
             (17, "add_pilot_onboarding"),
+            (18, "add_versioned_judge_definitions"),
+            (19, "backfill_versioned_judge_definitions"),
         ]
+    finally:
+        connection.close()
+
+
+def test_migration_19_backfills_judge_definitions_after_historical_version_18(
+    tmp_path: Path,
+) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "app.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:17]).migrate()
+    connection = factory.connect()
+    try:
+        connection.execute(
+            "INSERT INTO schema_migrations(version,name,applied_at) VALUES (18,?,?)",
+            ("add_custom_judge_templates", "2026-11-16T00:00:00Z"),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert MigrationManager(factory).migrate() == 19
+    connection = factory.connect()
+    try:
+        tables = {
+            row["name"]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name LIKE 'judge_definition%'"
+            )
+        }
+        assert tables == {"judge_definitions", "judge_definition_versions"}
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:
         connection.close()
 

@@ -124,22 +124,38 @@ class JsonSchemaConfig(BaseModel):
 class LlmJudgeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     evaluation_method: Literal["llm_judge"] = "llm_judge"
-    preset_id: str
-    preset_version: str
+    # Legacy preset references remain readable. New cases use judge_definition_*.
+    preset_id: str | None = None
+    preset_version: str | None = None
+    judge_definition_id: str | None = None
+    judge_definition_version: str | None = None
     expected_value: str | None = None
     context: str | None = None
 
     @model_validator(mode="after")
-    def valid_preset_inputs(self) -> LlmJudgeConfig:
-        preset = get_judge_preset(self.preset_id, self.preset_version)
+    def valid_judge_inputs(self) -> LlmJudgeConfig:
+        legacy = self.preset_id is not None or self.preset_version is not None
+        versioned = (
+            self.judge_definition_id is not None or self.judge_definition_version is not None
+        )
+        if legacy == versioned:
+            raise ValueError("select exactly one judge or legacy preset reference")
+        if legacy:
+            if self.preset_id is None or self.preset_version is None:
+                raise ValueError("preset_id and preset_version must be supplied together")
+            preset = get_judge_preset(self.preset_id, self.preset_version)
+            if preset.requires_expected and self.expected_value is None:
+                raise ValueError(f"{preset.id} requires expected_value")
+            if preset.requires_context and self.context is None:
+                raise ValueError(f"{preset.id} requires context")
+        elif self.judge_definition_id is None or self.judge_definition_version is None:
+            raise ValueError(
+                "judge_definition_id and judge_definition_version must be supplied together"
+            )
         if self.expected_value is not None and not self.expected_value.strip():
             raise ValueError("expected_value must not be blank")
         if self.context is not None and not self.context.strip():
             raise ValueError("context must not be blank")
-        if preset.requires_expected and self.expected_value is None:
-            raise ValueError(f"{preset.id} requires expected_value")
-        if preset.requires_context and self.context is None:
-            raise ValueError(f"{preset.id} requires context")
         return self
 
 
@@ -190,8 +206,8 @@ _EVALUATOR_CONFIG_EXAMPLES: dict[str, dict[str, Any]] = {
         "schema_draft": "2020-12",
     },
     "llm_judge": {
-        "preset_id": "general-quality",
-        "preset_version": "1.0",
+        "judge_definition_id": "select-a-published-judge",
+        "judge_definition_version": "1.0",
         "expected_value": None,
         "context": None,
     },

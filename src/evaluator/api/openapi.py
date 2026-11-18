@@ -239,6 +239,58 @@ def build_openapi_document() -> dict[str, Any]:
                     },
                 },
             },
+            "/api/v1/judges": {
+                "get": {
+                    "operationId": "listJudges",
+                    "responses": {"200": {"description": "User-created judge definitions"}},
+                },
+                "post": {
+                    "operationId": "createJudge",
+                    "responses": {
+                        "201": {"description": "Judge draft created"},
+                        "400": {"$ref": "#/components/responses/Error"},
+                    },
+                },
+            },
+            "/api/v1/judges/{definition_id}": {
+                "get": {
+                    "operationId": "getJudge",
+                    "responses": {
+                        "200": {"description": "Judge definition"},
+                        "404": {"$ref": "#/components/responses/Error"},
+                    },
+                }
+            },
+            "/api/v1/judges/{definition_id}/draft": {
+                "patch": {
+                    "operationId": "updateJudgeDraft",
+                    "responses": {
+                        "200": {"description": "Judge draft updated"},
+                        "400": {"$ref": "#/components/responses/Error"},
+                        "404": {"$ref": "#/components/responses/Error"},
+                        "409": {"$ref": "#/components/responses/Error"},
+                    },
+                }
+            },
+            "/api/v1/judges/{definition_id}/publish": {
+                "post": {
+                    "operationId": "publishJudge",
+                    "responses": {
+                        "201": {"description": "Immutable judge version published"},
+                        "404": {"$ref": "#/components/responses/Error"},
+                        "409": {"$ref": "#/components/responses/Error"},
+                    },
+                }
+            },
+            "/api/v1/judges/{definition_id}/versions/{version}": {
+                "get": {
+                    "operationId": "getJudgeVersion",
+                    "responses": {
+                        "200": {"description": "Immutable judge version"},
+                        "404": {"$ref": "#/components/responses/Error"},
+                    },
+                }
+            },
             "/api/v1/judge-profiles": {
                 "get": {
                     "operationId": "listJudgeProfiles",

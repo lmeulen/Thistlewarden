@@ -98,7 +98,7 @@ def test_invalid_method_specific_configuration_fails() -> None:
 
 
 def test_judge_requires_known_preset_and_rejects_case_defined_contract() -> None:
-    with pytest.raises(ValidationError, match="preset_id"):
+    with pytest.raises(ValidationError, match="select exactly one judge"):
         GoldenSetItemInput.model_validate(
             _item(evaluation_method="llm_judge", evaluator_config={}, expected_answer=None)
         )

@@ -15,6 +15,11 @@ from evaluator.database import SQLiteConnectionFactory, transaction
 from evaluator.endpoints import EndpointInput
 from evaluator.gates import QualityGates
 from evaluator.golden_set_contracts import GoldenSetInput, GoldenSetItemInput
+from evaluator.judging.definitions import (
+    JudgeDefinitionInput,
+    JudgeDefinitionVersion,
+    semantic_hash,
+)
 from evaluator.judging.extensions import JudgeImplementationRegistry
 from evaluator.judging.profiles import JudgeProfileInput
 from evaluator.logging_config import log_semantic_event
@@ -30,12 +35,28 @@ class BundleObject(BaseModel):
     data: dict[str, Any]
 
 
+class JudgeDefinitionBundle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str = Field(pattern=r"^[a-z][a-z0-9_-]*$", max_length=100)
+    draft: JudgeDefinitionInput | None = None
+    versions: list[JudgeDefinitionVersion] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def consistent_identity(self) -> JudgeDefinitionBundle:
+        if any(version.definition_id != self.id for version in self.versions):
+            raise ValueError("judge version definition reference does not match")
+        if self.draft is None and not self.versions:
+            raise ValueError("judge definition must contain a draft or published version")
+        return self
+
+
 class ConfigurationBundle(BaseModel):
     model_config = ConfigDict(extra="forbid")
     schema_version: Literal["1.0"] = "1.0"
     endpoints: list[BundleObject] = Field(default_factory=list)
     model_profiles: list[BundleObject] = Field(default_factory=list)
     judge_profiles: list[BundleObject] = Field(default_factory=list)
+    judge_definitions: list[JudgeDefinitionBundle] = Field(default_factory=list)
     golden_sets: list[BundleObject] = Field(default_factory=list)
     golden_set_items: list[BundleObject] = Field(default_factory=list)
 
@@ -51,16 +72,15 @@ class ConfigurationBundle(BaseModel):
         all_ids = [item.id for group in groups for item in group]
         if len(all_ids) != len(set(all_ids)):
             raise ValueError("object UUIDs must be globally unique")
+        definition_ids = [item.id for item in self.judge_definitions]
+        if len(definition_ids) != len(set(definition_ids)):
+            raise ValueError("judge definition IDs must be unique")
         endpoint_ids = {str(x.id) for x in self.endpoints}
-        model_ids = {str(x.id) for x in self.model_profiles}
         judge_ids = {str(x.id) for x in self.judge_profiles}
         set_ids = {str(x.id) for x in self.golden_sets}
         for item in self.model_profiles:
             if str(item.data.get("endpoint_id")) not in endpoint_ids:
                 raise ValueError("model endpoint reference is missing")
-        for item in self.judge_profiles:
-            if str(item.data.get("model_profile_id")) not in model_ids:
-                raise ValueError("judge model reference is missing")
         for item in self.golden_sets:
             ref = item.data.get("judge_profile_id")
             if ref is not None and str(ref) not in judge_ids:
@@ -156,6 +176,34 @@ class ConfigurationExchangeService:
                     data["temperature"] = None
                 data["implementation_config"] = json.loads(row["implementation_config_json"])
                 judges.append(BundleObject(id=row["id"], data=data))
+            definitions = []
+            for row in c.execute("SELECT * FROM judge_definitions ORDER BY id"):
+                versions = [
+                    JudgeDefinitionVersion(
+                        definition_id=version["definition_id"],
+                        version=version["version"],
+                        origin="local",
+                        lifecycle="published",
+                        data=JudgeDefinitionInput.model_validate_json(version["data_json"]),
+                        semantic_hash=version["semantic_hash"],
+                    )
+                    for version in c.execute(
+                        "SELECT * FROM judge_definition_versions WHERE definition_id=? "
+                        "ORDER BY version",
+                        (row["id"],),
+                    )
+                ]
+                definitions.append(
+                    JudgeDefinitionBundle(
+                        id=row["id"],
+                        draft=(
+                            JudgeDefinitionInput.model_validate_json(row["draft_json"])
+                            if row["draft_json"]
+                            else None
+                        ),
+                        versions=versions,
+                    )
+                )
             sets = [
                 BundleObject(id=r["id"], data=_plain(r))
                 for r in c.execute("SELECT * FROM golden_sets ORDER BY id")
@@ -170,6 +218,7 @@ class ConfigurationExchangeService:
                 endpoints=endpoints,
                 model_profiles=models,
                 judge_profiles=judges,
+                judge_definitions=definitions,
                 golden_sets=sets,
                 golden_set_items=items,
             )
@@ -184,6 +233,7 @@ class ConfigurationExchangeService:
                     bundle.endpoints,
                     bundle.model_profiles,
                     bundle.judge_profiles,
+                    bundle.judge_definitions,
                     bundle.golden_sets,
                     bundle.golden_set_items,
                 )
@@ -205,14 +255,28 @@ class ConfigurationExchangeService:
                 d = dict(item.data)
                 d.pop("endpoint_id", None)
                 ModelProfileInput.model_validate(_model_wire(d))
+            bundled_model_ids = {str(item.id) for item in bundle.model_profiles}
+            connection = self._factory.connect()
+            try:
+                existing_model_ids = {
+                    str(row[0]) for row in connection.execute("SELECT id FROM model_profiles")
+                }
+            finally:
+                connection.close()
             for item in bundle.judge_profiles:
                 judge = JudgeProfileInput.model_validate(item.data)
+                if str(judge.model_profile_id) not in bundled_model_ids | existing_model_ids:
+                    raise ValueError("judge model reference is missing")
                 if self._judge_registry is not None:
                     self._judge_registry.validate_configuration(
                         judge.implementation_id,
                         judge.implementation_version,
                         judge.implementation_config,
                     )
+            for definition in bundle.judge_definitions:
+                for version in definition.versions:
+                    if version.semantic_hash != semantic_hash(version.data):
+                        raise ValueError("judge version semantic hash does not match")
             for item in bundle.golden_sets:
                 GoldenSetInput.model_validate(
                     {
@@ -257,6 +321,12 @@ class ConfigurationExchangeService:
             ]
             mapping = {str(x.id): str(uuid4()) for x in incoming if str(x.id) in existing}
             conflicts = [{"id": old, "resolution": f"remap:{new}"} for old, new in mapping.items()]
+            existing_definitions = {row[0] for row in c.execute("SELECT id FROM judge_definitions")}
+            conflicts.extend(
+                {"id": item.id, "resolution": "reject:immutable-definition-exists"}
+                for item in bundle.judge_definitions
+                if item.id in existing_definitions
+            )
             missing = [
                 str(x.id)
                 for x in bundle.endpoints
@@ -271,7 +341,7 @@ class ConfigurationExchangeService:
                 )
             return ImportPlan(
                 mode=mode,
-                creates=len(incoming),
+                creates=len(incoming) + len(bundle.judge_definitions),
                 updates=0,
                 archives=archives,
                 uuid_map=mapping,
@@ -297,6 +367,11 @@ class ConfigurationExchangeService:
                 preview=True,
             )
             return plan
+        if any(
+            conflict["resolution"] == "reject:immutable-definition-exists"
+            for conflict in plan.conflicts
+        ):
+            raise ConflictError("Judge definition already exists and is immutable.")
         c = self._factory.connect()
         now = to_utc_iso(utc_now())
         try:
@@ -428,6 +503,43 @@ class ConfigurationExchangeService:
                     json.dumps(d.get("implementation_config", {}), separators=(",", ":")),
                 ),
             )
+        for definition in b.judge_definitions:
+            latest = definition.versions[-1] if definition.versions else None
+            draft = definition.draft
+            if draft is None:
+                if latest is None:
+                    raise ValueError("judge definition has no content")
+                name = latest.data.name
+            else:
+                name = draft.name
+            lifecycle = "published" if definition.versions else "draft"
+            c.execute(
+                "INSERT INTO judge_definitions("
+                "id,name,origin,lifecycle,draft_json,created_at,updated_at) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (
+                    definition.id,
+                    name,
+                    "local",
+                    lifecycle,
+                    None if draft is None else draft.model_dump_json(),
+                    now,
+                    now,
+                ),
+            )
+            for version in definition.versions:
+                c.execute(
+                    "INSERT INTO judge_definition_versions("
+                    "definition_id,version,data_json,semantic_hash,published_at) "
+                    "VALUES (?,?,?,?,?)",
+                    (
+                        definition.id,
+                        version.version,
+                        version.data.model_dump_json(),
+                        version.semantic_hash,
+                        now,
+                    ),
+                )
         for x in b.golden_sets:
             d = x.data
             c.execute(

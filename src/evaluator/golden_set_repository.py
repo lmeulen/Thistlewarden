@@ -407,7 +407,20 @@ class SQLiteGoldenSetRepository:
                         )
 
                 now = to_utc_iso(utc_now())
-                if request.action in {"enable", "disable"}:
+                if request.action == "delete":
+                    connection.execute(
+                        f"DELETE FROM golden_set_items WHERE id IN ({placeholders})",
+                        ids,
+                    )
+                    remaining = connection.execute(
+                        "SELECT id FROM golden_set_items WHERE golden_set_id=? "
+                        "ORDER BY sort_order,case_id",
+                        (str(set_id),),
+                    ).fetchall()
+                    self._rewrite_orders(
+                        connection, [row["id"] for row in remaining], now=now, touched=set()
+                    )
+                elif request.action in {"enable", "disable"}:
                     connection.execute(
                         f"UPDATE golden_set_items SET enabled=?,updated_at=? "
                         f"WHERE id IN ({placeholders})",
