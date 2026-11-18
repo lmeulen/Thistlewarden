@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from decimal import Decimal
 from enum import IntEnum
 from pathlib import Path
@@ -52,12 +52,14 @@ class GateProtocol(Protocol):
     def results(self, run_id: UUID) -> dict[str, Any]: ...
 
 
+class ExportArtifactProtocol(Protocol):
+    path: Path
+
+    def cleanup(self) -> None: ...
+
+
 class ExportProtocol(Protocol):
-    def export_json(self, run_id: UUID) -> bytes: ...
-
-    def export_csv(self, run_id: UUID) -> bytes: ...
-
-    def export_html(self, run_id: UUID) -> bytes: ...
+    def create_export(self, run_id: UUID, format_: str) -> ExportArtifactProtocol: ...
 
 
 _GATE_NAMES = tuple(QualityGates.model_fields)
@@ -253,8 +255,12 @@ def exit_code_for_summary(
 
 
 def write_export(path: Path, content: bytes, *, overwrite: bool) -> None:
-    """Write one export atomically, refusing existing destinations by default."""
+    """Write one in-memory export atomically; retained for small non-run callers and tests."""
 
+    _write_export_chunks(path, (content,), overwrite=overwrite)
+
+
+def _write_export_chunks(path: Path, chunks: Iterable[bytes], *, overwrite: bool) -> None:
     path = path.expanduser()
     path.parent.mkdir(parents=True, exist_ok=True)
     flags = os.O_WRONLY | os.O_CREAT | (os.O_TRUNC if overwrite else os.O_EXCL)
@@ -263,7 +269,8 @@ def write_export(path: Path, content: bytes, *, overwrite: bool) -> None:
         descriptor = os.open(temporary, flags, 0o600)
         try:
             with os.fdopen(descriptor, "wb") as stream:
-                stream.write(content)
+                for chunk in chunks:
+                    stream.write(chunk)
                 stream.flush()
                 os.fsync(stream.fileno())
             if overwrite:
@@ -297,9 +304,17 @@ def perform_exports(
     for format_, path in selected:
         if path is None:
             continue
-        exporter = getattr(service, f"export_{format_}")
-        write_export(path, exporter(run_id), overwrite=overwrite)
-        written.append(str(path))
+        artifact = service.create_export(run_id, format_)
+        try:
+            with artifact.path.open("rb") as source:
+                _write_export_chunks(
+                    path,
+                    iter(lambda: source.read(64 * 1024), b""),
+                    overwrite=overwrite,
+                )
+            written.append(str(path))
+        finally:
+            artifact.cleanup()
     return written
 
 

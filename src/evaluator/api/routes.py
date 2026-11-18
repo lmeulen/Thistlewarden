@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal, cast
 from urllib.parse import quote
 from uuid import UUID
 
-from flask import Blueprint, Response, current_app, jsonify, request
+from flask import Blueprint, Response, current_app, jsonify, request, send_file
+from werkzeug.wsgi import ClosingIterator
 
 from evaluator.aggregates import AggregateService, aggregate_to_dict
 from evaluator.api.errors import ValidationApiError
@@ -31,7 +33,7 @@ from evaluator.judging.definition_service import (
 from evaluator.judging.profiles import JudgeProfileService, judge_profile_to_dict
 from evaluator.models import ModelProfileService, profile_to_dict
 from evaluator.run_comparisons import ComparisonFilter, RunComparisonService
-from evaluator.run_exports import RunExportService, safe_filename
+from evaluator.run_exports import ExportFormat, RunExportService, safe_filename
 from evaluator.runs import RunQueue
 from evaluator.settings import SettingsService
 
@@ -592,22 +594,23 @@ def export_run_comparison(run_id: UUID, baseline_id: UUID) -> Response:
 @api_v1.get("/runs/<uuid:run_id>/export")
 def export_run(run_id: UUID) -> Response:
     format_ = request.args.get("format", "json")
-    service = _run_export_service()
-    data = service.data(run_id)
-    name = safe_filename(data["run"]["name"])
-    if format_ == "json":
-        content, mimetype, suffix = service.export_json(run_id), "application/json", "json"
-    elif format_ == "csv":
-        content, mimetype, suffix = service.export_csv(run_id), "text/csv", "csv"
-    elif format_ == "html":
-        content, mimetype, suffix = service.export_html(run_id), "text/html", "html"
-    else:
-        raise ValidationApiError("Exportformaat moet json, csv of html zijn.")
-    return Response(
-        content,
-        mimetype=mimetype,
-        headers={"Content-Disposition": f'attachment; filename="{name}.{suffix}"'},
+    if format_ not in {"json", "csv", "html"}:
+        raise ValidationApiError("Export format must be json, csv, or html.")
+    artifact = _run_export_service().create_export(run_id, cast(ExportFormat, format_))
+    try:
+        response = send_file(
+            artifact.path,
+            mimetype=artifact.mimetype,
+            as_attachment=True,
+            download_name=artifact.download_name,
+        )
+    except BaseException:
+        artifact.cleanup()
+        raise
+    response.response = ClosingIterator(
+        cast(Iterable[bytes], response.response), [artifact.cleanup]
     )
+    return response
 
 
 @api_v1.delete("/runs/<uuid:run_id>")
