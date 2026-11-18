@@ -52,13 +52,18 @@ def test_readme_badges_match_user_facing_project_metadata() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     badge_row = readme.splitlines()[2]
 
-    assert badge_row.count("[![") == 5
+    assert badge_row.count("[![") == 6
     assert (
         "[![CI status]"
         "(https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml/"
         "badge.svg?branch=master)]"
         "(https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml?"
         "query=branch%3Amaster)"
+    ) in badge_row
+    assert (
+        "[![Coverage on master]"
+        "(https://codecov.io/gh/lmeulen/Thistlewarden/branch/master/graph/badge.svg)]"
+        "(https://codecov.io/gh/lmeulen/Thistlewarden/branch/master)"
     ) in badge_row
     assert "[![Python 3.12 or newer]" in badge_row
     assert "](https://img.shields.io/badge/Python-3.12%2B-3776AB)](#requirements)" in badge_row

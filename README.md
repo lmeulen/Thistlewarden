@@ -1,6 +1,6 @@
 # Thistlewarden
 
-[![CI status](https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml?query=branch%3Amaster) [![Python 3.12 or newer](https://img.shields.io/badge/Python-3.12%2B-3776AB)](#requirements) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-2C3E50)](LICENSE) [![User manual](https://img.shields.io/badge/User_manual-Read-2C3E50)](docs/manual/README.md) [![Security policy](https://img.shields.io/badge/Security-Policy-2C3E50)](SECURITY.md)
+[![CI status](https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml?query=branch%3Amaster) [![Coverage on master](https://codecov.io/gh/lmeulen/Thistlewarden/branch/master/graph/badge.svg)](https://codecov.io/gh/lmeulen/Thistlewarden/branch/master) [![Python 3.12 or newer](https://img.shields.io/badge/Python-3.12%2B-3776AB)](#requirements) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-2C3E50)](LICENSE) [![User manual](https://img.shields.io/badge/User_manual-Read-2C3E50)](docs/manual/README.md) [![Security policy](https://img.shields.io/badge/Security-Policy-2C3E50)](SECURITY.md)
 
 Thistlewarden monitors the quality and reliability of language models.
 
