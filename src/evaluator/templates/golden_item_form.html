@@ -252,16 +252,22 @@
           <textarea id="llm-context" rows="4"></textarea>
         </div>
       </div>
-      <label for="llm-preset">Predefined judge
-        <select id="llm-preset">
-          {% for preset in judge_presets %}
-          <option value="{{ preset.id }}@{{ preset.version }}">{{ preset.name }} · v{{ preset.version }} · threshold {{ preset.threshold }}</option>
+      <label for="llm-preset">Judge
+        <select id="llm-preset" {% if not judge_versions_json and not legacy_judge_presets %}disabled{% endif %}>
+          {% if not judge_versions_json and not legacy_judge_presets %}<option value="">No published judges available</option>{% endif %}
+          {% for judge in judge_versions_json %}
+          <option value="judge:{{ judge.id }}@{{ judge.version }}">{{ judge.name }} · v{{ judge.version }} · {{ 'one assessment for all metrics' if judge.mode == 'single_prompt' else 'separate assessment per metric' }} · threshold {{ judge.threshold }}</option>
           {% endfor %}
+          {% if legacy_judge_presets %}<optgroup label="Legacy judge used by this test case">
+          {% for preset in legacy_judge_presets %}
+          <option value="preset:{{ preset.id }}@{{ preset.version }}">{{ preset.name }} · v{{ preset.version }}</option>
+          {% endfor %}
+          </optgroup>{% endif %}
         </select>
       </label>
       <p id="llm-preset-description" class="help llm-preset-description"></p>
       <div id="llm-preset-details" class="content llm-preset-details"></div>
-      <p class="help llm-preset-help">Preset rubric and threshold are versioned and cannot be changed by a test case.</p>
+      <p class="help llm-preset-help">{% if not judge_versions_json and not legacy_judge_presets %}<a href="{{ url_for('gui.judge_rule_new') }}">Create and publish a judge</a> before configuring this test case.{% else %}Assessment method, metrics, weights, instructions, and threshold are fixed by selected judge version. Change them under <a href="{{ url_for('gui.judges_page') }}">Judges</a> before publishing.{% endif %}</p>
     </fieldset>
     <fieldset id="json-schema-fields" hidden>
       <legend>JSON Schema settings</legend>
@@ -380,6 +386,7 @@
   var llmPresetDescription = document.getElementById('llm-preset-description');
   var llmPresetDetails = document.getElementById('llm-preset-details');
   var judgePresets = {{ judge_presets_json|tojson }};
+  var judgeVersions = {{ judge_versions_json|tojson }};
   var showJsonSchemaForm = document.getElementById('show-json-schema-form');
   var showJsonSchemaJson = document.getElementById('show-json-schema-json');
   var jsonSchemaSchema = document.getElementById('json-schema-schema');
@@ -630,28 +637,40 @@
     showNumericForm.setAttribute('aria-pressed', String(useForm));
     showNumericJson.setAttribute('aria-pressed', String(!useForm));
   }
-  function selectedJudgePreset() {
-    var parts = llmPreset.value.split('@');
-    return judgePresets.find(function (preset) {
-      return preset.id === parts[0] && preset.version === parts[1];
+  function selectedJudge() {
+    var selection = llmPreset.value.split(':', 2);
+    var parts = (selection[1] || '').split('@');
+    var values = selection[0] === 'judge' ? judgeVersions : judgePresets;
+    var judge = values.find(function (value) {
+      return value.id === parts[0] && value.version === parts[1];
     });
+    return {kind: selection[0], value: judge};
   }
   function renderJudgePreset() {
-    var preset = selectedJudgePreset();
-    if (!preset) return;
-    llmPresetDescription.textContent = preset.description;
-    llmPresetDetails.textContent = 'Threshold: ' + preset.threshold + '\n' + preset.rubric.map(function (criterion) {
-      return criterion.id + ' (weight ' + criterion.weight + '): ' + criterion.description;
+    var selected = selectedJudge();
+    var judge = selected.value;
+    if (!judge) return;
+    llmPresetDescription.textContent = judge.description;
+    var metrics = judge.metrics || judge.rubric || [];
+    llmPresetDetails.textContent = 'Threshold: ' + judge.threshold + '\n' + metrics.map(function (metric) {
+      return metric.id + ' (weight ' + metric.weight + '): ' + metric.description;
     }).join('\n');
   }
   function llmFieldsToConfig() {
-    var preset = selectedJudgePreset();
-    config.value = JSON.stringify({
-      preset_id: preset.id,
-      preset_version: preset.version,
+    var selected = selectedJudge();
+    if (!selected.value) return;
+    var result = {
       expected_value: llmExpectedValue.value || null,
       context: llmContext.value || null
-    }, null, 2);
+    };
+    if (selected.kind === 'judge') {
+      result.judge_definition_id = selected.value.id;
+      result.judge_definition_version = selected.value.version;
+    } else {
+      result.preset_id = selected.value.id;
+      result.preset_version = selected.value.version;
+    }
+    config.value = JSON.stringify(result, null, 2);
     renderJudgePreset();
     clearConfigError();
   }
@@ -669,9 +688,17 @@
       configModeError.hidden = false;
       return false;
     }
-    var presetKey = String(value.preset_id || '') + '@' + String(value.preset_version || '');
+    if (llmPreset.disabled && !value.judge_definition_id && !value.preset_id) {
+      llmExpectedValue.value = '';
+      llmContext.value = '';
+      clearConfigError();
+      return true;
+    }
+    var isJudge = typeof value.judge_definition_id === 'string';
+    var prefix = isJudge ? 'judge:' : 'preset:';
+    var presetKey = prefix + String(isJudge ? value.judge_definition_id : value.preset_id || '') + '@' + String(isJudge ? value.judge_definition_version : value.preset_version || '');
     if (!Array.from(llmPreset.options).some(function (option) { return option.value === presetKey; })) {
-      configModeError.textContent = 'Select a known predefined judge preset.';
+      configModeError.textContent = 'Select a known published judge version or legacy preset.';
       configModeError.hidden = false;
       return false;
     }

@@ -20,7 +20,22 @@ from evaluator.ui.shared import (
 
 @gui.get("/judges")
 def judges_page() -> str:
-    return render_template("judges.html", judges=_judge_service().list_all())
+    definition_service = current_app.extensions["judge_definition_service"]
+    definitions = []
+    for record in definition_service.list_all():
+        versions = definition_service.list_versions(record.id)
+        definitions.append(
+            {
+                "record": record,
+                "content": record.draft or (versions[-1].data if versions else None),
+                "versions": versions,
+            }
+        )
+    return render_template(
+        "judges.html",
+        judge_definitions=definitions,
+        judge_profiles=_judge_service().list_all(),
+    )
 
 
 @gui.route("/judges/new", methods=["GET", "POST"])

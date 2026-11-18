@@ -14,7 +14,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory, transaction
+from evaluator.evaluators.contracts import LlmJudgeConfig
 from evaluator.gates import QualityGates
+from evaluator.judging.definitions import JudgeDefinitionInput
 from evaluator.judging.extensions import JudgeImplementationRegistry, JudgeImplementationUnavailable
 from evaluator.logging_config import log_semantic_event
 from evaluator.time import Clock, SystemClock, to_utc_iso
@@ -117,6 +119,12 @@ class RunQueue:
                 judge_snapshot = self._judge_snapshot(
                     connection, data.judge_profile_id or set_row["judge_profile_id"]
                 )
+                has_llm_judge_cases = any(row["evaluation_method"] == "llm_judge" for row in cases)
+                if has_llm_judge_cases and judge_snapshot[1] is None:
+                    raise ValidationApiError(
+                        "LLM-judge test cases require an active Judge profile. "
+                        "Select one for this run, golden set, or as global default."
+                    )
                 if judge_snapshot[1] is not None and self._judge_registry is not None:
                     try:
                         implementation_id = judge_snapshot[1]["implementation_id"]
@@ -195,6 +203,18 @@ class RunQueue:
                             "weight",
                         )
                     }
+                    if row["evaluation_method"] == "llm_judge":
+                        config = LlmJudgeConfig.model_validate(
+                            json.loads(row["evaluator_config_json"])
+                        )
+                        if config.judge_definition_id is not None:
+                            snapshot["judge_definition"] = self._judge_definition_snapshot(
+                                connection,
+                                config.judge_definition_id,
+                                config.judge_definition_version,
+                                config.expected_value,
+                                config.context,
+                            )
                     connection.execute(
                         "INSERT INTO run_case_snapshots VALUES (?,?,?,?,?,?)",
                         (
@@ -700,6 +720,35 @@ class RunQueue:
         ).fetchone()
         if row is None:
             raise LeaseLost
+
+    @staticmethod
+    def _judge_definition_snapshot(
+        connection: sqlite3.Connection,
+        definition_id: str,
+        version: str | None,
+        expected_value: str | None,
+        context: str | None,
+    ) -> dict[str, Any]:
+        if version is None:
+            raise ValidationApiError("Judge definition version is required.")
+        row = connection.execute(
+            """SELECT data_json,semantic_hash FROM judge_definition_versions
+            WHERE definition_id=? AND version=?""",
+            (definition_id, version),
+        ).fetchone()
+        if row is None:
+            raise ValidationApiError("Published judge definition version not found.")
+        data = JudgeDefinitionInput.model_validate_json(row["data_json"])
+        if data.requires_expected and expected_value is None:
+            raise ValidationApiError("Judge requires an expected answer.")
+        if data.requires_context and context is None:
+            raise ValidationApiError("Judge requires context.")
+        return {
+            "id": definition_id,
+            "version": version,
+            "semantic_hash": row["semantic_hash"],
+            "data": data.model_dump(mode="json"),
+        }
 
     @staticmethod
     def _judge_snapshot(

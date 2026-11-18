@@ -28,6 +28,10 @@ from evaluator.golden_set_repository import SQLiteGoldenSetRepository
 from evaluator.golden_set_service import GoldenSetService
 from evaluator.gui import csrf_token, gui
 from evaluator.judging.builtin import register_builtin_judge
+from evaluator.judging.definition_service import (
+    JudgeDefinitionService,
+    SQLiteJudgeDefinitionRepository,
+)
 from evaluator.judging.execution import JudgeCaller
 from evaluator.judging.extensions import JudgeImplementationRegistry, RegistryHook
 from evaluator.judging.profiles import JudgeProfileService, SQLiteJudgeProfileRepository
@@ -125,6 +129,7 @@ def create_app(
     golden_set_service: GoldenSetService | None = None
     model_discovery_service: ModelDiscoveryService | None = None
     judge_profile_service: JudgeProfileService | None = None
+    judge_definition_service: JudgeDefinitionService | None = None
     run_queue: RunQueue | None = None
     aggregate_service: AggregateService | None = None
     quality_gate_service: QualityGateService | None = None
@@ -160,6 +165,9 @@ def create_app(
         onboarding_service = OnboardingService(database_factory)
         judge_profile_service = JudgeProfileService(
             SQLiteJudgeProfileRepository(database_factory), judge_registry
+        )
+        judge_definition_service = JudgeDefinitionService(
+            SQLiteJudgeDefinitionRepository(database_factory)
         )
         run_queue = RunQueue(
             database_factory,
@@ -305,6 +313,8 @@ def create_app(
         app.extensions["model_discovery_service"] = model_discovery_service
     if judge_profile_service is not None:
         app.extensions["judge_profile_service"] = judge_profile_service
+    if judge_definition_service is not None:
+        app.extensions["judge_definition_service"] = judge_definition_service
     if run_queue is not None:
         app.extensions["run_queue"] = run_queue
     if aggregate_service is not None:

@@ -17,11 +17,11 @@ A run evaluates every enabled test case in one active golden set against one or 
 1. Enter a descriptive **Name**. Include purpose, suite version, and comparison when useful, for example `Support regression 1.2 — GPT-4.1 vs GPT-5`.
 2. Choose an active **Golden set**.
 3. Select one or more active **Model profiles**.
-4. Optionally select a **Judge override** and add a private operational **Note**.
+4. If the golden set contains LLM-judge test cases, ensure an active **Judge profile** resolves from the run override, golden-set override, or global default. Optionally select a run override and add a private operational **Note**.
 5. Review quality-gate defaults or choose to replace them for this run.
 6. Read the preflight summary and select **Start run**.
 
-Provider calls may incur costs. Starting a run creates immutable snapshots of selected cases, models, judge configuration, and quality gates. Subsequent edits to live configuration do not change that run's work or results.
+Run creation fails before any provider call when an enabled LLM-judge testcase has no active Judge profile. Provider calls may incur costs. Starting a run creates immutable snapshots of selected cases, models, judge configuration, and quality gates. Subsequent edits to live configuration do not change that run's work or results.
 
 ### Reusing a historical run configuration
 

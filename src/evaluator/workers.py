@@ -23,7 +23,11 @@ from evaluator.api.errors import (
 from evaluator.evaluators import EvaluationResult, EvaluatorRegistry
 from evaluator.gates import QualityGateService
 from evaluator.golden_set_contracts import GoldenSetItemInput, GoldenSetItemRecord
-from evaluator.judging.extensions import JudgeExtensionError
+from evaluator.judging.extensions import (
+    JudgeCancelledError,
+    JudgeExecutionError,
+    JudgeExtensionError,
+)
 from evaluator.logging_config import log_context, log_event
 from evaluator.provider import ProviderGuardrailError
 from evaluator.runs import JobLease, LeaseLost, RunQueue
@@ -168,6 +172,24 @@ class WorkerPipeline:
                     score=result.score,
                     outcome="passed" if result.passed else "failed",
                 )
+        except JudgeCancelledError as exc:
+            log_event(_LOG, logging.WARNING, "job_interrupted", job_id=lease.job_id)
+            try:
+                self._queue.fail(
+                    lease,
+                    "judge_cancelled",
+                    {
+                        "outcome_category": "cancelled",
+                        "outcome_stage": "judge",
+                        "outcome_code": "judge_cancelled",
+                        "provider_calls": list(exc.provider_calls),
+                        "incomplete": True,
+                    },
+                    metrics={"judge_cost": str(exc.judge_cost)},
+                )
+            except LeaseLost:
+                log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
+            return True
         except CancelledError:
             log_event(_LOG, logging.WARNING, "job_interrupted", job_id=lease.job_id)
             return True
@@ -239,6 +261,10 @@ class WorkerPipeline:
                 evaluator_method=case["evaluation_method"],
             )
             try:
+                provider_calls = (
+                    list(exc.provider_calls) if isinstance(exc, JudgeExecutionError) else []
+                )
+                judge_cost = str(exc.judge_cost) if isinstance(exc, JudgeExecutionError) else None
                 self._queue.fail(
                     lease,
                     "judge_extension_error",
@@ -247,7 +273,10 @@ class WorkerPipeline:
                         "outcome_category": "processing_error",
                         "outcome_stage": "judge",
                         "outcome_code": "judge_extension_error",
+                        "provider_calls": provider_calls,
+                        "incomplete": True,
                     },
+                    metrics={"judge_cost": judge_cost},
                 )
             except LeaseLost:
                 log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)

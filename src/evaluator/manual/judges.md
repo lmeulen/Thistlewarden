@@ -1,15 +1,26 @@
 <a id="page-top"></a>
 
-# Judge profiles
+# Judges
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
+
+### Evaluation rules: metrics, instructions, and assessment method
+
+Open **Judges** and use **Evaluation rules** to create versioned rules separately from judge-model settings. A test case selects one published Judge version. That version contains enabled metrics, weights, instructions, pass threshold, and assessment method.
+
+Choose one assessment method before publishing:
+
+- **One assessment for all metrics** sends one judge call containing all enabled metrics. It shows one free **Prompt** field followed by read-only **Fixed output requirements**. Thistlewarden appends those requirements to your prompt to form the single provider prompt.
+- **Separate assessment per metric** makes one sequential judge call for each enabled metric. It shows separate instructions for every enabled metric. Thistlewarden combines resulting metric scores using configured weights.
+
+Thistlewarden always owns and adds fixed prompt parts: safety boundaries, quoted testcase data, code-owned metric definitions, and strict JSON response contract. Your instructions are evaluation data inside that wrapper; they cannot change metric IDs, score ranges, aggregation, provider settings, or output schema. Publish the next Judge version for any semantic change; the editor proposes the next minor version and shows published history. Existing versions and run snapshots remain unchanged.
 
 ### Creating an LLM judge profile
 
 **Advanced feature:** finish one deterministic evaluation first. LLM judge makes extra provider call and can add cost, latency, and model variation.
 
-Open **Judge profiles** and select **Add judge profile**. A judge execution profile defines only model and provider-call settings used by test cases with **LLM judge** method. Test cases separately select an immutable, explicitly versioned preset that owns rubric and threshold.
+On **Judges**, use **Judge profiles** and select **Add judge profile**. A judge execution profile defines only model and provider-call settings used by test cases with **LLM judge** method. Test cases separately select an immutable, explicitly versioned user-created Judge that owns metrics, weights, instructions, assessment method, and threshold.
 
 Complete these fields:
 
@@ -30,7 +41,7 @@ Judge model is selected from existing model profiles. It is a second model role:
 
 Before selecting model, confirm profile and its endpoint are active, provider credentials work, model name is available, and expected judge cost is acceptable. Judge calls inherit selected model profile connection and request configuration. Judge profile can override temperature or reasoning effort, plus optional output-token limit, for judge call. Temperature and reasoning effort are mutually exclusive. Reasoning override requires selected model profile to define provider-specific reasoning field path such as `reasoning_effort` or `reasoning.effort`.
 
-Choose model with reliable instruction following and structured JSON output. Start with low temperature, modest output limit, and small pilot run. Judge must produce strict response contract; malformed output causes evaluation error rather than inferred score. Provider rate limits, outages, or authentication errors can therefore affect LLM-judge results even if target model succeeded.
+Choose model with reliable instruction following and structured JSON output. Start with low temperature, modest output limit, and small pilot run. Judge must produce strict response contract; malformed output causes evaluation error rather than inferred score. Provider rate limits, outages, or authentication errors can therefore affect LLM-judge results even if target model succeeded. If a separate per-metric assessment fails after earlier calls completed, the testcase remains an incomplete error with no partial score or pass decision. Safe usage, request IDs, finish reasons, and known cost from completed Judge calls remain available for audit.
 
 Avoid changing a commonly used judge profile without a tracked change decision. Create versioned replacement, run comparison, then make replacement active/default after review.
 
@@ -38,17 +49,17 @@ Avoid changing a commonly used judge profile without a tracked change decision. 
 
 ### Prompt contract
 
-Application uses fixed built-in judge request contract. It sends original prompt, preset-required expected value when present, resolved preset rubric, optional item context, and candidate answer as quoted untrusted evaluation data. It instructs judge model to return one JSON object only, with score, passed flag, reason, and exactly one result for each rubric criterion.
+Application wraps user-authored Judge instructions in a fixed request contract. It sends original prompt, optional expected value, Judge metrics, optional item context, and candidate answer as quoted untrusted evaluation data. It instructs judge model to return one JSON object only, with score, passed flag, reason, and exactly one result for each enabled metric.
 
-Judge execution profiles cannot supply or override prompt templates. Semantic prompt-contract changes require an application release and, where evaluation meaning changes, a new preset version.
+Judge-model settings cannot supply or override prompts. Change evaluation instructions under **Judges** → **Evaluation rules** and publish a new Judge version. Core-owned safety boundaries and output contract cannot be overridden.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
 ### Rubrics and scoring thresholds
 
-Each registered preset defines ordered observable criteria, criterion weights, and an inclusive threshold. Judge returns criterion score from `0` to `1` and reason for every preset criterion. Thistlewarden calculates overall score as weighted mean of criterion scores, then compares calculated score with preset threshold. Judge-provided overall score and pass flag are retained for diagnostics but do not override calculated result.
+Each published Judge version defines ordered metrics, metric weights, and an inclusive threshold. Judge returns a score from `0` to `1` and reason for every enabled metric. Thistlewarden calculates overall score as weighted mean of metric scores, then compares calculated score with Judge threshold. Judge-provided overall score and pass flag are retained for diagnostics but do not override calculated result.
 
-Test cases and judge profiles cannot extend, replace, or override preset rubric or threshold. Calibrate each preset using known good, borderline, and unacceptable candidate answers before using it for release gates. Semantic changes require a new immutable preset version. See [section 9.6](evaluators.md#llm-judge) for available presets and required inputs.
+Thistlewarden ships no selectable default Judges. Create a Judge, calibrate it using known good, borderline, and unacceptable candidate answers, then publish it. Semantic changes require a new immutable Judge version. Historical test cases using former built-in presets remain readable and retain their original semantics.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 

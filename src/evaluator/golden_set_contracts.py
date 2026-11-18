@@ -84,7 +84,10 @@ class GoldenSetItemInput(BaseModel):
     def validate_method_requirements(self) -> GoldenSetItemInput:
         config = validate_evaluator_config(self.evaluation_method, self.evaluator_config)
         normalized_config = config.model_dump(
-            mode="json", by_alias=True, exclude={"evaluation_method"}
+            mode="json",
+            by_alias=True,
+            exclude={"evaluation_method"},
+            exclude_none=self.evaluation_method == "llm_judge",
         )
         if (
             self.evaluation_method == "json_schema"
@@ -163,6 +166,7 @@ class GoldenItemBulkRequest(BaseModel):
         "move",
         "duplicate",
         "reorder",
+        "delete",
     ]
     category: str | None = Field(default=None, max_length=200)
     tags: list[str] = Field(default_factory=list, max_length=100)

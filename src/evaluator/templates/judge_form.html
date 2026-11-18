@@ -25,6 +25,7 @@
   <label class="wide">Implementation configuration (JSON object)
     <textarea name="implementation_config" rows="5">{{ d.implementation_config|tojson if d else '{}' }}</textarea>
   </label>
+  <p class="help wide">The built-in OpenAI-compatible implementation has no implementation settings, so <code>{}</code> is expected. Test cases select immutable evaluation presets with rubric and threshold.</p>
   <fieldset class="wide">
     <legend>Inference override</legend>
     <p>Set either temperature or reasoning effort. Leave both empty to use model profile settings. Reasoning effort uses model profile’s configured reasoning field path.</p>

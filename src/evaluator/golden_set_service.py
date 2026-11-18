@@ -346,6 +346,7 @@ class GoldenSetService:
             "move": ("Move", ("golden set", "order")),
             "duplicate": ("Duplicate", ("golden set", "ID", "order")),
             "reorder": ("Change order", ("order",)),
+            "delete": ("Delete", ("test cases",)),
         }
         label, fields = labels[request.action]
         destination = (
@@ -382,7 +383,9 @@ class GoldenSetService:
             ) from exc
         log_semantic_event(
             _LOG,
-            "golden_items_bulk_updated",
+            "golden_items_bulk_deleted"
+            if request.action == "delete"
+            else "golden_items_bulk_updated",
             object_id=set_id,
             action=request.action,
             count=count,

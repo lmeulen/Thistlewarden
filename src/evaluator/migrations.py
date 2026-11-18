@@ -419,6 +419,60 @@ def _migration_16(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_18(connection: sqlite3.Connection) -> None:
+    """Store local judge drafts and their immutable published versions."""
+
+    connection.execute(
+        """CREATE TABLE judge_definitions (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK(length(name)>0),
+            origin TEXT NOT NULL CHECK(origin IN ('local')),
+            lifecycle TEXT NOT NULL CHECK(lifecycle IN ('draft','published','archived')),
+            draft_json TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"""
+    )
+    connection.execute(
+        """CREATE TABLE judge_definition_versions (
+            definition_id TEXT NOT NULL REFERENCES judge_definitions(id) ON DELETE RESTRICT,
+            version TEXT NOT NULL,
+            data_json TEXT NOT NULL,
+            semantic_hash TEXT NOT NULL CHECK(length(semantic_hash)=64),
+            published_at TEXT NOT NULL,
+            PRIMARY KEY(definition_id,version),
+            UNIQUE(definition_id,semantic_hash)
+        )"""
+    )
+
+
+def _migration_19(connection: sqlite3.Connection) -> None:
+    """Backfill judge-definition tables for schemas with historical migration 18."""
+
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS judge_definitions (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK(length(name)>0),
+            origin TEXT NOT NULL CHECK(origin IN ('local')),
+            lifecycle TEXT NOT NULL CHECK(lifecycle IN ('draft','published','archived')),
+            draft_json TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )"""
+    )
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS judge_definition_versions (
+            definition_id TEXT NOT NULL REFERENCES judge_definitions(id) ON DELETE RESTRICT,
+            version TEXT NOT NULL,
+            data_json TEXT NOT NULL,
+            semantic_hash TEXT NOT NULL CHECK(length(semantic_hash)=64),
+            published_at TEXT NOT NULL,
+            PRIMARY KEY(definition_id,version),
+            UNIQUE(definition_id,semantic_hash)
+        )"""
+    )
+
+
 def _migration_17(connection: sqlite3.Connection) -> None:
     """Persist onboarding choices and successful readiness actions."""
 
@@ -459,6 +513,8 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(15, "add_versioned_judge_implementations", _migration_15),
     Migration(16, "add_endpoint_api_format", _migration_16),
     Migration(17, "add_pilot_onboarding", _migration_17),
+    Migration(18, "add_versioned_judge_definitions", _migration_18),
+    Migration(19, "backfill_versioned_judge_definitions", _migration_19),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

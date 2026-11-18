@@ -41,6 +41,8 @@ from evaluator.evaluation_preview import EvaluationPreviewService
 from evaluator.evaluators.contracts import evaluator_config_examples
 from evaluator.gates import QualityGateService
 from evaluator.golden_set_service import GoldenSetService
+from evaluator.judging.definition_service import JudgeDefinitionService
+from evaluator.judging.definitions import METRIC_CATALOG, metric_definition
 from evaluator.judging.presets import JUDGE_PRESETS
 from evaluator.judging.profiles import JudgeProfileService
 from evaluator.logging_config import log_event
@@ -64,6 +66,7 @@ __all__ = [
     "Decimal",
     "ImportPlan",
     "JUDGE_PRESETS",
+    "METRIC_CATALOG",
     "Literal",
     "OnboardingService",
     "RESULT_PAGE_SIZE",
@@ -94,6 +97,8 @@ __all__ = [
     "_golden_set_payload",
     "_item_payload",
     "_json_field",
+    "_judge_definition_service",
+    "_judge_versions_for_editor",
     "_judge_payload",
     "_judge_service",
     "_model_payload",
@@ -108,6 +113,7 @@ __all__ = [
     "_run_queue",
     "_run_views",
     "abort",
+    "current_app",
     "cast",
     "current_app",
     "evaluator_config_examples",
@@ -232,6 +238,33 @@ def _page_details(page: int, per_page: int, total: int) -> dict[str, int]:
 
 def _evaluation_preview_service() -> EvaluationPreviewService:
     return cast(EvaluationPreviewService, current_app.extensions["evaluation_preview_service"])
+
+
+def _judge_definition_service() -> JudgeDefinitionService:
+    return cast(JudgeDefinitionService, current_app.extensions["judge_definition_service"])
+
+
+def _judge_versions_for_editor() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": item.definition_id,
+            "version": item.version,
+            "name": item.data.name,
+            "description": item.data.description,
+            "threshold": item.data.threshold,
+            "mode": item.data.mode,
+            "metrics": [
+                {
+                    "id": metric.metric_id,
+                    "weight": metric.weight,
+                    "description": metric_definition(metric.metric_id).description,
+                }
+                for metric in item.data.metrics
+                if metric.enabled and metric.weight > 0
+            ],
+        }
+        for item in _judge_definition_service().list_published_versions()
+    ]
 
 
 def _judge_service() -> JudgeProfileService:

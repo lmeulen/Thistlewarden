@@ -3,26 +3,64 @@
 {% block content %}
 <div class="heading">
   <div>
-    <h1>Judge execution profiles</h1>
-    <p>Judge models and provider-call settings. Test cases select versioned evaluation presets.</p>
+    <h1>Judges</h1>
+    <p>Configure evaluation rules and the model profiles that execute them.</p>
   </div>
-  <a class="button" href="{{ url_for('gui.judge_new') }}">Add judge profile</a>
 </div>
-{% for judge in judges %}
-<section class="panel">
+
+<section aria-labelledby="judge-definitions-heading">
   <div class="heading">
-    <h2><a href="{{ url_for('gui.judge_edit', profile_id=judge.id) }}">{{ judge.data.name }}</a></h2>
-    <form method="post" action="{{ url_for('gui.judge_delete', profile_id=judge.id) }}" class="delete-judge-form" data-judge-name="{{ judge.data.name }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="confirm" value="on">
-      <button class="danger compact">Delete</button>
-    </form>
+    <div>
+      <h2 id="judge-definitions-heading">Evaluation rules</h2>
+      <p>Versioned assessment instructions, metrics, weights, and pass thresholds selected by test cases.</p>
+    </div>
+    <a class="button" href="{{ url_for('gui.judge_rule_new') }}">New judge</a>
   </div>
-  <p>{% if judge.data.reasoning_value %}Reasoning {{ judge.data.reasoning_value }}{% elif judge.data.temperature is not none %}Temperature {{ judge.data.temperature }}{% else %}Model inference defaults{% endif %} · {{ judge.data.max_output_tokens or 'Model default' }} max. output tokens · {{ 'Global default' if judge.data.is_global_default else 'Not default' }} · {{ 'Active' if judge.data.active else 'Inactive' }}</p>
+  {% for judge in judge_definitions %}
+  <section class="panel">
+    <div class="heading">
+      <h3><a href="{{ url_for('gui.judge_rule_edit', definition_id=judge.record.id) }}">{{ judge.record.name }}</a></h3>
+      <span class="status">{{ judge.record.lifecycle|capitalize }}</span>
+    </div>
+    {% if judge.content %}<p>{{ 'One assessment for all metrics' if judge.content.mode == 'single_prompt' else 'Separate assessment per metric' }} · {{ judge.content.metrics|selectattr('enabled')|list|length }} selected metrics · pass threshold {{ judge.content.threshold }} · {{ judge.versions|length }} published version{{ '' if judge.versions|length == 1 else 's' }}</p>{% endif %}
+  </section>
+  {% else %}
+  <section class="empty">
+    <h3>No judges yet</h3>
+    <p>Create a judge, review its instructions, metrics, and weights, then publish it for use in test cases.</p>
+    <a class="button" href="{{ url_for('gui.judge_rule_new') }}">Create first judge</a>
+  </section>
+  {% endfor %}
 </section>
-{% else %}
-<p class="empty">No judge execution profiles yet.</p>
-{% endfor %}
+
+<section aria-labelledby="judge-profiles-heading">
+  <div class="heading">
+    <div>
+      <h2 id="judge-profiles-heading">Judge profiles</h2>
+      <p>Models and provider-call settings used to execute LLM-judge test cases.</p>
+    </div>
+    <a class="button" href="{{ url_for('gui.judge_new') }}">Add judge profile</a>
+  </div>
+  {% for profile in judge_profiles %}
+  <section class="panel">
+    <div class="heading">
+      <h3><a href="{{ url_for('gui.judge_edit', profile_id=profile.id) }}">{{ profile.data.name }}</a></h3>
+      <form method="post" action="{{ url_for('gui.judge_delete', profile_id=profile.id) }}" class="delete-judge-form" data-judge-name="{{ profile.data.name }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="confirm" value="on">
+        <button class="danger compact">Delete</button>
+      </form>
+    </div>
+    <p>{% if profile.data.reasoning_value %}Reasoning {{ profile.data.reasoning_value }}{% elif profile.data.temperature is not none %}Temperature {{ profile.data.temperature }}{% else %}Model inference defaults{% endif %} · {{ profile.data.max_output_tokens or 'Model default' }} max. output tokens · {{ 'Global default' if profile.data.is_global_default else 'Not default' }} · {{ 'Active' if profile.data.active else 'Inactive' }}</p>
+  </section>
+  {% else %}
+  <section class="empty">
+    <h3>No judge profiles yet</h3>
+    <p>Add a profile to choose which model and inference settings execute published Judges.</p>
+    <a class="button" href="{{ url_for('gui.judge_new') }}">Add first judge profile</a>
+  </section>
+  {% endfor %}
+</section>
 <script nonce="{{ csp_nonce() }}">
 document.querySelectorAll('.delete-judge-form').forEach(function (form) {
   form.addEventListener('submit', function (event) {

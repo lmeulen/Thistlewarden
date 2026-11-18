@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Judge · Thistlewarden{% endblock %}
+{% block content %}
+<div class="heading judge-rule-heading">
+  <div>
+    <p class="eyebrow">Evaluation rules</p>
+    <h1>{{ judge.name if judge else 'New judge' }}</h1>
+    <p>Configure how answers are assessed. Judge-model settings remain separate.</p>
+  </div>
+  <a class="button secondary" href="{{ url_for('gui.judges_page') }}">Back to judges</a>
+</div>
+<form method="post" id="judge-rule-form" class="judge-rule-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <section class="panel judge-rule-step" aria-labelledby="judge-basics-heading">
+    <div class="step-heading"><span aria-hidden="true">1</span><div><h2 id="judge-basics-heading">Name your judge</h2><p>Use a name that makes this evaluation easy to recognize in test cases.</p></div></div>
+    <div class="judge-basics-grid">
+      <label>Name<input name="name" value="{{ judge.draft.name if judge and judge.draft else '' }}" required></label>
+      <label>Description<textarea name="description" rows="3">{{ judge.draft.description if judge and judge.draft and judge.draft.description else '' }}</textarea></label>
+    </div>
+  </section>
+
+  <section class="panel judge-rule-step" aria-labelledby="judge-method-heading">
+    <div class="step-heading"><span aria-hidden="true">2</span><div><h2 id="judge-method-heading">Choose assessment method</h2><p id="mode-help">Choose one call for all metrics, or a separate call for each metric.</p></div></div>
+    <div class="judge-mode-options" role="radiogroup" aria-describedby="mode-help">
+      <label class="judge-mode-option">
+        <input type="radio" name="mode" value="single_prompt" {% if not judge or judge.draft.mode == 'single_prompt' %}checked{% endif %}>
+        <span><strong>One assessment for all metrics</strong><small>One prompt and one judge call. Best when metrics should be considered together.</small></span>
+      </label>
+      <label class="judge-mode-option">
+        <input type="radio" name="mode" value="per_metric" {% if judge and judge.draft.mode == 'per_metric' %}checked{% endif %}>
+        <span><strong>Separate assessment per metric</strong><small>One sequential judge call per metric. Supports focused instructions for each metric.</small></span>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel judge-rule-step" aria-labelledby="judge-prompt-heading">
+    <div class="step-heading"><span aria-hidden="true">3</span><div><h2 id="judge-prompt-heading">Write assessment instructions</h2><p>Your text guides assessment. Thistlewarden keeps output structure and scoring reliable.</p></div></div>
+    <div id="single-prompt-editor" {% if judge and judge.draft.mode == 'per_metric' %}hidden{% endif %}>
+      <div class="judge-prompt-grid">
+        <label>Your prompt<textarea name="general_instructions" rows="13" aria-describedby="single-prompt-help" placeholder="Describe how the judge should assess the answer across the selected metrics…">{{ judge.draft.general_instructions if judge and judge.draft and judge.draft.general_instructions else default_single_prompt }}</textarea><small id="single-prompt-help">Free text sent first in the single judge prompt.</small></label>
+        <label class="fixed-output-label">Fixed output requirements <span class="badge">Read-only</span><textarea id="fixed-output-requirements" rows="13" readonly aria-describedby="fixed-output-help"></textarea><small id="fixed-output-help">Appended automatically. Includes selected metrics, quoted testcase data, and safety boundaries.</small></label>
+      </div>
+    </div>
+    <div id="per-metric-intro" {% if not judge or judge.draft.mode == 'single_prompt' %}hidden{% endif %} class="judge-mode-notice">
+      Add focused instructions inside each enabled metric below.
+    </div>
+  </section>
+
+  <section class="panel judge-rule-step" aria-labelledby="judge-metrics-heading">
+    <div class="step-heading"><span aria-hidden="true">4</span><div><h2 id="judge-metrics-heading">Select metrics and weights</h2><p>Weights determine each metric's contribution to final score.</p></div></div>
+    <div class="judge-threshold-row">
+      <label>Pass threshold<input name="threshold" type="number" min="0" max="1" step="0.01" value="{{ judge.draft.threshold if judge and judge.draft else '0.7' }}" required><small>Score from 0 to 1. Threshold is inclusive.</small></label>
+    </div>
+    <div class="judge-metric-grid">
+      {% for metric in metrics %}
+      {% set saved = judge.draft.metrics|selectattr('metric_id','equalto',metric.id)|list|first if judge and judge.draft else none %}
+      <fieldset class="judge-metric-card">
+        <legend class="sr-only">{{ metric.name }}</legend>
+        <div class="judge-metric-heading">
+          <label class="check"><input type="checkbox" name="metrics" value="{{ metric.id }}" {% if (saved and saved.enabled) or (not judge and metric.id in default_metric_weights) %}checked{% endif %}> <strong>{{ metric.name }}</strong></label>
+          <label class="judge-weight">Weight<input name="weight_{{ metric.id }}" type="number" min="0" step="0.1" value="{{ saved.weight if saved else default_metric_weights.get(metric.id, Decimal('1')) }}"></label>
+        </div>
+        <p>{{ metric.description }}</p>
+        <div class="metric-instructions" {% if not judge or judge.draft.mode == 'single_prompt' %}hidden{% endif %}>
+          <label>Instructions<textarea name="instructions_{{ metric.id }}" rows="4" placeholder="How should this metric be assessed?">{{ saved.instructions if saved and saved.instructions else (metric.description if not judge and metric.id in default_metric_weights else '') }}</textarea></label>
+        </div>
+      </fieldset>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="judge-form-actions">
+    <a href="{{ url_for('gui.judges_page') }}">Cancel</a>
+    <button>Save draft</button>
+  </div>
+</form>
+{% if judge %}
+<section class="panel judge-publish-panel">
+  <div>
+    <h2>{{ 'Publish this judge' if not versions else 'Publish updated rules' }}</h2>
+    <p>Publishing freezes the current draft as version {{ next_version }}. Earlier versions and run snapshots remain unchanged.</p>
+    {% if versions %}<p>Published versions: {% for version in versions %}<span class="badge">{{ version.version }}</span>{% endfor %}</p>{% endif %}
+  </div>
+  <form method="post" action="{{ url_for('gui.judge_rule_publish', definition_id=judge.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="version" value="{{ next_version }}">
+    <button>Publish version {{ next_version }}</button>
+  </form>
+</section>
+{% endif %}
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var modes = document.querySelectorAll('input[name="mode"]');
+  var singlePrompt = document.getElementById('single-prompt-editor');
+  var perMetricIntro = document.getElementById('per-metric-intro');
+  var fixedOutput = document.getElementById('fixed-output-requirements');
+  var metricInstructions = document.querySelectorAll('.metric-instructions');
+  var metricCheckboxes = document.querySelectorAll('input[name="metrics"]');
+  function selectedMode() { return document.querySelector('input[name="mode"]:checked').value; }
+  function updateFixedOutput() {
+    var metricIds = Array.from(metricCheckboxes).filter(function (element) { return element.checked; }).map(function (element) { return element.value; });
+    fixedOutput.value = 'Return one JSON object only (no Markdown or extra fields):\n' + JSON.stringify({score: '0..1', passed: 'boolean', reason: 'non-empty string', criteria: metricIds.map(function (id) { return {id: id, score: '0..1', reason: 'non-empty string'}; })}, null, 2);
+  }
+  function updateInstructions() {
+    var perMetric = selectedMode() === 'per_metric';
+    singlePrompt.hidden = perMetric;
+    perMetricIntro.hidden = !perMetric;
+    singlePrompt.querySelector('textarea[name="general_instructions"]').disabled = perMetric;
+    metricInstructions.forEach(function (element) {
+      element.hidden = !perMetric;
+      element.querySelector('textarea').disabled = !perMetric;
+    });
+  }
+  modes.forEach(function (element) { element.addEventListener('change', updateInstructions); });
+  metricCheckboxes.forEach(function (element) { element.addEventListener('change', updateFixedOutput); });
+  updateInstructions();
+  updateFixedOutput();
+})();
+</script>
+{% endblock %}

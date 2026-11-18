@@ -21,11 +21,13 @@ from evaluator.ui.shared import (
     _item_payload,
     _json_field,
     _judge_service,
+    _judge_versions_for_editor,
     _onboarding_service,
     _page_details,
     _requested_page,
     abort,
     cast,
+    current_app,
     evaluator_config_examples,
     flash,
     gui,
@@ -195,14 +197,41 @@ def quality_gates_update(set_id: UUID) -> Response:
     return redirect(url_for("gui.golden_set_edit", set_id=set_id))
 
 
+def _legacy_presets_for_item(item: Any) -> list[Any]:
+    if item is None or item.data.evaluation_method != "llm_judge":
+        return []
+    config = item.data.evaluator_config
+    preset_id = config.get("preset_id")
+    preset_version = config.get("preset_version")
+    return [
+        preset
+        for preset in JUDGE_PRESETS
+        if preset.id == preset_id and preset.version == preset_version
+    ]
+
+
 def _render_golden_item_form(*, item: Any, golden_set: Any) -> str:
+    legacy_presets = _legacy_presets_for_item(item)
+    judge_versions = _judge_versions_for_editor()
+    evaluator_examples = evaluator_config_examples()
+    evaluator_examples["llm_judge"] = (
+        {
+            "judge_definition_id": judge_versions[0]["id"],
+            "judge_definition_version": judge_versions[0]["version"],
+            "expected_value": None,
+            "context": None,
+        }
+        if judge_versions
+        else {}
+    )
     return render_template(
         "golden_item_form.html",
         item=item,
         golden_set=golden_set,
-        evaluator_examples=evaluator_config_examples(),
-        judge_presets=JUDGE_PRESETS,
-        judge_presets_json=[preset.model_dump(mode="json") for preset in JUDGE_PRESETS],
+        evaluator_examples=evaluator_examples,
+        legacy_judge_presets=legacy_presets,
+        judge_presets_json=[preset.model_dump(mode="json") for preset in legacy_presets],
+        judge_versions_json=judge_versions,
     )
 
 
@@ -215,6 +244,9 @@ def golden_item_new(set_id: UUID) -> str | Response:
             return redirect(url_for("gui.golden_item_edit", item_id=item.id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
+        except Exception:
+            current_app.logger.exception("golden-item creation failed")
+            flash("Test case could not be created. Check its fields and try again.", "error")
     return _render_golden_item_form(item=None, golden_set=_golden_service().get_set(set_id))
 
 
@@ -254,6 +286,9 @@ def golden_item_edit(item_id: UUID) -> str | Response:
             return redirect(url_for("gui.golden_item_edit", item_id=item_id))
         except (ApiError, ValueError, json.JSONDecodeError) as exc:
             flash(_error_message(exc), "error")
+        except Exception:
+            current_app.logger.exception("golden-item update failed")
+            flash("Test case could not be saved. Check its fields and try again.", "error")
     return _render_golden_item_form(
         item=item, golden_set=_golden_service().get_set(item.golden_set_id)
     )

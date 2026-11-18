@@ -13,7 +13,7 @@ from uuid import UUID
 import pytest
 
 from evaluator import create_app
-from evaluator.api.errors import ApiError
+from evaluator.api.errors import ApiError, ValidationApiError
 
 pytestmark = pytest.mark.integration
 
@@ -147,12 +147,18 @@ def test_step27_empty_pages_render_and_navigation(app) -> None:
     client = app.test_client()
     for path, text in (
         ("/golden-sets", "Golden sets"),
-        ("/judges", "Judge execution profiles"),
+        ("/judges", "Judge profiles"),
         ("/backup", "Backup and restore"),
     ):
         response = client.get(path)
         assert response.status_code == 200
         assert text in response.get_data(as_text=True)
+    legacy_judges = client.get("/judge-rules")
+    assert legacy_judges.status_code == 302
+    assert legacy_judges.headers["Location"].endswith("/judges")
+    combined = client.get("/judges").get_data(as_text=True)
+    assert "Evaluation rules" in combined
+    assert "Judge profiles" in combined
     configuration = client.get("/configuration")
     assert configuration.status_code == 308
     assert configuration.headers["Location"].endswith("/backup")
@@ -247,12 +253,17 @@ def test_item_form_shows_examples_and_preserves_saved_config(app) -> None:
     assert 'id="show-llm-json"' in page
     assert 'id="llm-expected-value"' in page
     assert 'id="llm-context"' in page
-    assert 'id="llm-preset"' in page
-    assert "General response quality" in page
-    assert "Grounded answer / RAG faithfulness" in page
+    assert 'id="llm-preset" disabled' in page
+    assert "No published judges available" in page
+    assert "General response quality" not in page
+    assert "Grounded answer / RAG faithfulness" not in page
+    assert "Create and publish a judge" in page
+    assert '"llm_judge": {}' in page
+    assert "if (llmPreset.disabled && !value.judge_definition_id && !value.preset_id)" in page
     assert 'class="help llm-preset-description"' in page
     assert 'class="content llm-preset-details"' in page
     assert 'class="help llm-preset-help"' in page
+    assert 'href="/judge-rules/new"' in page
     assert 'class="llm-rubric-weight"' not in page
     assert 'id="llm-threshold"' not in page
     assert page.count('class="info-button"') == 28
@@ -449,6 +460,32 @@ def test_gui_saves_every_evaluator_method(
     assert "Test case created" in response.get_data(as_text=True)
 
 
+def test_existing_legacy_testcase_shows_only_its_historical_judge(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    token = _csrf(client, f"/golden-sets/{set_id}/items/new")
+    response = client.post(
+        f"/golden-sets/{set_id}/items/new",
+        data={
+            "csrf_token": token,
+            "case_id": "legacy-judge",
+            "prompt": "Answer.",
+            "evaluation_method": "llm_judge",
+            "evaluator_config": json.dumps(
+                {"preset_id": "general-quality", "preset_version": "1.0"}
+            ),
+            "weight": "1",
+            "enabled": "on",
+        },
+        follow_redirects=True,
+    )
+    page = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Legacy judge used by this test case" in page
+    assert "General response quality · v1.0" in page
+    assert "Grounded answer / RAG faithfulness" not in page
+
+
 def test_golden_set_delete_requires_name_and_removes_items(app) -> None:
     client = app.test_client()
     set_id = _create_set(client)
@@ -537,7 +574,7 @@ def test_duplicate_set_and_quick_delete_item(app) -> None:
     page = client.get(f"/golden-sets/{set_id}").get_data(as_text=True)
     assert "inline-delete-form" in page and ">Delete</button>" in page
     assert page.count('name="item_ids"') == 2
-    assert "Delete selection" in page
+    assert '<option value="delete">Delete selected test cases</option>' in page
     token = _csrf(client, f"/golden-sets/{set_id}")
     deleted = client.post(
         f"/golden-sets/{set_id}/items/delete",
@@ -686,7 +723,12 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
         },
         follow_redirects=True,
     )
-    assert judge.status_code == 200 and "Judge profile created" in judge.get_data(as_text=True)
+    assert judge.status_code == 200
+    judge_text = judge.get_data(as_text=True)
+    assert "Judge profile created" in judge_text
+    assert 'name="implementation_config" rows="5">{}</textarea>' in judge_text
+    assert "has no implementation settings" in judge_text
+    assert "Test cases select immutable evaluation presets with rubric and threshold." in judge_text
     connection = app.extensions["database_factory"].connect()
     try:
         stored_semantics = connection.execute(
@@ -701,7 +743,8 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
     assert profile["temperature"] is None
     assert profile["reasoning_value"] == "high"
     form = client.get("/judges").get_data(as_text=True)
-    assert "Judge execution profiles" in form
+    assert "Judge profiles" in form
+    assert "Evaluation rules" in form
     assert "Rubrics, thresholds, and prompt templates" not in form
 
     exported = client.get("/backup/download")
@@ -772,6 +815,43 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
     )
     assert privacy_browser_preview.status_code == 200
     assert "Restore preview" in privacy_browser_preview.get_data(as_text=True)
+
+
+def test_configuration_bundle_can_reference_previously_imported_model(app) -> None:
+    client = app.test_client()
+    endpoint = client.post(
+        "/api/v1/endpoints",
+        json={"name": "Provider", "completions_url": "https://example.test/v1/chat/completions"},
+    ).get_json()["endpoint"]
+    model = client.post(
+        f"/api/v1/endpoints/{endpoint['id']}/models",
+        json={"model_id": "judge-model", "display_name": "Judge model"},
+    ).get_json()["model"]
+    service = app.extensions["configuration_exchange_service"]
+    bundle = {
+        "schema_version": "1.0",
+        "endpoints": [],
+        "model_profiles": [],
+        "judge_profiles": [
+            {
+                "id": "a3000000-0000-4000-8000-000000000001",
+                "data": {
+                    "name": "Imported default",
+                    "model_profile_id": model["id"],
+                    "is_global_default": True,
+                },
+            }
+        ],
+        "golden_sets": [],
+        "golden_set_items": [],
+    }
+    assert service.import_bundle(bundle, "merge", preview=True).creates == 1
+    service.import_bundle(bundle, "merge", preview=False)
+
+    bundle["judge_profiles"][0]["id"] = "a3000000-0000-4000-8000-000000000002"
+    bundle["judge_profiles"][0]["data"]["model_profile_id"] = "a2000000-0000-4000-8000-000000000099"
+    with pytest.raises(ValidationApiError, match="Configuration file is invalid"):
+        service.import_bundle(bundle, "merge", preview=True)
 
 
 def test_configuration_preview_can_be_committed_without_reselecting_file(app) -> None:
@@ -883,6 +963,68 @@ def test_bulk_maintenance_search_preview_apply_and_stale_conflict(app) -> None:
     assert "changed after preview" in stale
     assert service.get_item(first.id).data.weight == Decimal("3")
     assert service.get_item(second.id).data.weight == Decimal("1.0")
+
+
+def test_bulk_delete_is_selectable_reviewed_and_applied(app) -> None:
+    client = app.test_client()
+    set_id = UUID(_create_set(client))
+    service = app.extensions["golden_set_service"]
+    selected = [
+        service.create_item(
+            set_id,
+            {
+                "case_id": case_id,
+                "prompt": case_id,
+                "evaluation_method": "exact_match",
+                "evaluator_config": {"expected_value": case_id},
+            },
+        )
+        for case_id in ("delete-one", "delete-two")
+    ]
+    kept = service.create_item(
+        set_id,
+        {
+            "case_id": "keep",
+            "prompt": "keep",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "keep"},
+        },
+    )
+
+    page = client.get(f"/golden-sets/{set_id}").get_data(as_text=True)
+    assert '<option value="delete">Delete selected test cases</option>' in page
+    assert "bulk-delete-selection" not in page
+    token = _csrf(client, f"/golden-sets/{set_id}")
+    preview_response = client.post(
+        f"/golden-sets/{set_id}/items/bulk-preview",
+        data={
+            "csrf_token": token,
+            "item_ids": [str(item.id) for item in selected],
+            "action": "delete",
+        },
+    )
+    preview = preview_response.get_data(as_text=True)
+    assert preview_response.status_code == 200
+    assert "Deletion is permanent" in preview
+    assert "Permanently delete 2 test case(s)" in preview
+    token = re.search(r'name="csrf_token" value="([^"]+)"', preview).group(1)
+    versions = html.unescape(
+        re.search(r'name="expected_updated_at" value="([^"]+)"', preview).group(1)
+    )
+
+    applied = client.post(
+        f"/golden-sets/{set_id}/items/bulk-apply",
+        data={
+            "csrf_token": token,
+            "item_ids": [str(item.id) for item in selected],
+            "action": "delete",
+            "expected_updated_at": versions,
+        },
+        follow_redirects=True,
+    )
+    assert "exactly 2 test case(s)" in applied.get_data(as_text=True)
+    assert [item.id for item in service._repository.list_all_items(set_id)] == [kept.id]
+    assert service.get_item(kept.id).data.sort_order == 0
 
 
 def test_bulk_move_duplicate_conflict_and_deterministic_order(app) -> None:
