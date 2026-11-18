@@ -509,6 +509,10 @@ Use schema to enforce keys, types, arrays, enums, and required fields. Add `addi
 
 Use **LLM judge** when deterministic rules cannot capture quality, relevance, completeness, or style. First create and publish a Judge under **Judges** → **Evaluation rules**. A test case selects one exact published Judge version. Judge-model settings separately supply model and operational call settings.
 
+![LLM Judge test-case editor with expected answer, context, and selected Judge](images/evaluation-llm-judge.png)
+
+*LLM Judge fields using documentation-only synthetic content; no provider call or benchmark result is shown.*
+
 ```json
 {
   "judge_definition_id": "judge-…",
