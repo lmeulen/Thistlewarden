@@ -82,7 +82,7 @@ Changes affecting packaging, startup, providers, workers, persistence, or releas
 - Do not add compatibility fallbacks that silently change evaluation meaning.
 - Keep evaluator results self-contained and auditable.
 - Treat database migrations as forward-only. Back up and verify realistic upgrade paths.
-- Keep current user documentation under `docs/manual/` in sync with application behavior.
+- Keep current user documentation under `docs/manual/` in sync with application behavior. This is sole authored manual source; never copy or generate it under `src/`.
 - Use synthetic, non-sensitive test data only.
 
 ## Internal package boundaries
