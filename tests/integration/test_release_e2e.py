@@ -120,10 +120,15 @@ def test_offline_release_flow_all_evaluators_two_models_and_exports(tmp_path: Pa
         gates = app.extensions["quality_gate_service"].results(run_id)
         assert gates["status"] == "passed"
         exports = app.extensions["run_export_service"]
-        assert exports.export_json(run_id)
-        assert exports.export_csv(run_id)
-        html = exports.export_html(run_id)
-        assert b"<html" in html and b"release-fixture-secret" not in html
+        artifacts = [exports.create_export(run_id, format_) for format_ in ("json", "csv", "html")]
+        try:
+            assert artifacts[0].path.stat().st_size > 0
+            assert artifacts[1].path.stat().st_size > 0
+            html = artifacts[2].path.read_bytes()
+            assert b"<html" in html and b"release-fixture-secret" not in html
+        finally:
+            for artifact in artifacts:
+                artifact.cleanup()
         connection = app.extensions["database_factory"].connect()
         try:
             assert (

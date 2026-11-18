@@ -108,7 +108,11 @@ def test_profile_selection_snapshot_export_and_absent_plugin_history(tmp_path: P
     assert snapshot["implementation_id"] == "test.custom"
     assert snapshot["implementation_version"] == "2.1.0"
     assert snapshot["implementation_config"] == {"label": "audited"}
-    exported = json.loads(app.extensions["run_export_service"].export_json(run_id))
+    artifact = app.extensions["run_export_service"].create_export(run_id, "json")
+    try:
+        exported = json.loads(artifact.path.read_bytes())
+    finally:
+        artifact.cleanup()
     assert json.loads(exported["run"]["judge_snapshot_json"])["implementation_id"] == "test.custom"
 
     connection = app.extensions["database_factory"].connect()
@@ -126,7 +130,11 @@ def test_profile_selection_snapshot_export_and_absent_plugin_history(tmp_path: P
         initialize_database=True,
     )
     assert restarted.extensions["run_view_service"].run(run_id)["status"] == "completed"
-    historical = json.loads(restarted.extensions["run_export_service"].export_json(run_id))
+    artifact = restarted.extensions["run_export_service"].create_export(run_id, "json")
+    try:
+        historical = json.loads(artifact.path.read_bytes())
+    finally:
+        artifact.cleanup()
     historical_snapshot = json.loads(historical["run"]["judge_snapshot_json"])
     assert historical_snapshot["implementation_id"] == "test.custom"
 

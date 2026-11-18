@@ -61,6 +61,8 @@ Without `--wait`, command creates pending run and prints its ID; another support
 
 Human output is concise. `--output json` emits one versioned JSON document to standard output with run ID, status, gate status, job/error counts, safe model aggregates, and configured cost. It never includes prompts, answers, credentials, headers, or complete provider responses. Explicit JSON, CSV, and HTML reports can contain sensitive prompts and answers. Existing report files are refused unless `--overwrite` is supplied.
 
+Run exports are generated through restrictive temporary files and removed after transfer. JSON preserves the complete versioned machine-readable run document. CSV contains one deterministic row per result. HTML contains the human-readable run summary and result table; download JSON separately when complete machine-readable snapshots, jobs, attempts, results, and quality gates are required. Synchronous export supports at most 50,000 jobs per run. If this limit is exceeded, split the evaluation into smaller runs before exporting.
+
 Automation exit codes are stable:
 
 | Code | Outcome |
