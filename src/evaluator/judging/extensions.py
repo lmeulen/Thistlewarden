@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable, Mapping
+from concurrent.futures import CancelledError
 from decimal import Decimal
 from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
 
@@ -18,6 +19,8 @@ __all__ = [
     "BUILTIN_JUDGE_VERSION",
     "EmptyJudgeConfiguration",
     "JUDGE_EXTENSION_API_VERSION",
+    "JudgeCallEvidenceError",
+    "JudgeCancelledError",
     "JudgeCriterionDecision",
     "JudgeCriterionSnapshot",
     "JudgeDecision",
@@ -64,8 +67,35 @@ class JudgeDecisionError(JudgeExtensionError):
     """Raised when extension output violates core-owned invariants."""
 
 
-class JudgeExecutionError(JudgeExtensionError):
-    """Sanitized wrapper for implementation failures."""
+class JudgeCallEvidenceError:
+    """Safe evidence attached to failures after one or more completed provider calls."""
+
+    def __init__(
+        self,
+        *,
+        provider_calls: tuple[dict[str, Any], ...] = (),
+        judge_cost: Decimal = Decimal(0),
+    ) -> None:
+        self.provider_calls = provider_calls
+        self.judge_cost = judge_cost
+
+
+class JudgeExecutionError(JudgeCallEvidenceError, JudgeExtensionError):
+    """Sanitized failure with optional safe evidence from completed provider calls."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider_calls: tuple[dict[str, Any], ...] = (),
+        judge_cost: Decimal = Decimal(0),
+    ) -> None:
+        JudgeExtensionError.__init__(self, message)
+        JudgeCallEvidenceError.__init__(self, provider_calls=provider_calls, judge_cost=judge_cost)
+
+
+class JudgeCancelledError(JudgeCallEvidenceError, CancelledError):
+    """Cancellation carrying safe evidence from calls completed before cancellation."""
 
 
 class JudgeMessage(BaseModel):
@@ -110,6 +140,10 @@ class JudgeEvaluationRequest(BaseModel):
     actual_result: str
     context: str | None = None
     preset: JudgePresetSnapshot
+    # Core-owned wrapper applies these user-authored instructions as data.
+    instructions: str | None = None
+    metric_instructions: Mapping[str, str] = Field(default_factory=dict)
+    mode: Literal["single_prompt", "per_metric"] = "single_prompt"
     configuration: Mapping[str, Any] = Field(default_factory=dict)
 
 

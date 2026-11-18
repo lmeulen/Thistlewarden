@@ -14,7 +14,10 @@ from evaluator.endpoints import SQLiteEndpointRepository
 from evaluator.evaluators.contracts import LlmJudgeConfig
 from evaluator.evaluators.core import EvaluationResult
 from evaluator.judging.builtin import register_builtin_judge
+from evaluator.judging.definitions import JudgeDefinitionInput, metric_definition, semantic_hash
 from evaluator.judging.extensions import (
+    JudgeCancelledError,
+    JudgeCriterionSnapshot,
     JudgeEvaluationRequest,
     JudgeExecutionError,
     JudgeExtensionError,
@@ -94,12 +97,15 @@ class _CoreJudgeProvider:
         client: OpenAIProviderClient,
         executor: ProviderCallExecutor,
         cancelled: threading.Event | None,
+        *,
+        call_budget: int,
     ) -> None:
         self._endpoint = endpoint
         self._profile = profile
         self._client = client
         self._executor = executor
         self._cancelled = cancelled
+        self._call_budget = call_budget
         self._calls: list[JudgeProviderResult] = []
 
     @property
@@ -107,7 +113,7 @@ class _CoreJudgeProvider:
         return tuple(self._calls)
 
     def complete(self, *, prompt: str, system_prompt: str | None = None) -> JudgeProviderResult:
-        if len(self._calls) >= 2:
+        if len(self._calls) >= self._call_budget:
             raise RuntimeError("judge implementation exceeded provider-call limit")
         completion = self._executor.execute(
             self._endpoint,
@@ -118,8 +124,6 @@ class _CoreJudgeProvider:
             usage_tokens=lambda item: None if item.usage is None else item.usage.total_tokens,
             cancelled=self._cancelled,
         )
-        if self._cancelled is not None and self._cancelled.is_set():
-            raise CancelledError
         if not completion.evaluate:
             raise ProviderGuardrailError(completion.provider_evidence)
         usage = completion.usage
@@ -165,6 +169,8 @@ class _CoreJudgeProvider:
             cost=calculation.total_cost,
         )
         self._calls.append(result)
+        if self._cancelled is not None and self._cancelled.is_set():
+            raise CancelledError
         return result
 
 
@@ -192,17 +198,57 @@ class JudgeCaller:
     def __call__(self, run_id: UUID, case: dict[str, Any], candidate: str) -> EvaluationResult:
         snapshot = self._queue.judge_snapshot(run_id)
         if snapshot is None:
-            raise RuntimeError("judge snapshot unavailable")
+            raise JudgeExecutionError("Judge profile snapshot is unavailable.")
         implementation_id = str(snapshot["implementation_id"])
         implementation_version = str(snapshot["implementation_version"])
         implementation = self._registry.get(implementation_id, implementation_version)
         model = self._queue.model_snapshot_for_source(run_id, UUID(snapshot["model_profile_id"]))
         endpoint = self._endpoints.get(UUID(model["endpoint_id"]))
         if endpoint is None or not endpoint.data.active:
-            raise RuntimeError("judge endpoint unavailable")
+            raise JudgeExecutionError("Judge endpoint is unavailable.")
         profile = _apply_judge_overrides(_profile_from_snapshot(model), snapshot)
         config = LlmJudgeConfig.model_validate(json.loads(case["evaluator_config_json"]))
-        preset = get_judge_preset(config.preset_id, config.preset_version)
+        definition_snapshot = case.get("judge_definition")
+        if definition_snapshot is None:
+            if config.preset_id is None or config.preset_version is None:
+                raise RuntimeError("legacy judge preset is unavailable")
+            preset_snapshot = JudgePresetSnapshot.from_preset(
+                get_judge_preset(config.preset_id, config.preset_version)
+            )
+            instructions = None
+            metric_instructions: dict[str, str] = {}
+            mode = "single_prompt"
+        else:
+            definition = JudgeDefinitionInput.model_validate(definition_snapshot["data"])
+            if definition_snapshot.get("semantic_hash") != semantic_hash(definition):
+                raise RuntimeError("judge definition snapshot integrity check failed")
+            enabled = [
+                metric for metric in definition.metrics if metric.enabled and metric.weight > 0
+            ]
+            preset_snapshot = JudgePresetSnapshot(
+                id=str(definition_snapshot["id"]),
+                version=str(definition_snapshot["version"]),
+                name=definition.name,
+                description=definition.description or definition.name,
+                threshold=definition.threshold,
+                rubric=tuple(
+                    JudgeCriterionSnapshot(
+                        id=metric.metric_id,
+                        description=metric_definition(metric.metric_id).description,
+                        weight=metric.weight,
+                    )
+                    for metric in enabled
+                ),
+                requires_expected=definition.requires_expected,
+                requires_context=definition.requires_context,
+            )
+            instructions = definition.general_instructions
+            metric_instructions = {
+                metric.metric_id: metric.instructions
+                for metric in enabled
+                if metric.instructions is not None
+            }
+            mode = definition.mode
         configuration = self._registry.validate_configuration(
             implementation_id,
             implementation_version,
@@ -213,47 +259,69 @@ class JudgeCaller:
             expected_result=config.expected_value,
             actual_result=candidate,
             context=config.context,
-            preset=JudgePresetSnapshot.from_preset(preset),
+            preset=preset_snapshot,
+            instructions=instructions,
+            metric_instructions=metric_instructions,
+            mode=mode,
             configuration=configuration,
         )
         provider = _CoreJudgeProvider(
-            endpoint, profile, self._client, self._executor, self._cancelled
+            endpoint,
+            profile,
+            self._client,
+            self._executor,
+            self._cancelled,
+            call_budget=2 * len(request.preset.rubric),
         )
         try:
             decision = implementation.evaluate(request, provider)
-        except (CancelledError, JudgeExtensionError):
-            raise
+        except CancelledError as exc:
+            evidence, cost = _provider_call_evidence(provider.calls)
+            raise JudgeCancelledError(provider_calls=evidence, judge_cost=cost) from exc
+        except JudgeExtensionError as exc:
+            evidence, cost = _provider_call_evidence(provider.calls)
+            raise JudgeExecutionError(
+                "Judge implementation failed.", provider_calls=evidence, judge_cost=cost
+            ) from exc
         except Exception as exc:
-            raise JudgeExecutionError("Judge implementation failed.") from exc
+            evidence, cost = _provider_call_evidence(provider.calls)
+            raise JudgeExecutionError(
+                "Judge implementation failed.", provider_calls=evidence, judge_cost=cost
+            ) from exc
         result = validate_decision(
             decision,
             request,
             implementation_id=implementation_id,
             implementation_version=implementation_version,
         )
-        total_cost = sum((call.cost or Decimal(0) for call in provider.calls), Decimal(0))
+        call_evidence, total_cost = _provider_call_evidence(provider.calls)
         return cast(
             EvaluationResult,
             result.model_copy(
                 update={
                     "metadata": {
                         **result.metadata,
-                        "provider_calls": [
-                            {
-                                "usage": None
-                                if call.usage is None
-                                else call.usage.model_dump(mode="json"),
-                                "provider_request_id": call.provider_request_id,
-                                "finish_reason": call.finish_reason,
-                                "cost": None if call.cost is None else str(call.cost),
-                            }
-                            for call in provider.calls
-                        ],
+                        "provider_calls": list(call_evidence),
                         "judge_cost": str(total_cost),
                     }
                 }
             ),
         )
+
+
+def _provider_call_evidence(
+    calls: tuple[JudgeProviderResult, ...],
+) -> tuple[tuple[dict[str, Any], ...], Decimal]:
+    evidence = tuple(
+        {
+            "usage": None if call.usage is None else call.usage.model_dump(mode="json"),
+            "provider_request_id": call.provider_request_id,
+            "finish_reason": call.finish_reason,
+            "cost": None if call.cost is None else str(call.cost),
+        }
+        for call in calls
+    )
+    return evidence, sum((call.cost or Decimal(0) for call in calls), Decimal(0))
 
 
 def _detail_token(details: dict[str, Any] | None, name: str) -> int | None:
