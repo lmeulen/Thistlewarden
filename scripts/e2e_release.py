@@ -56,6 +56,12 @@ def wait_ready() -> None:
 
 def main() -> None:
     wait_ready()
+    status, manual_index = request("/manual/")
+    assert status == 200 and b"Thistlewarden User Manual" in manual_index
+    status, manual_page = request("/manual/dashboard")
+    assert status == 200 and b"Dashboard" in manual_page
+    status, manual_image = request("/manual/assets/dashboard.png")
+    assert status == 200 and manual_image.startswith(b"\x89PNG")
     bundle = json.loads(Path("examples/release-configuration.json").read_text(encoding="utf-8"))
     status, preview = request(
         "/api/v1/configuration/import?mode=merge&preview=true", method="POST", body=bundle

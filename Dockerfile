@@ -5,6 +5,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
 WORKDIR /build
 COPY pyproject.toml README.md constraints.txt ./
+COPY docs/manual ./docs/manual
 COPY src ./src
 RUN python -m pip wheel --constraint constraints.txt --wheel-dir /wheels .
 

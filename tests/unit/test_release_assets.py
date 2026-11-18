@@ -115,6 +115,8 @@ def test_dockerfile_is_single_nonroot_runtime_with_healthcheck() -> None:
     text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert "FROM python:3.12.10-slim-bookworm" in text
     assert "USER evaluator:evaluator" in text
+    assert "COPY docs/manual ./docs/manual" in text
+    assert "COPY src/evaluator/manual" not in text
     assert 'ENTRYPOINT ["python", "-m", "evaluator.container_entrypoint"]' in text
     assert "HEALTHCHECK" in text and "/ready" in text
     assert "gunicorn" not in text

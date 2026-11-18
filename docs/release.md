@@ -14,7 +14,8 @@ python -m ruff check .
 python -m ruff format --check .
 python -m mypy src
 python -m pytest -q tests/unit tests/integration --cov=evaluator --cov-branch --cov-report=term-missing:skip-covered
-python -m pip wheel --no-deps --wheel-dir dist .
+python -m build --wheel --sdist --outdir dist
+python scripts/verify_manual_artifacts.py --wheel dist/thistlewarden-*.whl --sdist dist/thistlewarden-*.tar.gz
 ```
 
 Review every secret-scanner finding. `.gitleaks.toml` allows only one exact synthetic fixture used by redaction tests; do not broaden it to paths or commits.
@@ -39,6 +40,7 @@ Manual release addition: restart evaluator during second E2E run and verify `rec
 
 ## Versioning and artifacts
 
+- `docs/manual/` is sole authored manual tree. Source and editable checkouts serve that fixed repository location; wheel, source distribution, and container builds install same files under `share/thistlewarden/manual`. No synchronization or generated copy under `src/` is permitted.
 - Python package version and Compose image tag must match.
 - Runtime dependencies are exact pins in `pyproject.toml`; `requirements.txt` mirrors runtime and dev gates.
 - Never publish `.env`, database, WAL, exports, backups or compose logs containing user content.

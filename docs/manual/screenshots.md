@@ -42,6 +42,6 @@ Capture and retain:
 - `evaluation-exact-match.png`, `evaluation-contains.png`, `evaluation-regex.png`, `evaluation-numeric.png`, and `evaluation-json-schema.png`: current deterministic evaluator forms;
 - `evaluation-llm-judge.png`: current LLM Judge testcase fields.
 
-After capture, copy each image to both `docs/manual/images/` and `src/evaluator/manual/images/` while duplicate manual packaging remains supported. Verify both trees are byte-identical, every Markdown reference resolves, removed files have no references, and manual rendering/asset tests pass. Delete fixture database, browser profile, and uncropped temporary images; never commit them.
+After capture, copy each image to the sole authored tree, `docs/manual/images/`. Verify every Markdown reference resolves, removed files have no references, manual rendering/asset tests pass, and wheel/sdist artifact verification proves byte-identical packaged content. Delete fixture database, browser profile, and uncropped temporary images; never commit them.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)

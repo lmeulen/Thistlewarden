@@ -35,6 +35,7 @@ reviews/
 scripts/*
 !scripts/e2e_release.py
 !scripts/prepare_manual_screenshot_fixture.py
+!scripts/verify_manual_artifacts.py
 testsets/
 issues.txt
 issues.md

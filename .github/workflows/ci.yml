@@ -24,6 +24,21 @@ jobs:
         run: python -m pip check
       - name: Audit Python dependencies
         run: python -m pip_audit -r requirements.txt --progress-spinner off
+      - name: Verify wheel and source distribution manual content
+        run: |
+          python -m build --wheel --sdist --outdir dist
+          python scripts/verify_manual_artifacts.py \
+            --wheel dist/thistlewarden-*.whl \
+            --sdist dist/thistlewarden-*.tar.gz
+          python -m venv /tmp/thistlewarden-wheel
+          /tmp/thistlewarden-wheel/bin/python -m pip install dist/thistlewarden-*.whl
+          cd /tmp
+          /tmp/thistlewarden-wheel/bin/python - <<'PY'
+          from evaluator.manual import manual_asset, manual_pages, render_manual_page
+          assert "dashboard" in manual_pages()
+          assert "Thistlewarden User Manual" in str(render_manual_page("index"))
+          assert manual_asset("dashboard.png").startswith(b"\x89PNG")
+          PY
       - run: python -m ruff check .
       - run: python -m ruff format --check .
       - run: python -m mypy src

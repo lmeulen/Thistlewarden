@@ -1,10 +1,10 @@
-"""Safe rendering and lookup for packaged user-manual Markdown."""
+"""Safe rendering and lookup for canonical user-manual Markdown."""
 
 from __future__ import annotations
 
 import re
-from importlib.resources import files
-from pathlib import PurePosixPath
+from importlib.metadata import PackageNotFoundError, PackagePath, files
+from pathlib import Path, PurePosixPath
 from typing import cast
 from urllib.parse import urlsplit, urlunsplit
 
@@ -14,6 +14,9 @@ from mistune import HTMLRenderer
 
 _SAFE_NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
 _ANCHOR = re.compile(r'<a id="([a-z0-9-]+)"></a>\s*')
+_DISTRIBUTION = "thistlewarden"
+_PACKAGED_MANUAL_SUFFIX = PurePosixPath("share/thistlewarden/manual/README.md")
+_SOURCE_MANUAL_ROOT = Path(__file__).resolve().parents[2] / "docs" / "manual"
 
 
 class _ManualRenderer(HTMLRenderer):
@@ -53,27 +56,67 @@ class _ManualRenderer(HTMLRenderer):
 
 
 _MARKDOWN = mistune.create_markdown(renderer=_ManualRenderer(), plugins=["table"])
-_ROOT = files("evaluator").joinpath("manual")
+
+
+def _manual_root() -> Path | None:
+    """Resolve canonical checkout or installed data location without CWD or tree searches."""
+
+    if _SOURCE_MANUAL_ROOT.joinpath("README.md").is_file():
+        return _SOURCE_MANUAL_ROOT
+    try:
+        distribution_files = files(_DISTRIBUTION)
+    except (PackageNotFoundError, OSError):
+        return None
+    if distribution_files is None:
+        return None
+    indexes = [
+        item
+        for item in distribution_files
+        if isinstance(item, PackagePath)
+        and PurePosixPath(str(item)).parts[-4:] == _PACKAGED_MANUAL_SUFFIX.parts
+    ]
+    if len(indexes) != 1:
+        return None
+    index = indexes[0]
+    try:
+        located = Path(index.locate()).resolve()
+        return located.parent if located.is_file() else None
+    except OSError:
+        return None
 
 
 def manual_pages() -> list[str]:
-    """Return stable page slugs included in installed package."""
-    return sorted(
-        item.name.removesuffix(".md")
-        for item in _ROOT.iterdir()
-        if item.name != "README.md" and item.name.endswith(".md")
-    )
+    """Return stable page slugs from canonical manual content."""
+
+    root = _manual_root()
+    if root is None:
+        return []
+    try:
+        return sorted(
+            item.name.removesuffix(".md")
+            for item in root.iterdir()
+            if item.name != "README.md" and item.name.endswith(".md") and item.is_file()
+        )
+    except OSError:
+        return []
 
 
 def render_manual_page(page: str) -> Markup:
-    """Render allowlisted packaged Markdown with escaped embedded HTML."""
+    """Render allowlisted canonical Markdown with escaped embedded HTML."""
+
     filename = "README.md" if page == "index" else f"{page}.md"
     if page != "index" and not _SAFE_NAME.fullmatch(page):
         raise FileNotFoundError(page)
-    source = _ROOT.joinpath(filename)
-    if not source.is_file():
+    root = _manual_root()
+    if root is None:
         raise FileNotFoundError(page)
-    markdown = source.read_text(encoding="utf-8")
+    source = root.joinpath(filename)
+    try:
+        if not source.is_file():
+            raise FileNotFoundError(page)
+        markdown = source.read_text(encoding="utf-8")
+    except OSError:
+        raise FileNotFoundError(page) from None
     anchors = "".join(
         f'<span id="{match.group(1)}"></span>' for match in _ANCHOR.finditer(markdown)
     )
@@ -82,10 +125,18 @@ def render_manual_page(page: str) -> Markup:
 
 
 def manual_asset(name: str) -> bytes:
-    """Read an allowlisted packaged PNG asset."""
-    if not _SAFE_NAME.fullmatch(PurePosixPath(name).stem) or PurePosixPath(name).suffix != ".png":
+    """Read an allowlisted canonical PNG asset."""
+
+    path = PurePosixPath(name)
+    if not _SAFE_NAME.fullmatch(path.stem) or path.suffix != ".png":
         raise FileNotFoundError(name)
-    asset = _ROOT.joinpath("images", name)
-    if not asset.is_file():
+    root = _manual_root()
+    if root is None:
         raise FileNotFoundError(name)
-    return asset.read_bytes()
+    asset = root.joinpath("images", name)
+    try:
+        if not asset.is_file():
+            raise FileNotFoundError(name)
+        return asset.read_bytes()
+    except OSError:
+        raise FileNotFoundError(name) from None
