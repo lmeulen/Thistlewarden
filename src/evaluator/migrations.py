@@ -473,6 +473,16 @@ def _migration_19(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_20(connection: sqlite3.Connection) -> None:
+    """Persist explicit manual completion of onboarding guidance."""
+
+    connection.execute(
+        """ALTER TABLE onboarding_preferences
+        ADD COLUMN manually_completed INTEGER NOT NULL DEFAULT 0
+        CHECK(manually_completed IN (0,1))"""
+    )
+
+
 def _migration_17(connection: sqlite3.Connection) -> None:
     """Persist onboarding choices and successful readiness actions."""
 
@@ -515,6 +525,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(17, "add_pilot_onboarding", _migration_17),
     Migration(18, "add_versioned_judge_definitions", _migration_18),
     Migration(19, "backfill_versioned_judge_definitions", _migration_19),
+    Migration(20, "add_manual_onboarding_completion", _migration_20),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

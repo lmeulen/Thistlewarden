@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from evaluator import create_app
+from evaluator.onboarding import OnboardingService
 from evaluator.time import to_utc_iso, utc_now
 
 pytestmark = pytest.mark.integration
@@ -50,6 +51,9 @@ def test_empty_dashboard_shows_ordered_accessible_pilot_steps(app) -> None:
     ):
         assert title in page
     assert page.count("Status:</strong> Not complete") == 6
+    assert 'aria-label="Pilot guidance actions"' in page
+    assert ">Mark as done</button>" in page
+    assert "does not complete setup, bypass blockers, create records" in page
     assert "No credential, endpoint, provider call, paid call, or judge call" in page
     assert 'href="/manual/getting-started"' in page
 
@@ -67,6 +71,50 @@ def test_dismiss_and_restore_persist_across_clients(app) -> None:
     restored = second.post("/onboarding/restore", data={"csrf_token": _csrf(second)})
     assert restored.status_code == 302
     assert "Run your first pilot evaluation" in second.get("/").get_data(as_text=True)
+
+
+def test_mark_as_done_persists_is_reversible_and_does_not_change_progress(app) -> None:
+    first = app.test_client()
+    response = first.post("/onboarding/complete", data={"csrf_token": _csrf(first)})
+    assert response.status_code == 302
+
+    second = app.test_client()
+    page = second.get("/").get_data(as_text=True)
+    assert "Run your first pilot evaluation" not in page
+    assert "Pilot guidance marked as done" in page
+    assert "did not change setup or evaluation status" in page
+    assert "Reopen pilot guidance" in page
+
+    factory = app.extensions["database_factory"]
+    connection = factory.connect()
+    try:
+        preference = connection.execute(
+            "SELECT dismissed,manually_completed FROM onboarding_preferences WHERE id=1"
+        ).fetchone()
+        assert tuple(preference) == (0, 1)
+        for table in (
+            "endpoints",
+            "model_profiles",
+            "golden_sets",
+            "golden_set_items",
+            "runs",
+            "onboarding_events",
+        ):
+            assert connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+    finally:
+        connection.close()
+
+    state = OnboardingService(factory).state()
+    assert state.manually_completed is True
+    assert state.complete is False
+    assert state.completed_count == 0
+
+    reopened = second.post("/onboarding/restore", data={"csrf_token": _csrf(second)})
+    assert reopened.status_code == 302
+    restored_page = second.get("/").get_data(as_text=True)
+    assert "Run your first pilot evaluation" in restored_page
+    assert "0 of 6 steps complete" in restored_page
+    assert "Pilot guidance marked as done" not in restored_page
 
 
 def test_explicit_starter_set_is_synthetic_deterministic_editable_and_removable(app) -> None:
