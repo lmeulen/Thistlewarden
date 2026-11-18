@@ -1,5 +1,11 @@
 """Run and result GUI routes plus presentation calculations."""
 
+from collections.abc import Iterable
+
+from flask import send_file
+from werkzeug.wsgi import ClosingIterator
+
+from evaluator.run_exports import ExportFormat
 from evaluator.ui.shared import (
     _RUN_SET_PAGE_SIZE,
     RESULT_PAGE_SIZE,
@@ -528,18 +534,18 @@ def run_export(run_id: UUID) -> str | Response:
     if format_ not in {"json", "csv", "html"} or "confirm_sensitive" not in request.form:
         flash("Choose a format and confirm the warning.", "error")
         return render_template("run_export.html", run=run)
-    service = _run_exports()
-    exporters = {
-        "json": service.export_json,
-        "csv": service.export_csv,
-        "html": service.export_html,
-    }
-    mimetypes = {"json": "application/json", "csv": "text/csv", "html": "text/html"}
-    content = exporters[format_](run_id)
-    return Response(
-        content,
-        content_type=mimetypes[format_],
-        headers={
-            "Content-Disposition": f'attachment; filename="{safe_filename(run["name"])}.{format_}"'
-        },
+    artifact = _run_exports().create_export(run_id, cast(ExportFormat, format_))
+    try:
+        response = send_file(
+            artifact.path,
+            mimetype=artifact.mimetype,
+            as_attachment=True,
+            download_name=artifact.download_name,
+        )
+    except BaseException:
+        artifact.cleanup()
+        raise
+    response.response = ClosingIterator(
+        cast(Iterable[bytes], response.response), [artifact.cleanup]
     )
+    return response

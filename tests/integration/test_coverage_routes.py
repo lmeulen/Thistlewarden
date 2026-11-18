@@ -106,9 +106,15 @@ def test_run_export_service_formats_outcomes_and_deletes_terminal_run(tmp_path: 
     assert json.loads(data["results"][0]["provider_evidence_json"])["finish_reason"] == (
         "content_filter"
     )
-    assert json.loads(service.export_json(run_id))["run"]["id"] == str(run_id)
-    assert service.export_csv(run_id).startswith(b"\xef\xbb\xbfjob_id")
-    assert b"Content-Security-Policy" in service.export_html(run_id)
+    artifacts = [service.create_export(run_id, format_) for format_ in ("json", "csv", "html")]
+    try:
+        assert json.loads(artifacts[0].path.read_bytes())["run"]["id"] == str(run_id)
+        assert artifacts[1].path.read_bytes().startswith(b"\xef\xbb\xbfjob_id")
+        assert b"Content-Security-Policy" in artifacts[2].path.read_bytes()
+        assert b"Complete data" not in artifacts[2].path.read_bytes()
+    finally:
+        for artifact in artifacts:
+            artifact.cleanup()
 
     service.delete(run_id)
     with pytest.raises(NotFoundError):

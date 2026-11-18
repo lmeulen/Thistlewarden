@@ -79,15 +79,23 @@ class FakeGates:
         return {"status": self.status, "gates": []}
 
 
+class FakeArtifact:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def cleanup(self) -> None:
+        self.path.unlink(missing_ok=True)
+
+
 class FakeExports:
-    def export_json(self, run_id: UUID) -> bytes:
-        return b"json"
+    def __init__(self, directory: Path) -> None:
+        self.directory = directory
 
-    def export_csv(self, run_id: UUID) -> bytes:
-        return b"csv"
-
-    def export_html(self, run_id: UUID) -> bytes:
-        return b"html"
+    def create_export(self, run_id: UUID, format_: str) -> FakeArtifact:
+        del run_id
+        path = self.directory / f"source.{format_}"
+        path.write_bytes(format_.encode())
+        return FakeArtifact(path)
 
 
 def _summary(**updates: Any) -> dict[str, Any]:
@@ -182,13 +190,28 @@ def test_exports_refuse_existing_files_unless_overwrite(tmp_path: Path) -> None:
     assert destination.read_bytes() == b"second"
 
 
+def test_cli_export_streams_artifact_and_removes_source(tmp_path: Path) -> None:
+    destination = tmp_path / "result.json"
+    source_directory = tmp_path / "sources"
+    source_directory.mkdir()
+
+    assert perform_exports(
+        FakeExports(source_directory),
+        uuid4(),
+        {"json": destination, "csv": None, "html": None},
+        overwrite=False,
+    ) == [str(destination)]
+    assert destination.read_bytes() == b"json"
+    assert list(source_directory.iterdir()) == []
+
+
 def test_multiple_exports_preflight_existing_destinations(tmp_path: Path) -> None:
     existing = tmp_path / "result.json"
     existing.write_text("keep", encoding="utf-8")
     csv_path = tmp_path / "result.csv"
     with pytest.raises(FileExistsError):
         perform_exports(
-            FakeExports(),
+            FakeExports(tmp_path),
             uuid4(),
             {"json": existing, "csv": csv_path, "html": None},
             overwrite=False,

@@ -16,7 +16,7 @@ Thistlewarden is designed for one trusted user on one computer. It has no user a
 
 ## Known limitations
 
-- Large run exports are assembled in memory until [issue #20](https://github.com/lmeulen/Thistlewarden/issues/20) is resolved.
+- Synchronous run exports support at most 50,000 jobs per run. Split larger evaluations into smaller runs before exporting.
 - Export SQL identifiers still need an explicit allowlist; see [issue #21](https://github.com/lmeulen/Thistlewarden/issues/21).
 - This beta supports local, single-user deployment only. Network deployment and untrusted users are outside the threat model.
 
