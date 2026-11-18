@@ -507,12 +507,12 @@ Use schema to enforce keys, types, arrays, enums, and required fields. Add `addi
 
 ### LLM judge
 
-Use **LLM judge** when deterministic rules cannot capture quality, relevance, completeness, or style. Test case selects a predefined, versioned judge preset. Judge profile supplies model and operational call settings. Test cases cannot define or override rubrics, prompt templates, or thresholds.
+Use **LLM judge** when deterministic rules cannot capture quality, relevance, completeness, or style. First create and publish a Judge under **Judges** → **Evaluation rules**. A test case selects one exact published Judge version. Judge-model settings separately supply model and operational call settings.
 
 ```json
 {
-  "preset_id": "reference-correctness",
-  "preset_version": "1.0",
+  "judge_definition_id": "judge-…",
+  "judge_definition_version": "1.0",
   "expected_value": "A correct answer should explain the documented behavior.",
   "context": null
 }
@@ -522,23 +522,14 @@ Use **LLM judge** when deterministic rules cannot capture quality, relevance, co
 
 | Parameter | Required/default | Meaning |
 |---|---|---|
-| `preset_id` | Required | Registered preset identifier. Unknown identifiers are rejected. |
-| `preset_version` | Required | Exact preset version. Latest-version resolution is deliberately unsupported. |
-| `expected_value` | Preset-dependent | Reference answer shown to judge; candidate need not use identical words. |
-| `context` | Preset-dependent | Case-specific source facts or constraints. Do not place secrets here. |
+| `judge_definition_id` | Required | Identifier of a user-created Judge. |
+| `judge_definition_version` | Required | Exact published version; drafts cannot be selected. |
+| `expected_value` | Optional | Reference answer shown to Judge; candidate need not use identical words. |
+| `context` | Optional | Case-specific source facts or constraints. Do not place secrets here. |
 
-Available version `1.0` presets:
+Published Judge version supplies immutable assessment method, prompt, metrics, weights, threshold, and required-input rules. Final score is `sum(metric score × weight) / sum(weights)`. Thistlewarden ships no selectable default Judges. Historical test cases that reference former built-in presets remain readable and executable with their original semantics, but those presets are not offered for new test cases.
 
-- `general-quality`: broad response quality; threshold `0.70`.
-- `reference-correctness`: semantic correctness against required `expected_value`; threshold `0.80`.
-- `grounded-answer`: faithfulness to required `context`; threshold `0.85`.
-- `summary-quality`: summary quality against required `context`; threshold `0.80`.
-- `safe-response`: harm prevention, privacy, and safe alternatives; threshold `0.90`.
-- `instruction-following`: semantic instruction compliance; threshold `0.85`.
-
-Preset supplies immutable rubric, criterion weights, threshold, and required-input rules. Final score is `sum(criterion score × weight) / sum(weights)`. Existing free-form LLM-judge test cases are removed during preset migration because their custom semantics cannot be mapped safely to a registered preset. Historical completed-run snapshots remain available for audit.
-
-LLM judge makes an additional provider call, can add cost and latency, and sends evaluation context—including prompt, candidate answer, optional expected answer, context, and preset rubric—to judge provider. It requires active usable judge profile and model. Results can vary with judge model. Review sample results before basing release decisions on them. Output tester intentionally does not run LLM judge; test it in a controlled run.
+LLM judge makes one or more additional provider calls, can add cost and latency, and sends evaluation context—including prompt, candidate answer, optional expected answer, context, and Judge metrics—to judge provider. It requires active usable judge-model settings and model. Results can vary with judge model. Review sample results before basing release decisions on them. Output tester intentionally does not run LLM judge; test it in a controlled run.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 

@@ -106,6 +106,41 @@ def complete_run(app, run_id: str, *, status="passed"):
     app.extensions["quality_gate_service"].evaluate_run(lease.run_id)
 
 
+def test_run_form_explains_and_rejects_missing_judge_profile(app) -> None:
+    client = app.test_client()
+    golden, model = app.config["FIXTURE_IDS"]
+    app.extensions["golden_set_service"].create_item(
+        golden,
+        {
+            "case_id": "needs-judge",
+            "prompt": "Judge this",
+            "evaluation_method": "llm_judge",
+            "evaluator_config": {"preset_id": "general-quality", "preset_version": "1.0"},
+        },
+    )
+    page = client.get("/runs/new").get_data(as_text=True)
+    assert "LLM-judge test cases require an active Judge profile" in page
+    token = csrf(client, "/runs/new")
+    response = client.post(
+        "/runs/new",
+        data={
+            "csrf_token": token,
+            "name": "Missing judge",
+            "golden_set_id": str(golden),
+            "model_profile_ids": str(model),
+        },
+    )
+    text = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "require an active Judge profile" in text
+    connection = app.extensions["database_factory"].connect()
+    try:
+        assert connection.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM run_jobs").fetchone()[0] == 0
+    finally:
+        connection.close()
+
+
 def test_run_can_be_renamed_from_detail_page(app) -> None:
     client = app.test_client()
     run_id = create_run(client, app, "Original run")
@@ -153,7 +188,13 @@ def test_new_run_preview_targets_creation_form_and_uses_english(app) -> None:
     assert text.index('name="name" form="run-create-form"') < text.index(
         "<legend>Golden set</legend>"
     )
-    for heading in ("Run preview", "Model profiles", "Judge", "Quality gates", "Start run"):
+    for heading in (
+        "Run preview",
+        "Model profiles",
+        "Judge profile",
+        "Quality gates",
+        "Start run",
+    ):
         assert f"<legend>{heading}</legend>" in text
     assert 'name="golden_set_id" form="run-create-form" required' in text
     assert "document.getElementById('run-create-form')" in text

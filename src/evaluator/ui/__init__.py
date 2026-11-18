@@ -5,6 +5,7 @@ from evaluator.ui import backup as backup
 from evaluator.ui import dashboard as dashboard
 from evaluator.ui import endpoints as endpoints
 from evaluator.ui import golden_sets as golden_sets
+from evaluator.ui import judge_rules as judge_rules
 from evaluator.ui import judges as judges
 from evaluator.ui import runs as runs
 from evaluator.ui.shared import csrf_token, gui
