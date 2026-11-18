@@ -376,6 +376,10 @@ def build_openapi_document() -> dict[str, Any]:
             "/api/v1/runs/{run_id}/export": {
                 "get": {
                     "operationId": "exportRun",
+                    "description": (
+                        "Download a bounded-memory JSON, CSV, or HTML export. "
+                        "Synchronous exports support at most 50,000 run jobs."
+                    ),
                     "responses": {"200": {"description": "Run export"}},
                 }
             },
