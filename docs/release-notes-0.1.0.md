@@ -1,10 +1,6 @@
-# Changelog
+# Thistlewarden 0.1.0 release notes
 
-Notable changes to Thistlewarden are documented here. The project follows semantic versioning after the first stable release; `0.x` releases may contain breaking changes documented in release notes.
-
-## [Unreleased]
-
-No unreleased changes documented yet.
+The project follows semantic versioning after the first stable release; `0.x` releases may contain breaking changes documented in release notes.
 
 ## [0.1.0] - 2026-11-14
 
@@ -30,5 +26,4 @@ Thistlewarden 0.1.0 supports one trusted user on one host. Keep the application 
 - Export SQL identifiers do not yet use an explicit allowlist ([#21](https://github.com/lmeulen/Thistlewarden/issues/21)).
 - Provider destination checks do not pin the resolved IP into the HTTP transport ([#22](https://github.com/lmeulen/Thistlewarden/issues/22)).
 
-[Unreleased]: https://github.com/lmeulen/Thistlewarden/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/lmeulen/Thistlewarden/releases/tag/v0.1.0

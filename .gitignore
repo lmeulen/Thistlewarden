@@ -9,12 +9,15 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+build/
+dist/
 
 # Local configuration and secrets
 .env
 
 # Runtime data
 data/
+data2/
 exports/
 *.db
 *.db-shm

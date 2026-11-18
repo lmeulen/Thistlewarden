@@ -17,15 +17,20 @@ ROOT = Path(__file__).parents[2]
 def test_product_branding_is_consistent() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    compose_e2e = (ROOT / "compose.e2e.yaml").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert 'name = "thistlewarden"' in pyproject
+    assert 'version = "0.2.0"' in pyproject
     assert 'thistlewarden = "evaluator.server:main"' in pyproject
     assert 'thistlewarden-admin = "evaluator.cli:main"' in pyproject
     assert "name: thistlewarden" in compose
-    assert "image: thistlewarden:0.1.0" in compose
+    assert "image: thistlewarden:0.2.0" in compose
+    assert "image: thistlewarden:0.2.0" in compose_e2e
     assert "name: thistlewarden-data" in compose
     assert readme.startswith("# Thistlewarden\n")
+    assert "**Version 0.2.0 is a beta release.**" in readme
+    assert "docs/release-notes-0.2.0.md" in readme
 
     searched_roots = [ROOT / "src", ROOT / "docs", ROOT / "tests"]
     searched_files = [ROOT / "README.md", ROOT / "SECURITY.md"]
@@ -41,6 +46,24 @@ def test_product_branding_is_consistent() -> None:
         except UnicodeDecodeError:
             continue
         assert "LLMEvaluator" + " Evaluator" not in text, path
+
+
+def test_generated_and_sensitive_directories_are_excluded_from_release_contexts() -> None:
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+
+    assert {"build/", "dist/", "data/", "data2/", "exports/", "testsets/"} <= set(gitignore)
+    assert {
+        "build",
+        "dist",
+        "data",
+        "data2",
+        "exports",
+        "testsets",
+        "docs/archive",
+        ".coverage",
+        "htmlcov",
+    } <= set(dockerignore)
 
 
 def test_quality_gate_table_separates_model_groups() -> None:
