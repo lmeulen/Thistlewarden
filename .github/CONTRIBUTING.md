@@ -71,6 +71,8 @@ python -m mypy src
 python -m pytest -q tests/unit tests/integration --cov=evaluator --cov-branch --cov-report=term-missing:skip-covered
 ```
 
+CI writes Pytest results to its GitHub job summary and retains raw JUnit and coverage XML artifacts for 14 days. Coverage uploads to Codecov are non-blocking: Pytest remains the quality gate, so a third-party outage cannot hide or replace its exit status. Trusted runs use the optional `CODECOV_TOKEN`; fork pull requests cannot access that secret and instead use Codecov's public tokenless upload path.
+
 Changes affecting packaging, startup, providers, workers, persistence, or release behavior should also pass the Docker release gate in [docs/release.md](../docs/release.md).
 
 ## Change guidelines

@@ -71,6 +71,33 @@ def test_readme_badges_match_user_facing_project_metadata() -> None:
     assert "certified" not in badge_row.casefold()
 
 
+def test_ci_publishes_bounded_test_and_coverage_reports_safely() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    contributing = (ROOT / ".github/CONTRIBUTING.md").read_text(encoding="utf-8")
+
+    assert workflow.count("python -m pytest -q tests/unit tests/integration") == 1
+    assert "--junitxml=junit.xml" in workflow
+    assert "--cov-branch" in workflow
+    assert "--cov-report=xml:coverage.xml" in workflow
+    assert workflow.count("if: always()") >= 5
+    assert workflow.count("retention-days: 14") == 2
+    assert "path: junit.xml" in workflow
+    assert "path: coverage.xml" in workflow
+    assert "GITHUB_STEP_SUMMARY" in workflow
+    assert "permissions:\n  contents: read" in workflow
+    assert "pull_request_target" not in workflow
+    assert "checks: write" not in workflow
+    assert "continue-on-error: true" in workflow
+    assert "token: ${{ secrets.CODECOV_TOKEN }}" in workflow
+    assert "uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5" in workflow
+    assert (
+        workflow.count("uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02")
+        == 2
+    )
+    assert "retains raw JUnit and coverage XML artifacts for 14 days" in contributing
+    assert "fork pull requests cannot access that secret" in contributing
+
+
 def test_generated_and_sensitive_directories_are_excluded_from_release_contexts() -> None:
     gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
