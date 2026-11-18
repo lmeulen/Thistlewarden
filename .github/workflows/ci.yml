@@ -45,8 +45,76 @@ jobs:
       - name: Test with branch coverage
         run: >-
           python -m pytest -q tests/unit tests/integration
+          --junitxml=junit.xml
+          -o junit_logging=no
+          -o junit_log_passing_tests=false
           --cov=evaluator --cov-branch
           --cov-report=term-missing:skip-covered
+          --cov-report=xml:coverage.xml
+      - name: Publish test summary
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          report = Path("junit.xml")
+          print("## Pytest results")
+          if not report.is_file():
+              print("Pytest did not produce JUnit XML; inspect preceding workflow steps.")
+              raise SystemExit()
+          root = ET.parse(report).getroot()
+          suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
+          outer = suites[0]
+          tests = int(outer.get("tests", "0"))
+          failures = int(outer.get("failures", "0"))
+          errors = int(outer.get("errors", "0"))
+          skipped = int(outer.get("skipped", "0"))
+          print(f"{tests} tests: {tests - failures - errors - skipped} passed, "
+                f"{failures} failed, {errors} errors, {skipped} skipped.")
+          problems = [case for case in root.iter("testcase")
+                      if case.find("failure") is not None or case.find("error") is not None]
+          if problems:
+              print("\n### Failures and errors")
+              for case in problems:
+                  detail = case.find("failure")
+                  if detail is None:
+                      detail = case.find("error")
+                  message = (detail.get("message", "") if detail is not None else "").splitlines()[0]
+                  name = f"{case.get('classname', '')}.{case.get('name', '')}".strip(".")
+                  print(f"- `{name}`: {message or 'See raw JUnit artifact.'}")
+          PY
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pytest-junit-${{ github.run_id }}
+          path: junit.xml
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pytest-coverage-${{ github.run_id }}
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 14
+      # Repository Actions policy allowlists this exact Codecov commit; update both together.
+      # Trusted runs use CODECOV_TOKEN when configured. Fork pull requests receive no secret
+      # and use Codecov's public tokenless path. Reporting stays non-blocking because Pytest is
+      # the quality gate and a third-party outage must not replace or hide its exit status.
+      - name: Publish coverage to Codecov
+        if: always() && hashFiles('coverage.xml') != ''
+        continue-on-error: true
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage.xml
+          flags: pytest
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: false
 
   container:
     runs-on: ubuntu-24.04
