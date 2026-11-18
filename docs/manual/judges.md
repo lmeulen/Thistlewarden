@@ -12,9 +12,11 @@ Open **Judges** and use **Evaluation rules** to create versioned rules separatel
 Choose one assessment method before publishing:
 
 - **One assessment for all metrics** sends one judge call containing all enabled metrics. It shows one free **Prompt** field followed by read-only **Fixed output requirements**. Thistlewarden appends those requirements to your prompt to form the single provider prompt.
-- **Separate assessment per metric** makes one sequential judge call for each enabled metric. It shows separate instructions for every enabled metric. Thistlewarden combines resulting metric scores using configured weights.
+- **Separate assessment per metric** makes one sequential judge call for each enabled metric. Every active metric starts with editable, metric-specific guidance covering evidence, scope, optional expected answers or context, five score anchors, and boundaries with related metrics. Review these defaults as starting points rather than assuming they guarantee deterministic scores. Thistlewarden combines resulting metric scores using configured weights.
 
-Thistlewarden always owns and adds fixed prompt parts: safety boundaries, quoted testcase data, code-owned metric definitions, and strict JSON response contract. Your instructions are evaluation data inside that wrapper; they cannot change metric IDs, score ranges, aggregation, provider settings, or output schema. Publish the next Judge version for any semantic change; the editor proposes the next minor version and shows published history. Existing versions and run snapshots remain unchanged.
+Switching assessment methods in editor does not overwrite text already entered in current form. Saving and reopening an existing separate-assessment draft preserves its instructions. Calibrate edited prompts with known fully acceptable, borderline, partial, and unacceptable answers before publishing.
+
+Thistlewarden always owns and adds fixed prompt parts: safety boundaries, quoted testcase data, code-owned metric definitions, and strict JSON response contract. Your instructions are evaluation data inside that wrapper; they cannot change metric IDs, score ranges, aggregation, provider settings, or output schema. Publish the next Judge version for any semantic change, including changes to default or customized metric instructions; editor proposes next minor version and shows published history. Existing drafts are not rewritten when code-owned defaults change. Existing published versions and run snapshots remain unchanged.
 
 ### Creating an LLM judge profile
 

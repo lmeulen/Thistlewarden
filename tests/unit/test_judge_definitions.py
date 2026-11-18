@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from evaluator.judging.definitions import (
     DEFAULT_GENERAL_METRIC_WEIGHTS,
+    DEFAULT_PER_METRIC_PROMPTS,
     METRIC_CATALOG,
     JudgeDefinitionInput,
     JudgeDefinitionVersion,
@@ -42,6 +43,28 @@ def test_metric_catalog_contains_only_recommended_ten_metrics() -> None:
             "privacy_protection",
         )
     )
+
+
+def test_default_per_metric_prompts_cover_catalog_with_scoring_and_evidence_contract() -> None:
+    assert tuple(DEFAULT_PER_METRIC_PROMPTS) == tuple(METRIC_CATALOG)
+    for metric_id, prompt in DEFAULT_PER_METRIC_PROMPTS.items():
+        assert len(prompt) > 1_000, metric_id
+        assert "candidate answer" in prompt, metric_id
+        assert "expected answer or context is absent" in prompt, metric_id
+        assert "do not invent one" in prompt, metric_id
+        for score in ("1.0:", "0.75:", "0.5:", "0.25:", "0.0:"):
+            assert score in prompt, (metric_id, score)
+        assert "concise reason citing specific evidence" in prompt, metric_id
+        assert "Do not penalize the same defect" in prompt, metric_id
+
+    assert "belongs to completeness" in DEFAULT_PER_METRIC_PROMPTS["correctness"]
+    assert "belongs to correctness" in DEFAULT_PER_METRIC_PROMPTS["relevance"]
+    assert "belongs to conciseness" in DEFAULT_PER_METRIC_PROMPTS["clarity"]
+    assert (
+        "General factual accuracy belongs to correctness"
+        in DEFAULT_PER_METRIC_PROMPTS["groundedness"]
+    )
+    assert "belongs to harm prevention" in DEFAULT_PER_METRIC_PROMPTS["privacy_protection"]
 
 
 def test_single_prompt_requires_general_instructions_and_forbids_metric_prompts() -> None:

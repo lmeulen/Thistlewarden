@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from evaluator.judging.definitions import DEFAULT_GENERAL_METRIC_WEIGHTS, DEFAULT_SINGLE_PROMPT
+from evaluator.judging.definitions import (
+    DEFAULT_GENERAL_METRIC_WEIGHTS,
+    DEFAULT_PER_METRIC_PROMPTS,
+    DEFAULT_SINGLE_PROMPT,
+)
 from evaluator.ui.shared import (
     METRIC_CATALOG,
     ApiError,
@@ -68,6 +72,7 @@ def judge_rule_new() -> str | Response:
         judge=None,
         metrics=METRIC_CATALOG.values(),
         default_metric_weights=DEFAULT_GENERAL_METRIC_WEIGHTS,
+        default_per_metric_prompts=DEFAULT_PER_METRIC_PROMPTS,
         default_single_prompt=DEFAULT_SINGLE_PROMPT,
         Decimal=Decimal,
     )
@@ -94,6 +99,7 @@ def judge_rule_edit(definition_id: str) -> str | Response:
         next_version=service.next_version(definition_id),
         metrics=METRIC_CATALOG.values(),
         default_metric_weights=DEFAULT_GENERAL_METRIC_WEIGHTS,
+        default_per_metric_prompts=DEFAULT_PER_METRIC_PROMPTS,
         default_single_prompt=DEFAULT_SINGLE_PROMPT,
         Decimal=Decimal,
     )

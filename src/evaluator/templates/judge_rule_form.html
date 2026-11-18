@@ -43,7 +43,7 @@
       </div>
     </div>
     <div id="per-metric-intro" {% if not judge or judge.draft.mode == 'single_prompt' %}hidden{% endif %} class="judge-mode-notice">
-      Add focused instructions inside each enabled metric below.
+      Each metric starts with editable guidance for scope, evidence, score anchors, and related-metric boundaries. Review and calibrate it before publishing.
     </div>
   </section>
 
@@ -63,7 +63,7 @@
         </div>
         <p>{{ metric.description }}</p>
         <div class="metric-instructions" {% if not judge or judge.draft.mode == 'single_prompt' %}hidden{% endif %}>
-          <label>Instructions<textarea name="instructions_{{ metric.id }}" rows="4" placeholder="How should this metric be assessed?">{{ saved.instructions if saved and saved.instructions else (metric.description if not judge and metric.id in default_metric_weights else '') }}</textarea></label>
+          <label>Instructions<textarea name="instructions_{{ metric.id }}" rows="14" placeholder="How should this metric be assessed?">{{ saved.instructions if saved and saved.instructions else (default_per_metric_prompts.get(metric.id, '') if not judge and metric.id in default_metric_weights else '') }}</textarea><small>Editable starting point. Publishing freezes this text in an immutable Judge version.</small></label>
         </div>
       </fieldset>
       {% endfor %}
