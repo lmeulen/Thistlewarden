@@ -15,7 +15,7 @@ from mistune import HTMLRenderer
 _SAFE_NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
 _ANCHOR = re.compile(r'<a id="([a-z0-9-]+)"></a>\s*')
 _DISTRIBUTION = "thistlewarden"
-_PACKAGED_MANUAL_INDEX = PurePosixPath("../../../share/thistlewarden/manual/README.md")
+_PACKAGED_MANUAL_SUFFIX = PurePosixPath("share/thistlewarden/manual/README.md")
 _SOURCE_MANUAL_ROOT = Path(__file__).resolve().parents[2] / "docs" / "manual"
 
 
@@ -69,12 +69,15 @@ def _manual_root() -> Path | None:
         return None
     if distribution_files is None:
         return None
-    index = next(
-        (item for item in distribution_files if PurePosixPath(str(item)) == _PACKAGED_MANUAL_INDEX),
-        None,
-    )
-    if not isinstance(index, PackagePath):
+    indexes = [
+        item
+        for item in distribution_files
+        if isinstance(item, PackagePath)
+        and PurePosixPath(str(item)).parts[-4:] == _PACKAGED_MANUAL_SUFFIX.parts
+    ]
+    if len(indexes) != 1:
         return None
+    index = indexes[0]
     try:
         located = Path(index.locate()).resolve()
         return located.parent if located.is_file() else None
