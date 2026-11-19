@@ -458,7 +458,7 @@ class ModelProfileService:
         try:
             self._repository.save(record)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Profielnaam bestaat al binnen endpoint.") from exc
+            raise ConflictError("Profile name already exists within endpoint.") from exc
         result = self.get(record.id)
         log_semantic_event(
             _LOG,
@@ -483,7 +483,7 @@ class ModelProfileService:
         try:
             self._repository.save(updated)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Profielnaam bestaat al binnen endpoint.") from exc
+            raise ConflictError("Profile name already exists within endpoint.") from exc
         result = self.get(profile_id)
         log_semantic_event(
             _LOG,
@@ -499,7 +499,7 @@ class ModelProfileService:
             if not self._repository.delete(profile_id):
                 raise NotFoundError("Model profile not found.")
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Modelprofiel heeft historische referenties.") from exc
+            raise ConflictError("Model profile has historical references.") from exc
         log_semantic_event(
             _LOG,
             "model_profile_deleted",

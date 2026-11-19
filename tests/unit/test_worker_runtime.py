@@ -98,8 +98,8 @@ def test_model_tester_uses_complete_persisted_specification() -> None:
     assert called_profile is profile.data
     assert called_profile.custom_parameters == {"seed": 7}
     assert kwargs == {
-        "prompt": ModelProfileTester.TEST_PROMPT,
-        "system_prompt": ModelProfileTester.TEST_SYSTEM_PROMPT,
+        "prompt": "Reply with exactly MODEL_TEST_OK.",
+        "system_prompt": "Follow the instruction exactly and add no other text.",
         "diagnostic_mode": True,
     }
 

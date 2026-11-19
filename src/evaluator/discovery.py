@@ -55,7 +55,7 @@ def parse_models_response(content: bytes) -> list[str]:
         return result
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise InvalidProviderResponseError(
-            "Providerresponse heeft geen geldig modelcontract."
+            "Provider response does not match the model-list contract."
         ) from exc
 
 
@@ -84,7 +84,7 @@ class ModelDiscoveryClient:
 
     def discover(self, endpoint: EndpointRecord) -> list[str]:
         if endpoint.data.models_url is None:
-            raise ValidationApiError("Models-URL is niet geconfigureerd.")
+            raise ValidationApiError("Models URL is not configured.")
         if self._transport is None:
             validate_destination(endpoint, endpoint.data.models_url)
         try:
@@ -156,12 +156,12 @@ class ModelDiscoveryService:
         except ValidationError as exc:
             raise ValidationApiError.from_pydantic(exc) from exc
         if len(set(selection.model_ids)) != len(selection.model_ids):
-            raise ValidationApiError("model_ids moeten uniek zijn.")
+            raise ValidationApiError("model_ids must be unique.")
         endpoint = self._get_endpoint(endpoint_id)
         discovered = self._executor.execute(endpoint, lambda: self._client.discover(endpoint))
         available = set(discovered)
         if any(model_id not in available for model_id in selection.model_ids):
-            raise ValidationApiError("Selectie bevat model-ID dat niet is ontdekt.")
+            raise ValidationApiError("Selection contains a model ID that was not discovered.")
         existing = {
             record.data.display_name.casefold()
             for record in self._models.list_for_endpoint(endpoint.id)
@@ -185,7 +185,7 @@ class ModelDiscoveryService:
         except sqlite3.IntegrityError as exc:
             from evaluator.api.errors import ConflictError
 
-            raise ConflictError("Modelimport conflicteert met bestaande profielen.") from exc
+            raise ConflictError("Model import conflicts with existing profiles.") from exc
         return [record for item in records if (record := self._models.get(item.id)) is not None]
 
     def _get_endpoint(self, endpoint_id: Any) -> EndpointRecord:

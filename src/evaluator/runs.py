@@ -798,8 +798,7 @@ class RunQueue:
             result["recovery_warning"] = bool(result["recovery_warning"])
             if result["recovery_warning"]:
                 result["recovery_message"] = (
-                    "Onderbroken providercalls kunnen opnieuw zijn uitgevoerd en "
-                    "dubbele kosten veroorzaken."
+                    "Interrupted provider calls may have been repeated and caused duplicate costs."
                 )
             return result
         finally:

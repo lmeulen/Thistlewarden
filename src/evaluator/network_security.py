@@ -41,16 +41,16 @@ def validate_destination(
     if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
         raise ProviderClientError("Provider destination is invalid.")
     if parsed.username is not None or parsed.password is not None:
-        raise ProviderClientError("Providerbestemming bevat verboden userinfo.")
+        raise ProviderClientError("Provider destination contains forbidden user information.")
     try:
         records = resolver(
             parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
         )
     except OSError as exc:
-        raise NetworkError("Providerhost kon niet veilig worden resolved.") from exc
+        raise NetworkError("Provider host could not be resolved safely.") from exc
     addresses = {str(record[4][0]) for record in records}
     if not addresses:
-        raise NetworkError("Providerhost heeft geen adressen.")
+        raise NetworkError("Provider host has no addresses.")
     restricted = [address for address in addresses if is_restricted_address(address)]
     hostname = parsed.hostname.casefold()
     loopback_name = hostname == "localhost"
@@ -58,5 +58,5 @@ def validate_destination(
     trusted = endpoint.data.trusted_internal_http and endpoint.data.security_warning_confirmed
     if restricted and not ((loopback_name and only_loopback) or trusted):
         raise ProviderClientError(
-            "Providerhost resolveert naar een beperkt intern of metadata-adres."
+            "Provider host resolves to a restricted internal or metadata address."
         )

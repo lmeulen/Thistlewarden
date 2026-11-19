@@ -31,4 +31,7 @@ def test_only_expired_utc_lease_recovers_with_new_generation(tmp_path: Path) -> 
         queue.complete(old, status="passed", score="1", weight="1", result={})
     queue.complete(new, status="passed", score="1", weight="1", result={})
     run = queue.get_run(run_id)
-    assert run["recovery_warning"] is True and "dubbele kosten" in run["recovery_message"]
+    assert run["recovery_warning"] is True
+    assert run["recovery_message"] == (
+        "Interrupted provider calls may have been repeated and caused duplicate costs."
+    )

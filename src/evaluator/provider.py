@@ -218,7 +218,7 @@ def parse_completion_response(content: bytes, headers: Mapping[str, str]) -> Com
         usage = None if usage_value is None else ProviderUsage.model_validate(usage_value)
     except (json.JSONDecodeError, KeyError, IndexError, TypeError, ValidationError) as exc:
         raise InvalidProviderResponseError(
-            "Providerresponse heeft geen geldig completioncontract."
+            "Provider response does not match the completion contract."
         ) from exc
     lowered = {key.lower(): value for key, value in headers.items()}
     request_id = next((lowered[name] for name in _REQUEST_ID_HEADERS if lowered.get(name)), None)
@@ -312,7 +312,7 @@ class ProviderHeaderResolver:
         if endpoint.api_key_secret_id is not None:
             secret = self._secrets.get(endpoint.api_key_secret_id)
             if secret is None:
-                raise ProviderClientError("Endpoint-API-key is niet beschikbaar.")
+                raise ProviderClientError("Endpoint API key is unavailable.")
             headers[endpoint.data.api_key_header] = compose_api_key(
                 endpoint.data.api_key_prefix, secret.value
             )
@@ -322,14 +322,16 @@ class ProviderHeaderResolver:
                 secret_id = secret_ids.get(header.name.lower())
                 secret = self._secrets.get(secret_id) if secret_id is not None else None
                 if secret is None:
-                    raise ProviderClientError("Geheime endpointheader is niet beschikbaar.")
+                    raise ProviderClientError("Secret endpoint header is unavailable.")
                 value = secret.value
             else:
                 match = _ENV_REFERENCE.fullmatch(header.value)
                 if match is not None:
                     value = self._environment.get(match.group(1), "")
                     if not value:
-                        raise ProviderClientError("Environment-headersecret is niet beschikbaar.")
+                        raise ProviderClientError(
+                            "Environment-backed header secret is unavailable."
+                        )
                 else:
                     value = header.value
             headers[header.name] = value
@@ -438,4 +440,4 @@ class OpenAIProviderClient:
         if status >= 500:
             raise ProviderServerError()
         if 300 <= status < 400:
-            raise ProviderClientError("Providerredirects worden niet gevolgd.")
+            raise ProviderClientError("Provider redirects are not followed.")
