@@ -483,6 +483,25 @@ def _migration_20(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_21(connection: sqlite3.Connection) -> None:
+    """Terminalize active child jobs left under historically cancelled runs."""
+
+    connection.execute(
+        """UPDATE run_jobs
+        SET status='cancelled',lease_owner=NULL,lease_expires_at=NULL,
+            updated_at=COALESCE(
+                (SELECT cancelled_at FROM runs WHERE runs.id=run_jobs.run_id),
+                (SELECT created_at FROM runs WHERE runs.id=run_jobs.run_id),
+                updated_at
+            )
+        WHERE status IN ('pending','running')
+          AND EXISTS (
+              SELECT 1 FROM runs
+              WHERE runs.id=run_jobs.run_id AND runs.status='cancelled'
+          )"""
+    )
+
+
 def _migration_17(connection: sqlite3.Connection) -> None:
     """Persist onboarding choices and successful readiness actions."""
 
@@ -526,6 +545,7 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(18, "add_versioned_judge_definitions", _migration_18),
     Migration(19, "backfill_versioned_judge_definitions", _migration_19),
     Migration(20, "add_manual_onboarding_completion", _migration_20),
+    Migration(21, "terminalize_cancelled_run_jobs", _migration_21),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

@@ -74,7 +74,84 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (18, "add_versioned_judge_definitions"),
             (19, "backfill_versioned_judge_definitions"),
             (20, "add_manual_onboarding_completion"),
+            (21, "terminalize_cancelled_run_jobs"),
         ]
+    finally:
+        connection.close()
+
+
+def test_migration_21_terminalizes_active_jobs_under_cancelled_runs(tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "app.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:20]).migrate()
+    connection = factory.connect()
+    try:
+        run_id = "10000000-0000-0000-0000-000000000001"
+        model_id = "30000000-0000-0000-0000-000000000001"
+        cancelled_at = "2026-11-18T12:00:00Z"
+        connection.execute(
+            """INSERT INTO runs(
+                id,name,golden_set_id,status,cancelled_at,created_at,
+                recovery_warning,gate_status
+            ) VALUES(?,?,?,'cancelled',?,?,0,'not_evaluated')""",
+            (run_id, "Cancelled", "golden", cancelled_at, "2026-11-18T11:00:00Z"),
+        )
+        case_ids = [f"20000000-0000-0000-0000-00000000000{index}" for index in range(1, 4)]
+        connection.executemany(
+            "INSERT INTO run_case_snapshots VALUES(?,?,?,?,?,?)",
+            [
+                (item_id, run_id, f"source-case-{index}", f"case-{index}", "1", "{}")
+                for index, item_id in enumerate(case_ids, start=1)
+            ],
+        )
+        connection.execute(
+            "INSERT INTO run_model_snapshots VALUES(?,?,?,?,?)",
+            (model_id, run_id, "source-model", "endpoint", "{}"),
+        )
+        jobs = [
+            (
+                f"40000000-0000-0000-0000-00000000000{index}",
+                run_id,
+                case_ids[index - 1],
+                model_id,
+                status,
+                owner,
+                expires,
+                "2026-11-18T11:00:00Z",
+                "2026-11-18T11:30:00Z",
+            )
+            for index, (status, owner, expires) in enumerate(
+                [
+                    ("pending", None, None),
+                    ("running", "worker", "2026-11-18T13:00:00Z"),
+                    ("completed", None, None),
+                ],
+                start=1,
+            )
+        ]
+        connection.executemany(
+            """INSERT INTO run_jobs(
+                id,run_id,case_snapshot_id,model_snapshot_id,status,
+                lease_owner,lease_expires_at,created_at,updated_at
+            ) VALUES(?,?,?,?,?,?,?,?,?)""",
+            jobs,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert MigrationManager(factory).migrate() == LATEST_SCHEMA_VERSION
+    connection = factory.connect()
+    try:
+        rows = connection.execute(
+            "SELECT status,lease_owner,lease_expires_at,updated_at FROM run_jobs ORDER BY id"
+        ).fetchall()
+        assert [tuple(row) for row in rows] == [
+            ("cancelled", None, None, cancelled_at),
+            ("cancelled", None, None, cancelled_at),
+            ("completed", None, None, "2026-11-18T11:30:00Z"),
+        ]
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:
         connection.close()
 

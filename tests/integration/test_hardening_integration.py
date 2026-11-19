@@ -114,6 +114,12 @@ def test_cancel_fences_running_worker_final_commit(app) -> None:
         queue.complete(lease, status="passed", score="1", weight="1", result={})
     connection = app.extensions["database_factory"].connect()
     try:
+        job = connection.execute(
+            """SELECT status,lease_owner,lease_expires_at
+            FROM run_jobs WHERE run_id=?""",
+            (str(run_id),),
+        ).fetchone()
+        assert tuple(job) == ("cancelled", None, None)
         assert (
             connection.execute(
                 "SELECT COUNT(*) FROM run_results WHERE run_id=?", (str(run_id),)

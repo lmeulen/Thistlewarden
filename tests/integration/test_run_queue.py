@@ -14,6 +14,7 @@ import pytest
 from evaluator import create_app
 from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.endpoints import SQLiteEndpointRepository
+from evaluator.evaluators import EvaluationResult
 from evaluator.provider import CompletionResult, ProviderUsage
 from evaluator.runs import LeaseLost, RunQueue
 from evaluator.worker_runtime import JudgeCaller
@@ -440,6 +441,74 @@ def test_failed_per_metric_judge_persists_completed_call_evidence_without_score(
     assert "criteria" not in result and "candidate" not in result
 
 
+def test_cancel_during_judge_terminalizes_claimed_job(tmp_path: Path) -> None:
+    app, golden, model = fixture_app(tmp_path)
+    app.extensions["judge_profile_service"].create(
+        {"name": "Judge model", "model_profile_id": str(model.id), "is_global_default": True}
+    )
+    definitions = app.extensions["judge_definition_service"]
+    definition = definitions.create(
+        {
+            "name": "Cancellation judge",
+            "mode": "single_prompt",
+            "threshold": "0.5",
+            "general_instructions": "Assess answer.",
+            "metrics": [{"metric_id": "correctness", "weight": "1"}],
+        }
+    )
+    definitions.publish(definition.id)
+    app.extensions["golden_set_service"].create_item(
+        golden.id,
+        {
+            "case_id": "cancel-during-judge",
+            "prompt": "Question",
+            "evaluation_method": "llm_judge",
+            "evaluator_config": {
+                "judge_definition_id": definition.id,
+                "judge_definition_version": "1.0",
+            },
+        },
+    )
+    queue = app.extensions["run_queue"]
+    run_id = queue.create_run(
+        {
+            "name": "Cancel judge",
+            "golden_set_id": str(golden.id),
+            "model_profile_ids": [str(model.id)],
+        }
+    )
+
+    def cancel_judge(active_run_id, case, candidate):
+        del case, candidate
+        queue.cancel(active_run_id)
+        return EvaluationResult(method="llm_judge", score=Decimal("1"), passed=True, reason="Pass.")
+
+    pipeline = WorkerPipeline(
+        queue,
+        lambda case, profile: TargetOutcome(content="Candidate"),
+        judge=cancel_judge,
+        heartbeat_interval=0.01,
+    )
+    while pipeline.run_once("cancel-judge"):
+        pass
+
+    exported = app.extensions["run_export_service"].data(run_id)
+    assert exported["run"]["status"] == "cancelled"
+    case_ids = {
+        snapshot["id"]: json.loads(snapshot["snapshot_json"])["case_id"]
+        for snapshot in exported["case_snapshots"]
+    }
+    judge_job = next(
+        job
+        for job in exported["jobs"]
+        if case_ids[job["case_snapshot_id"]] == "cancel-during-judge"
+    )
+    assert judge_job["status"] == "cancelled"
+    assert all(job["status"] in {"cancelled", "completed"} for job in exported["jobs"])
+    completed_job_ids = {job["id"] for job in exported["jobs"] if job["status"] == "completed"}
+    assert {result["job_id"] for result in exported["results"]} == completed_job_ids
+
+
 def test_cancelled_per_metric_judge_stops_calls_and_persists_completed_call_evidence(
     tmp_path: Path,
 ) -> None:
@@ -547,6 +616,92 @@ def test_run_rejects_unknown_published_judge_version_atomically(tmp_path: Path) 
         assert connection.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 0
     finally:
         connection.close()
+
+
+def test_cancel_terminalizes_all_active_jobs_and_preserves_completed_results(
+    tmp_path: Path,
+) -> None:
+    app, golden, model = fixture_app(tmp_path)
+    service = app.extensions["golden_set_service"]
+    service.create_item(
+        golden.id,
+        {
+            "case_id": "second",
+            "prompt": "second",
+            "expected_answer": "second",
+            "evaluation_method": "exact_match",
+        },
+    )
+    for case_id in ("third", "fourth"):
+        service.create_item(
+            golden.id,
+            {
+                "case_id": case_id,
+                "prompt": case_id,
+                "expected_answer": case_id,
+                "evaluation_method": "exact_match",
+            },
+        )
+    clock = FakeClock()
+    queue = RunQueue(app.extensions["database_factory"], clock=clock)
+    run_id = queue.create_run(
+        {"name": "R", "golden_set_id": str(golden.id), "model_profile_ids": [str(model.id)]}
+    )
+    completed = queue.claim("worker")
+    assert completed is not None
+    queue.complete(completed, status="passed", score="1", weight="1", result={"passed": True})
+    failed = queue.claim("worker")
+    assert failed is not None
+    queue.fail(failed, "preserved_error", {"diagnostic": "preserve me"})
+    running = queue.claim("worker")
+    assert running is not None
+
+    response = app.test_client().post(f"/api/v1/runs/{run_id}/cancel")
+
+    assert response.status_code == 200
+    run = response.get_json()["run"]
+    assert run["status"] == "cancelled"
+    assert run["job_counts"] == {"cancelled": 2, "completed": 1, "failed": 1}
+    assert queue.claim("other") is None
+    assert queue.recover_expired() == {"jobs": 0, "runs": 0}
+    with pytest.raises(LeaseLost):
+        queue.record_attempt(running, "late", {})
+    with pytest.raises(LeaseLost):
+        queue.complete(running, status="passed", score="1", weight="1", result={})
+
+    poll = app.test_client().get(f"/runs/{run_id}/status").get_json()
+    assert poll["done_jobs"] == poll["total_jobs"] == 4
+    assert poll["progress_percent"] == 100 and poll["terminal"] is True
+
+    export_service = app.extensions["run_export_service"]
+    exported = export_service.data(run_id)
+    assert sorted(job["status"] for job in exported["jobs"]) == [
+        "cancelled",
+        "cancelled",
+        "completed",
+        "failed",
+    ]
+    failed_job = next(job for job in exported["jobs"] if job["id"] == str(failed.job_id))
+    assert failed_job["error_code"] == "preserved_error"
+    assert len(exported["results"]) == 2
+    failed_result = next(
+        result for result in exported["results"] if result["job_id"] == str(failed.job_id)
+    )
+    assert json.loads(failed_result["result_json"]) == {"diagnostic": "preserve me"}
+
+    artifacts: dict[str, bytes] = {}
+    for format_ in ("json", "csv", "html"):
+        artifact = export_service.create_export(run_id, format_)
+        try:
+            artifacts[format_] = artifact.path.read_bytes()
+        finally:
+            artifact.cleanup()
+    json_export = json.loads(artifacts["json"])
+    assert all(job["status"] not in {"pending", "running"} for job in json_export["jobs"])
+    assert artifacts["csv"].count(b"\n") == 3
+    assert b"Status: cancelled" in artifacts["html"]
+    assert artifacts["html"].count(b"<tbody><tr>") == 1
+    assert artifacts["html"].count(b"<tr>") == 3
 
 
 def test_atomic_snapshots_jobs_and_fenced_expiry(tmp_path: Path) -> None:

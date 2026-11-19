@@ -127,7 +127,7 @@ You can cancel only a pending or running run.
 2. In **Actions**, select **I confirm cancellation**.
 3. Select **Cancel run**.
 
-Cancellation stops pending jobs and marks the run cancelled. Work already executing may have reached a provider before cancellation takes effect, so cancellation does not guarantee zero further provider usage. Completed results remain visible for inspection. A cancelled run is terminal and cannot be resumed; create a new run if needed.
+Cancellation atomically marks pending and running jobs cancelled, clears their leases, and marks the run cancelled. Workers holding old leases cannot save later attempts or results. Work already executing may have reached a provider before cancellation takes effect, so cancellation does not guarantee zero further provider usage. Results completed before cancellation remain visible for inspection. A cancelled run is terminal and cannot be resumed; create a new run if needed.
 
 Use cancellation for an incorrect selection, unexpected run size, configuration problem, or budget concern. Confirm the checkbox deliberately: it prevents an accidental click from stopping active evaluation work.
 

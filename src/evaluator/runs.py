@@ -279,8 +279,10 @@ class RunQueue:
         try:
             with transaction(connection, mode="IMMEDIATE"):
                 rows = connection.execute(
-                    "SELECT id,run_id FROM run_jobs WHERE status='running' "
-                    "AND lease_expires_at <= ?",
+                    """SELECT j.id,j.run_id FROM run_jobs j
+                    JOIN runs r ON r.id=j.run_id
+                    WHERE j.status='running' AND j.lease_expires_at <= ?
+                    AND r.status IN ('pending','running')""",
                     (now,),
                 ).fetchall()
                 run_ids = {row["run_id"] for row in rows}
@@ -521,7 +523,7 @@ class RunQueue:
         now = to_utc_iso(self._clock.now_utc())
         connection = self._factory.connect()
         try:
-            with transaction(connection):
+            with transaction(connection, mode="IMMEDIATE"):
                 cursor = connection.execute(
                     "UPDATE runs SET status='cancelled',cancelled_at=? WHERE id=? "
                     "AND status IN ('pending','running')",
@@ -530,8 +532,9 @@ class RunQueue:
                 if cursor.rowcount != 1:
                     raise ValidationApiError("Run cannot be cancelled.")
                 connection.execute(
-                    "UPDATE run_jobs SET status='cancelled',updated_at=? WHERE run_id=? "
-                    "AND status='pending'",
+                    """UPDATE run_jobs
+                    SET status='cancelled',lease_owner=NULL,lease_expires_at=NULL,updated_at=?
+                    WHERE run_id=? AND status IN ('pending','running')""",
                     (now, str(run_id)),
                 )
                 counts = connection.execute(

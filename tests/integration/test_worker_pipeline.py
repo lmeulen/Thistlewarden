@@ -96,6 +96,26 @@ def test_interrupted_provider_job_remains_recoverable(tmp_path: Path) -> None:
     assert queue.claim("recovery-worker") is not None
 
 
+def test_cancel_during_target_terminalizes_claimed_job(tmp_path: Path) -> None:
+    app, golden, model = fixture_app(tmp_path)
+    queue = app.extensions["run_queue"]
+    run_id = queue.create_run(
+        {"name": "cancel", "golden_set_id": str(golden.id), "model_profile_ids": [str(model.id)]}
+    )
+
+    def cancel_during_target(case, profile):
+        del case, profile
+        queue.cancel(run_id)
+        return TargetOutcome("too late")
+
+    worker = WorkerPipeline(queue, cancel_during_target, heartbeat_interval=0.01)
+    assert worker.run_once("worker")
+    exported = app.extensions["run_export_service"].data(run_id)
+    assert exported["run"]["status"] == "cancelled"
+    assert [job["status"] for job in exported["jobs"]] == ["cancelled"]
+    assert exported["results"] == []
+
+
 def test_cancel_skips_pending_jobs(tmp_path: Path) -> None:
     app, golden, model = fixture_app(tmp_path)
     queue = RunQueue(app.extensions["database_factory"])
