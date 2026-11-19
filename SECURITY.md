@@ -4,51 +4,86 @@
 
 | Version | Supported |
 | --- | --- |
-| 0.2.x beta | Yes |
-| Earlier versions | No |
+| Latest 0.2.x beta | Yes |
+| Earlier releases | No |
 
-Security fixes are provided for the latest 0.2.x beta release only.
+Security fixes are provided only for latest published 0.2.x beta. Upgrade before reporting behavior already addressed in newer release.
 
 ## Supported boundary
 
-Thistlewarden is a local, single-user application. Supported deployment is one process on one host, listening only on loopback from host perspective, with SQLite and exports on a local filesystem. Docker Compose publishes container port only on `127.0.0.1`.
+Thistlewarden is a **local, single-user application**. Supported deployment has all following properties:
 
-Do not expose application directly to LAN or internet. Authentication, tenant isolation, reverse-proxy trust and hostile administrators are outside current threat model.
+- one trusted user;
+- one application process on one host;
+- host-facing listener bound only to loopback;
+- SQLite, WAL files, exports, and backups on local filesystem; and
+- browser used on same trusted computer.
+
+Docker Compose may bind `0.0.0.0` inside container, but supported Compose file publishes port only on host `127.0.0.1`.
+
+Do not expose Thistlewarden directly to LAN, internet, reverse proxy, shared workstation, or untrusted users. Application has no authentication, authorization, tenant isolation, or supported remote-deployment model. Reverse-proxy trust, hostile local administrators, and multi-user isolation are outside threat model.
 
 ## Sensitive data
 
-API keys and secret endpoint headers use AES-256-GCM in SQLite. `ENCRYPTION_KEY` and `SECRET_KEY` must be generated independently, stored in `.env`, excluded from source control and backed up separately. Losing encryption key makes encrypted provider secrets unrecoverable.
+### Application and provider secrets
 
-Prompts, expected answers, model answers and judge details are intentionally plaintext in local SQLite and run exports. Treat database, backups and exports as sensitive. Run downloads require explicit GUI confirmation.
+Provider API keys and endpoint headers marked secret are encrypted in SQLite with AES-256-GCM. Encryption at rest protects those fields only; it does not make host safe after compromise.
 
-Generate keys:
+`ENCRYPTION_KEY` and `SECRET_KEY` must be independent random values. Store them in `.env` or approved deployment secret mechanism, exclude them from source control, restrict access, and preserve protected recovery copy. Losing `ENCRYPTION_KEY` makes stored provider secrets unrecoverable. Anyone with both database and encryption key may decrypt them. Changing `SECRET_KEY` invalidates existing browser session and CSRF state.
+
+Generate independent values:
 
 ```bash
 python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
 python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
+### Evaluation content
+
+Prompts, expected answers, model answers, Judge instructions, evaluator configuration, run notes, and run exports are plaintext in local SQLite or files. Target providers receive prompts; Judge providers may additionally receive candidate answers, expected answers, context, and assessment criteria.
+
+Treat database, `.env`, backups, exports, browser profile, and screenshots as sensitive. Use synthetic or redacted test material where possible. Never place credentials, private keys, production secrets, or unapproved personal data in prompts or evaluator fields.
+
 ## Provider endpoint policy
 
-HTTPS is required by default. HTTP is accepted only for localhost or explicitly confirmed trusted internal endpoints. Redirects and ambient HTTP proxy variables are disabled. DNS destinations are classified before each real call; private, metadata, link-local, multicast, reserved and unspecified addresses require explicit internal trust.
+HTTPS is required by default. HTTP is accepted automatically only for localhost/loopback, or after explicit confirmation for trusted internal endpoint. Plain HTTP can expose credentials, prompts, and answers in transit.
 
-Residual: resolved IP is not pinned into HTTP transport. DNS rebinding between policy resolution and connect remains theoretically possible. Do not allow untrusted users to configure endpoints.
+Redirects and ambient HTTP proxy variables are disabled. Before each real provider call, destination is resolved and classified. Private, metadata, link-local, multicast, reserved, and unspecified destinations require explicit internal trust.
+
+Residual risk: resolved IP is not pinned into HTTP transport. DNS rebinding between policy resolution and connection remains theoretically possible. Only trusted user may configure endpoints; do not use untrusted endpoint URLs.
 
 ## Backups and restore
 
-Stop application or use SQLite backup command:
+Before migration, upgrade, or direct database work, stop application or create consistent SQLite backup:
 
 ```bash
 python -m evaluator.cli backup ./backups/manual.db
 python -m evaluator.cli restore ./backups/manual.db ./data/restored.db
 ```
 
-Back up `.env` separately using OS secret storage. Restore always targets a new path. Validate with `migrate`, point `DATABASE_PATH` to restored file, then start app. Roll back by stopping app and restoring pre-upgrade backup to a new local path.
+Restore always targets new path. Database backup alone is insufficient for complete recovery: preserve `.env` or deployment secrets separately so encrypted endpoint credentials remain readable. Protect backups at least as strongly as live data.
+
+Test recovery in isolated local environment:
+
+1. Restore database to new local path.
+2. Supply matching protected `ENCRYPTION_KEY` and valid `SECRET_KEY`.
+3. Set `DATABASE_PATH` to restored path.
+4. Run migration/startup validation.
+5. Confirm records are readable and re-test provider access with approved credential.
+
+Never send production database, `.env`, backup, or unredacted export with support report.
 
 ## Reporting a vulnerability
 
-Do not open a public issue for a suspected vulnerability. Use GitHub's private **Security → Report a vulnerability** form for this repository. If private vulnerability reporting is temporarily unavailable, contact the repository owner through the private contact method shown on their GitHub profile and ask for a secure reporting channel before sharing details.
+Do not open public issue for suspected vulnerability. Use repository's private **Security → Report a vulnerability** form. If unavailable, contact repository owner through private contact method on GitHub profile and ask for secure channel before sharing details.
 
-Include the affected version, a reproduction that uses no real secrets, the impact, and any suggested mitigation. Never attach production databases, exports, prompts, model answers, or provider credentials.
+Include:
 
-You should receive an acknowledgement within seven days. The maintainer will validate the report, coordinate remediation and disclosure, and credit the reporter unless anonymity is requested.
+- affected Thistlewarden version;
+- minimal reproduction using synthetic data and no real secrets;
+- security impact and deployment assumptions; and
+- suggested mitigation, if known.
+
+Do not attach credentials, cookies, CSRF values, production databases, backups, prompts, model answers, provider responses, or unredacted exports.
+
+Expected acknowledgement is within seven days. Maintainer validates report, coordinates remediation and disclosure, and credits reporter unless anonymity is requested.

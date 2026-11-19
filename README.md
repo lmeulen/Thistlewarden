@@ -2,53 +2,76 @@
 
 [![CI status](https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/lmeulen/Thistlewarden/actions/workflows/ci.yml?query=branch%3Amaster) [![Coverage on master](https://codecov.io/gh/lmeulen/Thistlewarden/branch/master/graph/badge.svg)](https://codecov.io/gh/lmeulen/Thistlewarden/branch/master) [![Python 3.12 or newer](https://img.shields.io/badge/Python-3.12%2B-3776AB)](#requirements) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache--2.0-2C3E50)](LICENSE) [![User manual](https://img.shields.io/badge/User_manual-Read-2C3E50)](docs/manual/README.md) [![Security policy](https://img.shields.io/badge/Security-Policy-2C3E50)](SECURITY.md)
 
-Thistlewarden monitors the quality and reliability of language models.
-
-Local single-user web application for reproducible evaluation of OpenAI-compatible language models. The GUI, API fields, logs, and documentation are in English.
+Thistlewarden is a local web application for repeatable evaluation of OpenAI-compatible and Anthropic-compatible language models. Build reusable test suites, compare models under the same conditions, inspect quality and performance, and preserve the exact configuration used for each run.
 
 ![Thistlewarden dashboard showing evaluation, configuration, and test-material summaries](docs/manual/images/dashboard.png)
 
-*Thistlewarden overview with synthetic demonstration data.*
+*Dashboard with synthetic demonstration data.*
 
 ## Status
 
-**Version 0.2.2 is a beta release.** It adds bounded-memory run exports, one canonical packaged user manual, and refreshed reproducible GUI screenshots, while retaining immutable Judge definitions, reproducible snapshots, deterministic evaluation, streaming metrics, quality gates, and configuration exchange.
+**Version 0.2.2 is a beta release.** Use it for controlled evaluation and comparison, not as a public or multi-user service.
 
-Thistlewarden is designed for one trusted user on one computer. It has no user authentication or tenant isolation. Keep it bound to loopback; do not expose it directly to a LAN or the internet. See the [security policy](SECURITY.md) for the supported deployment boundary.
+Thistlewarden is designed for one trusted user on one computer. It has no login system, user roles, or tenant isolation. Keep it bound to loopback (`127.0.0.1` or `::1`) and never expose it directly to a LAN or the internet. Read the [security policy](SECURITY.md) before installation.
+
+Each run snapshots its selected test cases, model settings, Judge configuration, and quality gates. Later edits therefore affect future runs without rewriting completed evidence.
 
 ## Known limitations
 
-- Synchronous run exports support at most 50,000 jobs per run. Split larger evaluations into smaller runs before exporting.
+- Supported deployment is one application process on one host, using local filesystem storage.
+- Synchronous run exports support at most 50,000 jobs per run. Split larger evaluations before exporting.
 - Export SQL identifiers still need an explicit allowlist; see [issue #21](https://github.com/lmeulen/Thistlewarden/issues/21).
-- This beta supports local, single-user deployment only. Network deployment and untrusted users are outside the threat model.
+- Thistlewarden does not provide authentication, multi-user collaboration, or supported network deployment.
 
 ## Requirements
 
-- Python 3.12+ or Docker Compose v2
-- Local file system for SQLite, WAL, exports and backups
+Choose one installation method:
+
+- **Docker Compose v2** — recommended; or
+- **Python 3.12 or newer** — for a native local installation.
+
+SQLite, WAL files, exports, and backups must remain on a local filesystem. SMB, NFS, CIFS, shared volumes, and WSL network paths are unsupported.
+
+You also need provider-approved credentials and the exact inference URL and model ID for each external model you intend to test. Provider and Judge calls may create charges.
 
 ## Docker Compose — recommended
 
-```bash
-cp .env.example .env
-python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-# Put the generated values in .env as ENCRYPTION_KEY and SECRET_KEY
-docker compose build
-docker compose up -d --wait
-```
+1. Create local configuration:
 
-PowerShell uses `Copy-Item .env.example .env`; other commands remain the same.
+   ```bash
+   cp .env.example .env
+   ```
 
-Open <http://127.0.0.1:5000>. Compose publishes host loopback only, uses one non-root container process, and stores database/WAL/exports in named volume `thistlewarden-data`.
+   PowerShell: `Copy-Item .env.example .env`
+
+2. Generate two independent secrets:
+
+   ```bash
+   python -c "import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())"
+   python -c "import secrets; print(secrets.token_urlsafe(48))"
+   ```
+
+3. Put first value in `.env` as `ENCRYPTION_KEY` and second as `SECRET_KEY`. Never commit `.env`.
+4. Build and start application:
+
+   ```bash
+   docker compose build
+   docker compose up -d --wait
+   ```
+
+5. Open <http://127.0.0.1:5000>.
+
+Compose publishes host loopback only, runs one non-root application process, and stores persistent data in named volume `thistlewarden-data`.
+
+Useful commands:
 
 ```bash
 docker compose logs -f evaluator
-docker compose down                 # data remains available
-docker compose down -v              # DELETES ALL DATA; run only intentionally
+docker compose down                 # stop application; preserve data
+docker compose down -v              # permanently delete named volume and all application data
 ```
 
-Bind mounts are only supported when demonstrably local filesystem. SMB/NFS/CIFS/WSL network paths are not supported.
+> **Data-loss warning:** `docker compose down -v` permanently removes database and stored endpoint secrets. Export or back up required data first.
 
 ## Native installation — POSIX
 
@@ -59,9 +82,11 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
 cp .env.example .env
-# Generate and replace SECRET_KEY and ENCRYPTION_KEY
+# Generate independent SECRET_KEY and ENCRYPTION_KEY values as shown above.
 python -m evaluator
 ```
+
+Open <http://127.0.0.1:5000>. Keep terminal running while using application.
 
 ## Native installation — PowerShell
 
@@ -72,50 +97,55 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python -m pip install -e .
 Copy-Item .env.example .env
-# Generate and replace SECRET_KEY and ENCRYPTION_KEY
+# Generate independent SECRET_KEY and ENCRYPTION_KEY values as shown above.
 python -m evaluator
 ```
 
-Production server is Waitress with one process and four worker threads. Worker threads are bounded by `RUN_CONCURRENCY`. Flask reloader remains off.
+Open <http://127.0.0.1:5000>. Native server uses Waitress with one process and bounded worker threads.
 
 ## URLs
 
-- App: <http://127.0.0.1:5000>
+- Application: <http://127.0.0.1:5000>
+- User manual in application: <http://127.0.0.1:5000/manual/>
+
+If `PORT` was changed, replace `5000` with configured local port. Do not replace loopback host with a network address.
 
 ## Configuration
 
-`.env` deliberately uses `python-dotenv override=True`: file overwrites process environment. Priority: `.env > GUI/database > default`. Active environment values ​​are read-only in GUI/API.
+Copy `.env.example` and change only values required for your installation. `.env` overrides process environment; GUI/database settings apply only when no environment value controls same setting.
 
-Most important fields:
-
-| Variable | Default | Meaning |
+| Variable | Default | Purpose |
 |---|---:|---|
-| `HOST` | `127.0.0.1` | Host native only loopback |
-| `PORT` | `5000` | Local port |
-| `DATABASE_PATH` | `./data/evaluator.db` | Local SQLite Database |
-| `EXPORT_PATH` | `./exports` | Export path |
-| `APP_PROCESS_COUNT` | `1` | Must be exactly one |
-| `WORKERS_ENABLED` | `true` | Production worker threads |
-| `RUN_CONCURRENCY` | `4` | Simultaneous jobs |
-| `MAX_RUN_CONCURRENCY` | `10` | Upper limit |
-| `MAX_MODEL_PROFILES_PER_RUN` | `20` | Model limit per run |
-| `RUN_RETENTION_DAYS` | `0` | Zero disables cleanup |
+| `HOST` | `127.0.0.1` | Local bind address. Keep loopback on host. |
+| `PORT` | `5000` | Local browser port. |
+| `DATABASE_PATH` | `./data/evaluator.db` | Local SQLite database. |
+| `EXPORT_PATH` | `./exports` | Local export directory. |
+| `APP_PROCESS_COUNT` | `1` | Must remain exactly one. |
+| `WORKERS_ENABLED` | `true` | Process queued evaluation jobs. |
+| `RUN_CONCURRENCY` | `4` | Maximum simultaneous run jobs. |
+| `MAX_RUN_CONCURRENCY` | `10` | Allowed concurrency ceiling. |
+| `MAX_MODEL_PROFILES_PER_RUN` | `20` | Model-selection limit per run. |
+| `RUN_RETENTION_DAYS` | `0` | `0` disables automatic cleanup. |
 
-All limits are in `.env.example`. `CONTAINER_MODE=true` is for container entry point only and allows `HOST=0.0.0.0` internally; Compose still binds `127.0.0.1` externally.
+`CONTAINER_MODE=true` allows internal container bind to `0.0.0.0`; supported Compose configuration still publishes only `127.0.0.1` on host. See [configuration reference](docs/configuration.md) before changing runtime, storage, worker, or limit settings.
 
 ## Secrets and sensitive content
 
-`ENCRYPTION_KEY` is URL-safe base64 of exactly 32 random bytes. Endpoint secrets use AES-256-GCM. Regular exports, API responses and logs never contain secret values. Prompts and answers remain plaintext in local SQLite and run exports according to MVP: protect database, backups and downloads.
+`ENCRYPTION_KEY` must be URL-safe base64 for exactly 32 random bytes. Endpoint API keys and secret headers are encrypted with AES-256-GCM. `SECRET_KEY` protects browser session and CSRF state. Generate keys independently, protect both, and preserve recovery copies.
+
+Prompts, expected answers, model answers, Judge material, run notes, and exports are **not encrypted by Thistlewarden**. They remain plaintext in local SQLite or downloaded files. Protect computer, database, `.env`, backups, browser profile, and exports. Never place credentials or production secrets in test material.
 
 ## Database management
 
+Stop active evaluation work before maintenance. Create backup before upgrade or direct database work:
+
 ```bash
-python -m evaluator.cli migrate
 python -m evaluator.cli backup ./backups/manual.db
+python -m evaluator.cli migrate
 python -m evaluator.cli restore ./backups/manual.db ./data/restored.db
 ```
 
-Restore rejects existing target. Normal startup holds process-lifetime instance lock, migrates, restores expired leases, starts workers and then opens HTTP server. Existing schema upgrade creates consistent backup first.
+Restore refuses an existing target path. Database backup does not replace protected backup of `.env`; both are needed to recover encrypted endpoint credentials. See [backup guidance](docs/manual/import-export.md#backing-up-application-data).
 
 ## Automated local runs
 
@@ -127,9 +157,11 @@ thistlewarden-admin run lookup models
 thistlewarden-admin run start --golden-set <id> --model <id> --wait --output json
 ```
 
-CLI and server cannot own same database simultaneously. Stop server before using `run wait` or `run start --wait`. See [command-line automation](docs/manual/runs-and-results.md#automating-runs-from-command-line) for gate overrides, exports, interruption behavior, and stable exit codes.
+CLI and server cannot own same database simultaneously. Stop server before using `run wait` or `run start --wait`. See [command-line automation](docs/manual/runs-and-results.md#automating-runs-from-command-line) for exports, gate overrides, interruption behavior, and exit codes.
 
 ## Testing and release
+
+This section is for contributors and release maintainers:
 
 ```bash
 python -m ruff check .
@@ -138,19 +170,16 @@ python -m mypy src
 python -m pytest -q tests/unit tests/integration
 ```
 
-Offline Docker E2E uses `compose.e2e.yaml`, `evaluator.mock_provider`, `examples/release-configuration.json` and `scripts/e2e_release.py`. See `docs/release.md`.
+See [release guide](docs/release.md) for offline container checks, release artifacts, and rollback.
 
 ## Documentation
 
-- [User manual](docs/manual/README.md) — application workflows and reference
-- [Configuration](docs/configuration.md) — settings and schedules
-- [Release guide](docs/release.md) — release gate, Docker E2E and rollback
-- [Security policy](SECURITY.md) — threat model and security policy
-- [0.2.2 beta release notes](docs/release-notes-0.2.2.md) — current changes, upgrade notes, and known limitations
-- [0.2.1 beta release notes](docs/release-notes-0.2.1.md) — Judge output modes and bounded deliberation
-- [0.2.0 beta release notes](docs/release-notes-0.2.0.md) — versioned Judges and onboarding
-- [0.1.0 beta release notes](docs/release-notes-0.1.0.md) — first public beta
-- [Contributing](.github/CONTRIBUTING.md) — development setup and contribution rules
+- [User manual](docs/manual/README.md) — first evaluation, daily workflows, and complete field guidance
+- [Configuration reference](docs/configuration.md) — setting precedence, lifecycle, topology, and file formats
+- [Security policy](SECURITY.md) — supported boundary, sensitive data, backups, and vulnerability reporting
+- [0.2.2 beta release notes](docs/release-notes-0.2.2.md) — current changes and upgrade notes
+- [Release guide](docs/release.md) — maintainer release procedure
+- [Contributing](.github/CONTRIBUTING.md) — development and contribution rules
 
 ## License
 

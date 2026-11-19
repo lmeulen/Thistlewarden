@@ -548,7 +548,7 @@ Selecting evaluation method fills **Evaluator configuration (JSON)** with valid 
 | Regex | Pattern-constrained text | No | Pattern searches or fully matches. |
 | Numeric | Measured numeric answer | No | Extracted number meets exact/tolerance rule. |
 | JSON Schema | Structured JSON | No | Valid JSON satisfies schema and optional expected value. |
-| LLM judge | Qualitative behavior | `expected_value` or rubric | Judge score meets applicable threshold. |
+| LLM judge | Qualitative behavior | Published Judge version; optional `expected_value`/context | Calculated weighted score meets published threshold. |
 
 Choose simplest method that measures requirement. Deterministic evaluators are fast, local, repeatable, and usable in unsaved output tester. LLM judge supports nuanced judgment but depends on provider availability, configuration, cost, and nondeterministic model behavior. Every method result stores score, pass/fail state, and reason; inspect individual result details when outcome surprises you.
 

@@ -155,7 +155,7 @@ Delete only a terminal run—completed, completed with errors, failed, or cancel
 2. In **Actions**, select **I understand deletion is permanent**.
 3. Select **Delete run**.
 
-Deletion permanently removes run records, job results, and associated snapshots. It cannot be undone. Export needed results first; see [chapter 14](import-export.md#import-export-and-backup) for export guidance. Active runs must be cancelled and reach a terminal state before deletion.
+Deletion permanently removes run records, job results, and associated snapshots. It cannot be undone. Export needed results first; see [Import, export, and backup](import-export.md#import-export-and-backup) for guidance. Active runs must be cancelled and reach a terminal state before deletion.
 
 Keep runs needed for release evidence, regression baselines, cost review, or audit history. Delete disposable experiments and obsolete retries according to your retention policy.
 
@@ -236,7 +236,7 @@ The **Cost versus score** scatter plot places models by total known cost on X-ax
 
 For a completed run, select **Compare baseline**, then choose another completed run. Candidate list labels each baseline as **Compatible**, **Partially compatible**, or **Incompatible** and previews warnings. Selection is explicit for each comparison; Thistlewarden does not automatically approve or persist a baseline relationship.
 
-Records match by immutable source case and model-profile identities. A matched result is comparable only when case content, evaluator method/configuration, case weight, model identity, endpoint/pricing/inference snapshot, and—when used—judge preset/version/execution snapshot are identical. Changed inputs appear as **Incomparable** rather than contributing misleading deltas. Added and removed records are also separate.
+Records match by immutable source case and model-profile identities. A matched result is comparable only when case content, evaluator method/configuration, case weight, model identity, endpoint/pricing/inference snapshot, and—when used—published Judge version and Judge-profile snapshot are identical. Changed inputs appear as **Incomparable** rather than contributing misleading deltas. Added and removed records are also separate.
 
 Use filters to show regressions (passed to failed), improvements (failed to passed), unchanged records, or incomparable records. Links open both source results. Mean deltas are candidate minus baseline for score, latency, TTFT, throughput, tokens, and configured costs. A metric pair with either value missing is excluded from that metric. Error results are incomparable for quality/performance deltas; error-rate delta uses matched records whose immutable inputs agree. Changed weights are never blended into aggregate deltas.
 
@@ -250,7 +250,7 @@ Valid comparison: rerun same immutable suite/model configuration after a control
 
 **Results by judge type** groups results by evaluation method: Exact match, Contains, Regex, Numeric, JSON Schema, or LLM judge. Each row shows result count, weighted score, passed percentage, and a stacked bar for passed, failed, and error results.
 
-Use this view to find evaluator-specific patterns. For example, JSON Schema errors can indicate malformed structured output, while LLM-judge failures can reflect rubric expectations rather than literal answer mismatch. Do not treat scores from different methods as automatically interchangeable: their pass conditions and score semantics differ.
+Use this view to find evaluator-specific patterns. For example, JSON Schema errors can indicate malformed structured output, while LLM-Judge failures can reflect published assessment criteria rather than literal answer mismatch. Do not treat scores from different methods as automatically interchangeable: their pass conditions and score semantics differ.
 
 If one judge type has many errors, open filtered individual results to determine whether source is model output, evaluator configuration, judge availability, or provider failure. Fix configuration and run a new comparison rather than editing historical results.
 

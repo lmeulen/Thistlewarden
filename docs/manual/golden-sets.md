@@ -21,7 +21,7 @@ To create one:
 7. Select **Save**.
 8. On the set page, select **Add test case** to add test material.
 
-After saving, the golden-set page lists its test cases and provides controls to add, edit, select, delete, export, configure a judge override, and configure quality gates. See [chapter 8](#test-cases) for case authoring and [chapter 13](quality-gates.md#quality-gates) for gate configuration.
+After saving, golden-set page lists its test cases and controls to add, edit, select, delete, export, configure Judge-profile override, and configure quality gates. See [Test cases](#test-cases) and [Quality gates](quality-gates.md#quality-gates).
 
 Use one golden set for a coherent evaluation purpose, such as customer-support answers, retrieval quality, structured output, or safety regressions. Avoid mixing unrelated tasks in one set: separate sets make results easier to interpret and allow each set to have its own judge and quality standards.
 
@@ -70,9 +70,9 @@ A golden set can use a specific judge profile for its LLM judge test cases. Conf
 
 The override affects only test cases using the **LLM judge** evaluation method. Deterministic methods—exact match, contains, regular expression, numeric, and JSON Schema—do not use a judge profile.
 
-Choose a set-specific override when that suite needs a different judge model, prompt template, rubric behavior, or cost profile than other suites. Use the global default when one approved judge profile should apply across sets.
+Choose set-specific override when suite needs different Judge model, inference behavior, or cost profile. Evaluation meaning remains in exact published Judge version selected by each LLM-Judge test case. Use global default when one approved execution profile should apply broadly.
 
-Before assigning a profile, confirm that it is configured with an active model profile and that its model can be called successfully. A judge failure can cause LLM-judge results to fail even when target-model calls succeed. See [chapter 10](judges.md#judge-profiles) for creating and managing judge profiles.
+Before assigning profile, confirm its model profile and endpoint are active and **Test model** succeeds. Judge failure can produce error even when target-model call succeeds. See [Judges](judges.md#judges) for evaluation rules and profiles.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
@@ -98,9 +98,9 @@ Evaluator configuration is stored as JSON. Form starts with valid method-specifi
 
 **User prompt** is required text sent to target model. Write it as representative request from intended workload. **System prompt** is optional instruction sent before user prompt; use it when target behavior depends on system-level context.
 
-Evaluator configuration JSON supplies method-specific reference data. **Exact match** stores its required reference text as `expected_value`. **LLM judge** stores optional reference text as `expected_value`; presets can require it. Other methods use their documented configuration fields.
+Evaluator configuration JSON supplies method-specific reference data. **Exact match** stores required reference text as `expected_value`. **LLM judge** may store optional reference text as `expected_value`; selected published Judge can require it. Other methods use documented configuration fields.
 
-Older exact-match cases may retain a separate legacy expected answer. When loaded, Thistlewarden moves it to `expected_value`. Legacy free-form LLM-judge test cases are unsupported and removed during preset migration; create replacements using registered versioned presets.
+Older exact-match cases may retain separate legacy expected answer. When loaded, Thistlewarden moves it to `expected_value`. Legacy free-form LLM-Judge cases are unsupported; create replacements that select user-created published Judge version. Historical built-in preset snapshots remain compatibility-only and are not selectable for new cases.
 
 Write prompts and expectations to make pass condition clear:
 
@@ -110,7 +110,7 @@ Write prompts and expectations to make pass condition clear:
 - Use deterministic evaluator for exact structured or numeric requirements when possible.
 - Do not include credentials, personal data, or production secrets in any prompt or answer field.
 
-Candidate answers produced during runs, and their input prompt material, become part of result detail and exports. See [chapter 18](security-and-privacy.md#security-and-privacy) for handling sensitive content.
+Candidate answers produced during runs, and input prompt material, become part of result detail and exports. See [Security and privacy](security-and-privacy.md#security-and-privacy) for handling sensitive content.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 

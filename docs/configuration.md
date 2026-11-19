@@ -1,62 +1,108 @@
 # Configuration reference
 
-Technical names remain English; GUI labels are Dutch.
+This operator reference explains configuration sources, when changes take effect, supported runtime shape, and exchange-file contracts. Application settings and GUI labels are English.
+
+For ordinary use, copy `.env.example`, set independent `SECRET_KEY` and `ENCRYPTION_KEY`, keep host loopback-only, and leave topology defaults unchanged.
 
 ## Source precedence and lifecycle
 
-For restart-required and dynamic settings, effective order is `.env > GUI/database > default`. `.env` is loaded with `override=True`, so file values replace existing process environment. Environment-backed settings are read-only in GUI/API.
+Effective source order is:
 
-Every setting has one explicit lifecycle:
+```text
+.env / process environment > saved GUI/database value > built-in default
+```
 
-- **Bootstrap:** environment/config-file only and always read-only in GUI/API. Database values are ignored because these settings locate or initialize the database and process. This includes `FLASK_ENV`, `SECRET_KEY`, `ENCRYPTION_KEY`, `HOST`, `PORT`, `DATABASE_PATH`, `EXPORT_PATH`, `APP_PROCESS_COUNT`, `STORAGE_BACKEND`, `WORKERS_ENABLED`, `RELOADER_ENABLED`, and `CONTAINER_MODE`.
-- **Restart required:** GUI changes persist as desired configuration but do not change current process or constructed services. `/settings` shows active and desired values separately and marks differences pending. Restart process to activate them.
-- **Dynamic:** changes are applied through an explicit thread-safe runtime callback before persistence. `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS` are dynamic; answer-limit changes atomically update active evaluation-preview service.
+`.env` is loaded with `override=True`, so its values replace same process-environment names. Settings controlled by environment are read-only in GUI/API.
 
-All non-bootstrap settings except `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS` are restart-required. `GET /api/v1/settings` reports `active_value`, `desired_value`, `lifecycle`, and `pending_restart`; compatibility field `value` is always active value. Secrets remain suppressed in every value field.
+Each setting has one lifecycle:
 
-`SECRET_KEY` is mandatory and must be a non-default random value of at least 32 UTF-8 bytes. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, store it in the deployment secret mechanism or `.env`, and never commit it. Changing it invalidates all existing browser sessions and CSRF tokens, requiring users to reload and sign in again if authentication is configured. Startup errors identify `SECRET_KEY` but never include its value. `.env.example` intentionally contains a rejected placeholder.
+| Lifecycle | Where changed | When effective |
+|---|---|---|
+| **Bootstrap** | Environment or configuration file only | Next process start |
+| **Restart required** | GUI/database unless environment-controlled | After process restart |
+| **Dynamic** | GUI/API unless environment-controlled | Immediately after validated save |
+
+Bootstrap settings locate or initialize process and database; database values cannot control them. They are `FLASK_ENV`, `SECRET_KEY`, `ENCRYPTION_KEY`, `HOST`, `PORT`, `DATABASE_PATH`, `EXPORT_PATH`, `APP_PROCESS_COUNT`, `STORAGE_BACKEND`, `WORKERS_ENABLED`, `RELOADER_ENABLED`, and `CONTAINER_MODE`.
+
+Dynamic settings are `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS`. All other non-bootstrap settings are restart-required. Settings page shows active value, source, lifecycle, and pending desired value where applicable. `GET /api/v1/settings` reports `active_value`, `desired_value`, `lifecycle`, and `pending_restart`; compatibility field `value` is active value. Secret values are always suppressed.
+
+`SECRET_KEY` is mandatory, non-default, and at least 32 UTF-8 bytes. Generate independently from encryption key:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Store securely and never commit it. Changing it invalidates existing browser session and CSRF state. Startup errors name setting but never value. `.env.example` contains intentionally rejected placeholder.
 
 ## Runtime topology
 
-| Variable | Constraint |
-|---|---|
-| `HOST` | `127.0.0.1`, `::1`, or `localhost`; `0.0.0.0` only with `CONTAINER_MODE=true` |
-| `APP_PROCESS_COUNT` | exactly `1` |
-| `STORAGE_BACKEND` | exactly `local` |
-| `RELOADER_ENABLED` | `false` when workers enabled |
-| `RUN_CONCURRENCY` | positive, no greater than `MAX_RUN_CONCURRENCY` |
-| `MAX_MODEL_PROFILES_PER_RUN` | default 20 |
+Supported topology is one process, one host, local filesystem, and host-loopback access.
 
-Compose enforces one app service, one named local volume and host-loopback publication. Network filesystems, shared volumes and additional app replicas are unsupported.
+| Variable | Supported constraint |
+|---|---|
+| `HOST` | `127.0.0.1`, `::1`, or `localhost`; `0.0.0.0` only inside container when `CONTAINER_MODE=true` |
+| `APP_PROCESS_COUNT` | Exactly `1` |
+| `STORAGE_BACKEND` | Exactly `local` |
+| `RELOADER_ENABLED` | `false` while workers enabled |
+| `RUN_CONCURRENCY` | Positive and no greater than `MAX_RUN_CONCURRENCY` |
+| `MAX_MODEL_PROFILES_PER_RUN` | Default `20` |
+
+Compose enforces one application service, one named local volume, and host-loopback publication. Do not add application replicas, shared database volume, network filesystem, or host-wide port publication. `CONTAINER_MODE=true` does not authorize network exposure; it only permits internal container bind.
+
+Paths are resolved in runtime context. Keep database, WAL, export, temporary export, and backup paths on same trusted local filesystem class. Back up database and deployment secrets separately.
 
 ## Provider retries
 
-Each provider call makes at most `max_retries + 1` physical attempts. Rate-limit responses, provider server errors, and timeout/network failures before any response body data are retryable. Every physical attempt is logged with endpoint and attempt number. After any streaming response data arrives, transport failures return a partial failed result and are never replayed automatically, preventing duplicate execution and billing.
+Each provider call makes at most `max_retries + 1` physical attempts. Retry-eligible conditions are provider rate limits, temporary provider-server errors, and timeout/network failure before response body data arrives.
+
+Streaming safety rule: after any response body data arrives, transport failure returns partial failed result and is never replayed automatically. This avoids silently repeating partially completed request and possible duplicate billing.
+
+Retries can still add latency and provider usage. Set endpoint retry and rate-limit values according to provider contract; they do not increase provider quota.
 
 ## Shutdown budget
 
-Worker shutdown has one global 30-second deadline inside Compose's 40-second stop grace period. Shutdown signals limiter/retry waits, closes lifecycle-owned provider transports to interrupt blocked responses, and then joins all workers against same absolute deadline. Interrupted jobs remain leased rather than being recorded as provider failures; normal lease-expiry recovery makes them available after restart. A missed deadline is logged as `worker_shutdown_timed_out` and `shutdown_incomplete`; daemon worker threads prevent blocked third-party transports from extending process lifetime beyond external grace period.
+Worker shutdown uses one global 30-second deadline within Compose's 40-second stop grace period. Shutdown signals limiter/retry waits, closes lifecycle-owned provider transports, then joins workers against same absolute deadline.
+
+Interrupted jobs remain leased rather than being recorded as provider failures. After restart, normal lease-expiry recovery makes them available again. Provider may already have completed interrupted call, so recovery can repeat work and create duplicate cost. Prefer stopping only after active runs reach terminal status.
+
+A missed deadline logs `worker_shutdown_timed_out` and `shutdown_incomplete`. Daemon worker threads prevent blocked third-party transport from extending process beyond external grace period.
 
 ## Configuration bundle schema 1.0
 
-Secret-free bundles contain:
+Configuration exchange uses secret-free JSON bundle with:
 
 - `schema_version`: exactly `"1.0"`;
 - `endpoints`;
 - `model_profiles` referencing endpoint UUIDs;
+- `judge_definitions` and immutable published versions;
 - `judge_profiles` referencing model UUIDs;
-- `golden_sets` optionally referencing judge UUIDs;
-- `golden_set_items` referencing golden-set UUIDs.
+- `golden_sets` optionally referencing Judge-profile UUIDs; and
+- `golden_set_items` referencing golden-set UUIDs and exact published Judge versions where applicable.
 
-Every object has globally unique UUID `id` and object-specific `data`. Secret values are always `null`; importing secret metadata does not recreate secret. Enter secret through GUI after import. `merge` remaps colliding UUIDs. `replace` archives active historical configuration rather than deleting run references.
+Every object has globally unique UUID `id` and object-specific `data`. API keys and secret-header values are always `null`/missing and must be entered locally after import. Run history is not part of configuration bundle.
 
-Machine-valid example: `examples/release-configuration.json`. Judge profiles include immutable `implementation_id`, `implementation_version`, and validated secret-free `implementation_config`; see [Custom LLM judge extensions](judge-extensions.md).
+Import behavior:
+
+- **Merge** adds records and remaps colliding incoming UUIDs and references.
+- **Replace** archives current active configuration rather than deleting records used by history, then imports bundle.
+- Published Judge identities and semantic hashes are validated; conflicting immutable definitions are rejected, not silently rewritten.
+- Commit is atomic: entire valid bundle applies or nothing changes.
+
+Preview immediately before commit and review new records, archived records, UUID remaps, immutable-definition conflicts, active states, provider URLs, model prices, and endpoints missing secrets.
+
+Machine-valid example: `examples/release-configuration.json`. Trusted local custom Judge implementation configuration is documented in [Custom LLM Judge extensions](judge-extensions.md).
 
 ## Golden-set JSON
 
-Canonical standalone golden-set JSON contains `name`, optional `description`, `version`, `tags`, and `items`. Each item contains case ID, prompt, optional system/expected text, evaluator method/config, category, tags, Decimal weight and enabled state.
+Canonical standalone golden-set JSON contains:
 
-Supported evaluator methods:
+- `name`, optional `description`, user-managed `version`, and `tags`;
+- optional Judge-profile override and quality-gate defaults where supported by format; and
+- ordered `items`.
+
+Each item contains stable case ID, user prompt, optional system prompt, evaluator method/configuration, category, tags, Decimal weight, and enabled state. LLM-Judge items select immutable published Judge ID and exact version; they do not define metrics, weights, threshold, or Judge prompt.
+
+Supported evaluator method identifiers:
 
 - `exact_match`
 - `contains`
@@ -65,4 +111,4 @@ Supported evaluator methods:
 - `json_schema` (Draft 2020-12)
 - `llm_judge`
 
-JSON is lossless canonical format. CSV stores configs/tags as JSON strings and is intended for tabular editing.
+JSON is lossless canonical exchange format. CSV stores evaluator configurations and tags as JSON strings and is intended for tabular editing. Both may contain sensitive prompts and expected values; validate and protect files before import or sharing.
