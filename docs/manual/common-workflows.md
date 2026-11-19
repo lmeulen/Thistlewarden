@@ -10,7 +10,7 @@
 Use this small, low-risk workflow to establish working baseline:
 
 1. Create provider endpoint with approved non-production credential; keep endpoint active.
-2. Create active model profile, confirm model ID and request parameters, then use **Test connection**.
+2. Create active model profile, confirm model ID and request parameters, then use **Test model**.
 3. Create active golden set named and versioned for purpose, for example `Support baseline` version `0.1`.
 4. Add three to ten enabled cases representing key behaviors. Start with Exact match, Contains, Numeric, or JSON Schema.
 5. Use **Test evaluator** with known passing and failing candidate output for each deterministic case.
@@ -67,9 +67,9 @@ Example composition:
 - Contains verifies mandatory warning or citation.
 - LLM judge evaluates usefulness and completeness of longer answer.
 
-Make pass criteria explicit. Do not use LLM judge where JSON Schema or exact rule is sufficient. Do not use deterministic fragments as proxy for overall quality when semantic assessment is required. For LLM judge, configure active judge execution profile, low temperature, and calibrated immutable preset. Remember judge receives candidate and evaluation context; use approved provider and non-sensitive material.
+Make pass criteria explicit. Do not use LLM Judge where JSON Schema or exact rule is sufficient. Do not use deterministic fragments as proxy for overall quality when semantic assessment is required. For LLM Judge, publish calibrated immutable Judge version and configure active Judge profile with suitable model/inference settings. Remember Judge provider receives candidate and evaluation context; use approved provider and non-sensitive material.
 
-Review results by **Judge type** in run detail. Investigate disagreement between methods: it may reveal prompt ambiguity, overly brittle deterministic rule, weak rubric, or target behavior issue. Gate thresholds aggregate all results, so confirm weighting and evaluator mix represent actual release policy.
+Review results by **Judge type** in run detail. Investigate disagreement between methods: it may reveal prompt ambiguity, brittle deterministic rule, weak Judge instructions, or target behavior issue. Gate thresholds aggregate all results, so confirm weighting and evaluator mix represent actual release policy.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 

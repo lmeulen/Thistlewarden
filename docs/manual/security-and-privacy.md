@@ -4,6 +4,15 @@
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
+Before regular use, confirm:
+
+- browser URL uses loopback (`127.0.0.1`, `localhost`, or `::1`);
+- application is not published to LAN/internet;
+- provider credentials are dedicated and least privilege;
+- test material is synthetic, redacted, or approved for selected providers;
+- database, `.env`, backups, and exports are access-controlled; and
+- retention/deletion responsibilities are defined.
+
 ## Local-only access model
 
 Thistlewarden is designed for use from browser on same computer. Default host is loopback, and browser requests accept only `localhost`, `127.0.0.1`, or `::1` Host and Origin values. This prevents normal browser access through arbitrary network hostnames.
@@ -22,7 +31,7 @@ Store provider credentials only in endpoint **API key** field or additional head
 
 Protect encryption-key configuration as carefully as provider keys. Anyone who obtains both application data and active encryption key may be able to decrypt stored secrets. Restrict filesystem, environment, container-runtime, backup, and operator access. Use dedicated least-privilege provider credentials, rotate them according to policy, and revoke immediately after suspected exposure.
 
-Never put credentials in URLs, model IDs, display names, descriptions, prompts, expected answers, tags, evaluator configuration, judge rubrics, test-output previews, notes, CSV/JSON files, screenshots, tickets, or source control. When editing endpoint, leave existing secret fields blank to preserve current saved value; enter a value only to replace it or create a new secret.
+Never put credentials in URLs, model IDs, display names, descriptions, prompts, expected answers, tags, evaluator configuration, Judge instructions, test-output previews, notes, CSV/JSON files, screenshots, tickets, or source control. When editing endpoint, leave existing secret fields blank to preserve current saved value; enter a value only to replace it or create a new secret.
 
 Use HTTPS for external providers. Plain HTTP is automatically allowed for loopback endpoints only. A non-loopback HTTP endpoint requires explicit trusted-internal acknowledgement because it can expose prompts, answers, and credentials in transit.
 
@@ -30,7 +39,7 @@ Use HTTPS for external providers. Plain HTTP is automatically allowed for loopba
 
 ## Sensitive prompt and answer data
 
-Treat prompts, system prompts, expected answers, candidate answers, judge prompts, rubrics, evaluator configuration, and run notes as potentially confidential. Test and run content is stored locally and can be visible on result-detail pages or in exports. Model providers and LLM judges receive content needed for their configured calls.
+Treat prompts, system prompts, expected answers, candidate answers, Judge prompts and instructions, evaluator configuration, and run notes as potentially confidential. Test and run content is stored locally and can be visible on result-detail pages or in exports. Model providers and LLM judges receive content needed for their configured calls.
 
 Minimize data before it reaches application or provider:
 
@@ -58,7 +67,7 @@ Backup copies need same or stronger protection as live data. Preserve encryption
 
 ## Operational logging guarantees
 
-Operational logs are designed to record safe diagnostics and lifecycle events without recording sensitive evaluation content. Logging redacts configured secrets and avoids prompts, answers, expected answers, rubrics, provider response bodies, API keys, secret-header values, cookies, CSRF tokens, query strings, complete import/export content, exception messages, and tracebacks.
+Operational logs are designed to record safe diagnostics and lifecycle events without recording sensitive evaluation content. Logging redacts configured secrets and avoids prompts, answers, expected answers, Judge instructions, provider response bodies, API keys, secret-header values, cookies, CSRF tokens, query strings, complete import/export content, exception messages, and tracebacks.
 
 Request diagnostics use route templates rather than concrete request paths. Server generates request IDs for correlation; do not depend on caller-supplied `X-Request-ID` values. Service events use safe metadata such as object identifiers, method names, and counts after successful committed operations.
 

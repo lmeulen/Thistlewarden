@@ -4,10 +4,16 @@
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
+LLM judging has two separate parts:
+
+1. A published **Judge version** defines what good means: metrics, weights, instructions, assessment method, output mode, and pass threshold.
+2. A **Judge profile** defines how assessment runs: provider model and optional inference overrides.
+
+Create both before running an LLM-Judge test case. Start with deterministic evaluation when requirement can be expressed as exact text, fragments, pattern, number, or JSON structure; LLM judging adds provider cost, latency, and variation.
 
 ### Evaluation rules: metrics, instructions, and assessment method
 
-Open **Judges** and use **Evaluation rules** to create versioned rules separately from judge-model settings. A test case selects one published Judge version. That version contains enabled metrics, weights, instructions, pass threshold, and assessment method.
+Open **Judges** and use **Evaluation rules** → **New judge**. A test case can select only an exact published Judge version; drafts are not executable. Published versions are immutable, so semantic changes require new version.
 
 Choose one assessment method before publishing:
 
@@ -66,7 +72,7 @@ Judge-model settings cannot supply or override prompts. Change evaluation instru
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### Rubrics and scoring thresholds
+### Metrics and scoring thresholds
 
 Each published Judge version defines ordered metrics, metric weights, and an inclusive threshold. Judge returns a score from `0` to `1` and reason for every enabled metric. Thistlewarden calculates overall score as weighted mean of metric scores, then compares calculated score with Judge threshold. Judge-provided overall score and pass flag are retained for diagnostics but do not override calculated result.
 

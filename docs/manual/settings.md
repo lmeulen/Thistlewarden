@@ -6,67 +6,69 @@
 
 ## Editable settings
 
-Open **Settings** to view operational settings, resolved value, and source. A setting is editable in browser only when it is non-secret and not controlled by environment. Enter replacement value and select **Save**. Application validates value and all setting combinations before saving; invalid change is rejected without partial write.
+Open **Settings** to see each setting's active value, source, lifecycle, and available action. Only non-secret settings not controlled by environment can be edited. Invalid value or invalid combination is rejected without partial save.
 
-Editable database-backed settings include, when not environment-controlled:
+Three lifecycles matter:
 
-- `FLASK_ENV`, `HOST`, `PORT`, and `LOG_LEVEL`.
-- `DATABASE_PATH`, `EXPORT_PATH`, `APP_PROCESS_COUNT`, and `STORAGE_BACKEND`.
-- `WORKERS_ENABLED`, `RELOADER_ENABLED`, and `CONTAINER_MODE`.
-- Provider defaults: `DEFAULT_REQUEST_TIMEOUT_SECONDS` and `DEFAULT_MAX_RETRIES`.
-- Run settings: `RUN_CONCURRENCY`, `DEFAULT_RUN_CONCURRENCY`, `MAX_RUN_CONCURRENCY`, and `RUN_RETENTION_DAYS`.
-- Limits: prompt, system-prompt, expected-answer, model-answer, judge-context, import-file, provider-response, golden-set-item, and model-profiles-per-run limits.
+- **Bootstrap** — read-only; change environment/configuration file and restart.
+- **Restart required** — saved as desired value; active process keeps old value until restart.
+- **Dynamic** — applied safely to running process before save completes.
 
-Values have type and range rules. Boolean values accept `true`/`false`, `yes`/`no`, `on`/`off`, or `1`/`0`. Port must be `1` through `65535`; concurrency and size limits must be positive; retry count and retention days may be zero. `STORAGE_BACKEND` must remain `local`. `HOST` must be loopback (`127.0.0.1`, `::1`, or `localhost`), except `0.0.0.0` is allowed only with container mode enabled.
+Current dynamic settings are `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS`. Other editable settings require restart. Bootstrap settings—including host, port, database/export paths, process count, worker/container mode, and application secrets—cannot be changed in GUI.
 
-Keep `DEFAULT_RUN_CONCURRENCY` and `RUN_CONCURRENCY` no greater than `MAX_RUN_CONCURRENCY`. Do not enable reloader while workers are enabled. Use Settings for controlled local persistence; use environment configuration when deployment needs immutable operator-owned settings.
+Common editable groups, when not environment-controlled, include provider timeout/retry defaults, run concurrency and retention, content-size limits, import/provider-response limits, and maximum model profiles per run.
+
+Values have strict types and ranges. Boolean values accept `true`/`false`, `yes`/`no`, `on`/`off`, or `1`/`0`. Concurrency and size limits must be positive; retry count and retention days may be zero. Keep `DEFAULT_RUN_CONCURRENCY` and `RUN_CONCURRENCY` no greater than `MAX_RUN_CONCURRENCY`.
+
+Before changing a limit, identify expected workload and failure mode. Higher answer/import/provider limits increase local storage and memory exposure; higher concurrency increases provider usage and rate-limit pressure. Test changes with small controlled run.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
 ## Read-only environment settings
 
-Resolution precedence is **environment**, then saved database value, then built-in default. Settings page labels each source. Any setting supplied as environment variable is read-only in browser because environment value wins over database value.
+Effective source order is **environment**, then saved database value, then default. `.env` overrides same process-environment names. When source is **environment**, GUI shows setting as read-only because local save cannot override it.
 
-This protects deployment configuration from accidental UI changes. To change environment-controlled setting, change deployment environment or Compose configuration, then restart application. Do not expect saving a database value to override environment variable.
+To change environment-controlled value:
 
-Environment control is appropriate for host/port, paths, process behavior, resource limits, and all production operator policy. Review source column when a Save control is absent: **environment** means change belongs to operator configuration; **default** means application has no saved override; **database** means prior UI/API setting is stored locally.
+1. Wait for active runs to finish when possible.
+2. Back up current configuration and record old value.
+3. Edit `.env` or deployment configuration.
+4. Restart application.
+5. Open **Settings** and verify active value and source.
+6. Run small controlled check.
 
-Avoid setting `HOST` to network-accessible address outside documented container deployment. Local browser access is security boundary. `CONTAINER_MODE=true` permits internal container bind to `0.0.0.0`; Compose should still publish service only through intended loopback mapping.
+Keep host loopback-only. `CONTAINER_MODE=true` permits internal container bind to `0.0.0.0`; supported Compose mapping still publishes host `127.0.0.1` only. Do not add network-accessible publication.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
 ## Secret handling
 
-`SECRET_KEY` and `ENCRYPTION_KEY` are secrets. Settings page never displays them and never provides browser editing. API settings output also hides secret values. Configure them through secure environment/deployment secret mechanism, not copied into screenshots, tickets, exports, or source control.
+`SECRET_KEY` and `ENCRYPTION_KEY` are bootstrap secrets. Settings page and API never display or edit them.
 
-`SECRET_KEY` protects browser-session and CSRF security. `ENCRYPTION_KEY` protects locally stored endpoint secret records. Use strong, unique values and retain protected recovery copy. Changing or losing encryption key can prevent reading existing encrypted endpoint credentials; plan key rotation and credential re-entry with operator procedure.
+- `SECRET_KEY` protects browser session and CSRF state. Changing it invalidates existing browser state.
+- `ENCRYPTION_KEY` encrypts endpoint API keys and headers marked secret. Losing it makes stored provider secrets unreadable; exposing it with database defeats at-rest protection.
 
-Provider API keys and secret additional headers are managed with endpoint configuration and encrypted local secret storage; they are separate from application settings. Configuration exports intentionally omit secret values. See [Security and privacy](security-and-privacy.md) and [Exporting and importing application configuration](import-export.md#exporting-and-importing-application-configuration).
+Generate independent strong values, store them in `.env` or approved secret mechanism, never commit them, and preserve protected recovery copy. Provider API keys remain managed under endpoint configuration and are separate from application keys. Configuration exports intentionally omit all secret values.
 
-Never put secrets in non-secret setting fields, golden sets, prompts, evaluator configuration, run notes, judge templates, or exported filenames. Operational logs are designed to avoid sensitive payloads, but prevention at data entry remains required.
+Never place secrets in non-secret settings, URLs, names, descriptions, prompts, expected answers, evaluator configuration, Judge instructions, run notes, filenames, screenshots, tickets, or source control.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
 ## Settings that require a restart
 
-Saving non-secret database setting updates stored resolution and Settings page immediately. Running application components are initialized from settings at startup, so restart application after any operational setting change to ensure it takes effect consistently.
+Settings page marks restart-required values and shows pending desired value. Save does not reconfigure already constructed workers, providers, limits, or services.
 
-Restart is especially required after changes to:
+Safe restart procedure:
 
-- `HOST`, `PORT`, `FLASK_ENV`, `LOG_LEVEL`, `DATABASE_PATH`, or `EXPORT_PATH`.
-- `SECRET_KEY`, `ENCRYPTION_KEY`, process count, storage backend, workers, reloader, or container mode.
-- Provider timeout/retry defaults, run concurrency, retention, or any content/resource limit.
+1. Wait until runs reach terminal status. If stopping active work is unavoidable, record run IDs and expect possible recovery or duplicate provider cost.
+2. Back up database before storage, retention, or broad operational change.
+3. Save desired GUI value or edit environment configuration.
+4. Stop and start application using normal installation command.
+5. Confirm application readiness and active values in **Settings**.
+6. Inspect interrupted run status and complete small test before larger evaluations.
 
-Safe procedure:
+Dynamic `LOG_LEVEL` and `MAX_MODEL_ANSWER_CHARS` do not need restart. Bootstrap values always need process restart. Invalid environment combinations prevent startup; restore previous values or correct error, then start again.
 
-1. Avoid restart while a run is active unless interruption is acceptable.
-2. Record old and new values and reason for change.
-3. Save database-backed value, or change environment/deployment configuration.
-4. Stop and start application using normal operator procedure.
-5. Open Settings and verify value and source.
-6. Run a small controlled check before resuming production evaluations.
-
-An interrupted provider call may be retried after recovery and can cause duplicate cost. Wait for terminal runs where possible, then inspect readiness and run status after restart. Invalid environment combinations prevent successful startup; correct configuration and restart again.
-
+See [Configuration reference](../configuration.md) for complete precedence, topology, retry, and shutdown contracts.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)

@@ -4,6 +4,16 @@
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
+Choose artifact by goal:
+
+| Goal | Use | Does not include |
+|---|---|---|
+| Move/edit one test suite | Golden-set JSON or CSV | Provider/model configuration, secrets, runs |
+| Move application configuration | Configuration bundle | Secret values, run history |
+| Archive/analyze one run | Run JSON, CSV, or HTML | Live application state |
+| Recover installation | SQLite backup plus protected deployment secrets | — |
+
+Every export may contain sensitive operational or evaluation data. Review destination and access before download.
 
 ### Importing golden sets
 
@@ -56,7 +66,7 @@ Export before permanently deleting a run. An export is a point-in-time copy and 
 
 Open **Configuration exchange** to download or import a version `1.0` JSON configuration bundle.
 
-Configuration export includes application configuration objects: endpoints, model profiles, judge profiles, golden sets, and golden-set items. It excludes secret values. API keys and secret additional-header values are represented as missing rather than exported. It also is not a run-history export.
+Configuration export includes endpoints, model profiles, immutable Judge definitions/versions, Judge profiles, golden sets, and golden-set items. It excludes secret values. API keys and secret additional-header values are represented as missing rather than exported. It also is not a run-history export.
 
 To import:
 
@@ -87,15 +97,18 @@ Always preview current file against target environment immediately before commit
 
 **Operator task:** use your organization-approved backup procedure. See also [configuration guide](../configuration.md) for data paths and retention settings.
 
-Use exports for portable sharing, but use database backup for recoverable application state. A complete backup must preserve application data and secret storage together. Keep backup encrypted and access-controlled because database may contain credentials and sensitive prompts, answers, and run results.
+Use exports for portable sharing, but use database backup for recoverable application state. Complete recovery needs both consistent SQLite backup and matching protected deployment secrets—especially `ENCRYPTION_KEY`. Keep them separately protected and access-controlled; database contains encrypted provider credentials plus plaintext prompts, answers, and results.
 
 Recommended process:
 
-1. Stop application or ensure database backup method produces a consistent SQLite snapshot.
-2. Copy persistent application data volume or database file to protected backup storage.
-3. Record application version and backup time.
-4. Regularly test restoration in an isolated environment.
-5. Restore data and secret storage together; then verify endpoints, model profiles, golden sets, judge profiles, and sample run access.
+1. Wait for active runs to finish, then stop application; or use supported SQLite backup command for consistent snapshot.
+2. Back up local database/persistent volume to approved protected storage.
+3. Back up `.env` or deployment secrets separately with stronger access controls.
+4. Record application version, backup time, and source database path.
+5. Test restoration to new path in isolated local environment.
+6. Supply matching encryption key, start/migrate restored database, and verify records plus provider access.
+
+Never overwrite live database during restore. Supported CLI restore rejects existing target path.
 
 Do not rely on configuration export alone: it intentionally omits secret values and run history. Do not rely on run or golden-set exports alone: each contains only a subset of data. Define retention, encryption, access, and restore-testing practices that meet your organization's requirements.
 

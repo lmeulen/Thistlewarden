@@ -115,7 +115,7 @@ Use dedicated, least-privilege provider credentials where possible. Do not put c
 - endpoint URLs;
 - model IDs or display names;
 - prompts, system prompts, expected answers, tags, or test output;
-- evaluator configuration or judge rubrics;
+- evaluator configuration or Judge instructions;
 - imported golden-set files or exported run reports.
 
 If a key may have been exposed, revoke or rotate it through the provider, update the endpoint with the replacement key, and test the connection again.
