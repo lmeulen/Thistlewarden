@@ -471,7 +471,7 @@ class EndpointService:
         except sqlite3.IntegrityError as exc:
             for secret_id in created:
                 self._secrets.delete(secret_id)
-            raise ConflictError("Endpointnaam of headernaam bestaat al.") from exc
+            raise ConflictError("Endpoint name or header name already exists.") from exc
         except BaseException:
             for secret_id in created:
                 self._secrets.delete(secret_id)
@@ -539,7 +539,7 @@ class EndpointService:
         except sqlite3.IntegrityError as exc:
             for secret_id in new_secrets:
                 self._secrets.delete(secret_id)
-            raise ConflictError("Endpointnaam of headernaam bestaat al.") from exc
+            raise ConflictError("Endpoint name or header name already exists.") from exc
         except BaseException:
             for secret_id in new_secrets:
                 self._secrets.delete(secret_id)

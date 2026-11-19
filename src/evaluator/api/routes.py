@@ -56,10 +56,10 @@ def export_configuration() -> Response:
 def import_configuration() -> Response:
     mode = request.args.get("mode", "merge")
     if mode not in {"merge", "replace"}:
-        raise ValidationApiError("Importmodus moet merge of replace zijn.")
+        raise ValidationApiError("Import mode must be merge or replace.")
     preview_text = request.args.get("preview", "true").lower()
     if preview_text not in {"true", "false"}:
-        raise ValidationApiError("preview moet true of false zijn.")
+        raise ValidationApiError("preview must be true or false.")
     preview = preview_text == "true"
     plan = _configuration_exchange_service().import_bundle(
         _json_object(), cast(Literal["merge", "replace"], mode), preview=preview
@@ -195,7 +195,7 @@ def _run_queue() -> RunQueue:
 def _json_object() -> dict[str, object]:
     payload = request.get_json(silent=False)
     if not isinstance(payload, dict):
-        raise ValidationApiError("JSON-object is verplicht.")
+        raise ValidationApiError("JSON object is required.")
     return payload
 
 
@@ -392,7 +392,7 @@ def _positive_query(name: str, default: int) -> int:
     try:
         value = int(request.args.get(name, default))
     except ValueError as exc:
-        raise ValidationApiError(f"Queryparameter {name} moet een geheel getal zijn.") from exc
+        raise ValidationApiError(f"Query parameter {name} must be an integer.") from exc
     return value
 
 
@@ -401,7 +401,7 @@ def _optional_bool_query(name: str) -> bool | None:
     if value is None:
         return None
     if value.lower() not in {"true", "false"}:
-        raise ValidationApiError(f"Queryparameter {name} moet true of false zijn.")
+        raise ValidationApiError(f"Query parameter {name} must be true or false.")
     return value.lower() == "true"
 
 
@@ -421,13 +421,13 @@ def list_golden_sets() -> Response:
 def import_golden_set() -> tuple[Response, int] | Response:
     format_ = request.args.get("format", "json").lower()
     if format_ not in {"json", "csv"}:
-        raise ValidationApiError("Importformaat moet json of csv zijn.")
+        raise ValidationApiError("Import format must be json or csv.")
     preview_text = request.args.get("preview", "false").lower()
     if preview_text not in {"true", "false"}:
-        raise ValidationApiError("Queryparameter preview moet true of false zijn.")
+        raise ValidationApiError("Query parameter preview must be true or false.")
     upload = request.files.get("file")
     if upload is None:
-        raise ValidationApiError("Multipart-bestandsveld file is verplicht.")
+        raise ValidationApiError("Multipart file field is required.")
     settings = current_app.extensions["settings"]
     limit = settings.values.max_import_file_bytes
     content = upload.stream.read(limit + 1)
@@ -462,7 +462,7 @@ def get_golden_set(set_id: UUID) -> Response:
 def export_golden_set(set_id: UUID) -> Response:
     format_ = request.args.get("format", "json").lower()
     if format_ not in {"json", "csv"}:
-        raise ValidationApiError("Exportformaat moet json of csv zijn.")
+        raise ValidationApiError("Export format must be json or csv.")
     record = _golden_set_service().get_set(set_id)
     content = _golden_set_service().export_set(set_id, cast(Literal["json", "csv"], format_))
     safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", record.data.name).strip("-.") or "golden-set"
@@ -624,7 +624,7 @@ def cleanup_runs() -> Response:
     payload = _json_object()
     days = payload.get("retention_days")
     if not isinstance(days, int) or isinstance(days, bool):
-        raise ValidationApiError("retention_days moet een geheel getal zijn.")
+        raise ValidationApiError("retention_days must be an integer.")
     return jsonify({"deleted": _run_export_service().cleanup(days)})
 
 
@@ -644,7 +644,7 @@ def rerun_failures(run_id: UUID) -> tuple[Response, int]:
     payload = _json_object()
     name = payload.get("name")
     if not isinstance(name, str) or not name.strip():
-        raise ValidationApiError("Naam is verplicht.")
+        raise ValidationApiError("Name is required.")
     new_id = _run_queue().rerun_failures(run_id, name)
     return jsonify({"run": _run_queue().get_run(new_id)}), 201
 

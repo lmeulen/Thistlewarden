@@ -48,6 +48,33 @@ def test_product_branding_is_consistent() -> None:
         assert "LLMEvaluator" + " Evaluator" not in text, path
 
 
+def test_active_runtime_source_contains_no_known_dutch_messages() -> None:
+    runtime_root = ROOT / "src/evaluator"
+    excluded = {runtime_root / "mock_provider.py"}
+    known_dutch_fragments = (
+        "antwoord uitsluitend",
+        "volg de opdracht",
+        "ongeldige json",
+        "is verplicht",
+        "moet een",
+        "niet beschikbaar",
+        "bestaat al",
+        "historische referenties",
+        "dubbele kosten",
+        "gemiddelde latency",
+        "totale kosten",
+        "providerhost",
+        "judge-antwoord",
+    )
+
+    for path in runtime_root.rglob("*.py"):
+        if path in excluded:
+            continue
+        text = path.read_text(encoding="utf-8").casefold()
+        matches = [fragment for fragment in known_dutch_fragments if fragment in text]
+        assert not matches, f"{path}: {matches}"
+
+
 def test_readme_badges_match_user_facing_project_metadata() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     badge_row = readme.splitlines()[2]

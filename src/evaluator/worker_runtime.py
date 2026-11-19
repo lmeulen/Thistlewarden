@@ -101,8 +101,8 @@ class ModelTestResult:
 class ModelProfileTester:
     """Execute safe interactive test calls using persisted model specifications."""
 
-    TEST_PROMPT = "Antwoord uitsluitend met MODEL_TEST_OK."
-    TEST_SYSTEM_PROMPT = "Volg de opdracht exact en voeg geen andere tekst toe."
+    TEST_PROMPT = "Reply with exactly MODEL_TEST_OK."
+    TEST_SYSTEM_PROMPT = "Follow the instruction exactly and add no other text."
 
     def __init__(
         self,

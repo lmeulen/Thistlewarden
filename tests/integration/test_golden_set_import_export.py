@@ -138,7 +138,7 @@ def test_duplicate_case_id_and_oversized_file_rejected_before_write(app) -> None
         content_type="multipart/form-data",
     )
     assert duplicate.status_code == 400
-    assert "dupliceert" in str(duplicate.get_json())
+    assert "duplicates" in str(duplicate.get_json())
     oversized = client.post(
         "/api/v1/golden-sets/import?format=json",
         data={"file": (io.BytesIO(b"x" * 100001), "big.json")},

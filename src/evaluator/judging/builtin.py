@@ -149,7 +149,7 @@ def parse_judge_output(
         or set(actual) != set(expected)
         or len(actual) != len(expected)
     ):
-        raise JudgeParseError("Judge retourneerde geen exacte criteriumset.")
+        raise JudgeParseError("Judge did not return the exact criterion set.")
     by_id = {item.id: item for item in output.criteria}
     weight_sum = sum((item.weight for item in rubric), Decimal(0))
     calculated = (

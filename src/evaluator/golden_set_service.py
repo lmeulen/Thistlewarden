@@ -87,7 +87,7 @@ class GoldenSetService:
         )
         source_items = self._repository.list_all_items(set_id)
         if len(source_items) > self._limits.max_items:
-            raise ConflictError("Golden set bevat te veel testcases om te dupliceren.")
+            raise ConflictError("Golden set contains too many test cases to duplicate.")
         now = utc_now()
         record = GoldenSetRecord(id=uuid4(), data=data, created_at=now, updated_at=now)
         items = [
@@ -103,7 +103,7 @@ class GoldenSetService:
         try:
             self._repository.duplicate_set(set_id, record, items)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Golden-setnaam bestaat al.") from exc
+            raise ConflictError("Golden-set name already exists.") from exc
         result = self.get_set(record.id)
         log_semantic_event(
             _LOG,
@@ -132,7 +132,7 @@ class GoldenSetService:
         try:
             self._repository.save_set(record)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Golden-setnaam bestaat al.") from exc
+            raise ConflictError("Golden-set name already exists.") from exc
 
     def delete_set(self, set_id: UUID) -> bool:
         existing = self.get_set(set_id)
@@ -229,7 +229,7 @@ class GoldenSetService:
                 item = self._validate_item(payload)
                 folded = item.case_id.casefold()
                 if folded in seen:
-                    issues.append(ErrorDetail(label, f"case_id dupliceert rij {seen[folded]}."))
+                    issues.append(ErrorDetail(label, f"case_id duplicates row {seen[folded]}."))
                 else:
                     seen[folded] = row
                 item_data.append(item.model_copy(update={"sort_order": len(item_data)}))
@@ -268,7 +268,7 @@ class GoldenSetService:
         try:
             self._repository.import_set(record, records)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Golden-setnaam of case_id bestaat al.") from exc
+            raise ConflictError("Golden-set name or case_id already exists.") from exc
         result = self.get_set(record.id)
         log_semantic_event(
             _LOG,
@@ -283,7 +283,7 @@ class GoldenSetService:
     def create_item(self, set_id: UUID, payload: Any) -> GoldenSetItemRecord:
         self.get_set(set_id)
         if self._repository.count_items(set_id) >= self._limits.max_items:
-            raise ConflictError("Maximum aantal testcases voor golden set is bereikt.")
+            raise ConflictError("Maximum number of test cases for golden set was reached.")
         data = self._validate_item(payload)
         data = data.model_copy(update={"sort_order": self._repository.next_sort_order(set_id)})
         now = utc_now()
@@ -319,7 +319,7 @@ class GoldenSetService:
         try:
             self._repository.save_item(record, previous_order)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("case_id bestaat al binnen golden set.") from exc
+            raise ConflictError("case_id already exists within golden set.") from exc
 
     def preview_bulk_items(self, set_id: UUID, payload: Any) -> GoldenItemBulkPreview:
         self.get_set(set_id)
@@ -450,7 +450,7 @@ class GoldenSetService:
         try:
             deleted = self._repository.delete_items(set_id, unique_ids)
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Een testcase heeft historische referenties.") from exc
+            raise ConflictError("A test case has historical references.") from exc
         log_semantic_event(_LOG, "golden_items_deleted", object_id=set_id, count=deleted)
         return deleted
 
@@ -460,7 +460,7 @@ class GoldenSetService:
             if not self._repository.delete_item(item_id):
                 raise NotFoundError("Test case not found.")
         except sqlite3.IntegrityError as exc:
-            raise ConflictError("Testcase heeft historische referenties.") from exc
+            raise ConflictError("Test case has historical references.") from exc
         log_semantic_event(
             _LOG, "golden_item_deleted", object_id=item_id, source=existing.golden_set_id
         )

@@ -133,7 +133,7 @@ class CentralEndpointLimiter:
                     state.abandoned_tickets.add(ticket)
                     self._advance_tickets(state)
                     state.condition.notify_all()
-                    raise CancelledError("Limiter is gesloten of call is geannuleerd.")
+                    raise CancelledError("Rate limiter is closed or call was cancelled.")
                 now = self._clock.monotonic()
                 self._expire(state, now)
                 reason = self._blocked_reason(

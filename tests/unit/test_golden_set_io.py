@@ -49,5 +49,5 @@ def test_csv_round_trip_handles_multiline_quotes_decimal_tags_and_booleans() -> 
 
 def test_csv_rejects_invalid_boolean_with_row_and_case() -> None:
     content = export_csv(_items()).replace(b",false\r\n", b",maybe\r\n")
-    with pytest.raises(ValueError, match=r"rij 2 \(unicode-.\).+enabled"):
+    with pytest.raises(ValueError, match=r"CSV row 2 \(unicode-.\).+enabled"):
         parse_import(content, "csv", "Set")

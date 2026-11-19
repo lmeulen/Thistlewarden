@@ -20,7 +20,6 @@ Each run snapshots its selected test cases, model settings, Judge configuration,
 
 - Supported deployment is one application process on one host, using local filesystem storage.
 - Synchronous run exports support at most 50,000 jobs per run. Split larger evaluations before exporting.
-- Export SQL identifiers still need an explicit allowlist; see [issue #21](https://github.com/lmeulen/Thistlewarden/issues/21).
 - Thistlewarden does not provide authentication, multi-user collaboration, or supported network deployment.
 
 ## Requirements

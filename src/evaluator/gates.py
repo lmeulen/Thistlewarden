@@ -45,11 +45,11 @@ _GATE_LABELS = {
     "min_weighted_score": "Weighted score",
     "min_pass_rate": "Pass rate",
     "max_error_rate": "Error rate",
-    "max_mean_latency_ms": "Gemiddelde latency",
+    "max_mean_latency_ms": "Mean latency",
     "max_p95_latency_ms": "P95 latency",
     "max_p95_ttft_ms": "P95 TTFT",
-    "min_mean_tps": "Gemiddelde TPS",
-    "max_total_cost": "Totale kosten",
+    "min_mean_tps": "Mean TPS",
+    "max_total_cost": "Total cost",
 }
 
 _METRICS = {

@@ -102,43 +102,43 @@ def _parse_json(text: str) -> ParsedGoldenSet:
     try:
         document = json.loads(text, parse_float=Decimal)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Ongeldige JSON op regel {exc.lineno}, kolom {exc.colno}.") from exc
+        raise ValueError(f"Invalid JSON at line {exc.lineno}, column {exc.colno}.") from exc
     if not isinstance(document, dict):
-        raise ValueError("JSON-hoofdniveau moet een object zijn.")
+        raise ValueError("Top-level JSON value must be an object.")
     allowed = {"name", "description", "version", "tags", "items"}
     unknown = set(document) - allowed
     if unknown:
-        raise ValueError(f"Onbekende JSON-velden: {', '.join(sorted(unknown))}.")
+        raise ValueError(f"Unknown JSON fields: {', '.join(sorted(unknown))}.")
     items = document.get("items")
     if not isinstance(items, list):
-        raise ValueError("JSON-veld items moet een lijst zijn.")
+        raise ValueError("JSON field items must be a list.")
     set_payload = {key: value for key, value in document.items() if key != "items"}
     return ParsedGoldenSet(set_payload, items, list(range(1, len(items) + 1)))
 
 
 def _parse_csv(text: str, set_name: str | None) -> ParsedGoldenSet:
     if not set_name or not set_name.strip():
-        raise ValueError("Formulierveld name is verplicht voor CSV-import.")
+        raise ValueError("Form field name is required for CSV import.")
     stream = io.StringIO(text, newline="")
     reader = csv.DictReader(stream)
     if reader.fieldnames is None:
-        raise ValueError("CSV-header ontbreekt.")
+        raise ValueError("CSV header is missing.")
     if tuple(reader.fieldnames) != CSV_COLUMNS:
-        raise ValueError("CSV-header moet exact de gedocumenteerde kolommen bevatten.")
+        raise ValueError("CSV header must contain exactly the documented columns.")
     items: list[dict[str, Any]] = []
     rows: list[int] = []
     for row_number, row in enumerate(reader, start=2):
         if None in row:
-            raise ValueError(f"CSV-rij {row_number} bevat te veel kolommen.")
+            raise ValueError(f"CSV row {row_number} contains too many columns.")
         case_id = row.get("case_id", "")
         try:
             config = json.loads(row["evaluator_config"])
             tags = json.loads(row["tags"])
         except json.JSONDecodeError as exc:
-            raise ValueError(f"CSV-rij {row_number} ({case_id}): invalid JSON field.") from exc
+            raise ValueError(f"CSV row {row_number} ({case_id}): invalid JSON field.") from exc
         enabled_text = row["enabled"].strip().lower()
         if enabled_text not in {"true", "false"}:
-            raise ValueError(f"CSV-rij {row_number} ({case_id}): enabled moet true of false zijn.")
+            raise ValueError(f"CSV row {row_number} ({case_id}): enabled must be true or false.")
         items.append(
             {
                 "case_id": case_id,

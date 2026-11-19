@@ -23,7 +23,7 @@ class ApiError(Exception):
 
     code = "INTERNAL_ERROR"
     status_code = 500
-    default_message = "Er is een interne fout opgetreden."
+    default_message = "An internal error occurred."
 
     def __init__(
         self,
@@ -62,19 +62,19 @@ class NotFoundError(ApiError):
 class ConflictError(ApiError):
     code = "CONFLICT"
     status_code = 409
-    default_message = "Wijziging conflicteert met bestaande gegevens."
+    default_message = "Change conflicts with existing data."
 
 
 class AuthenticationError(ApiError):
     code = "AUTHENTICATION_ERROR"
     status_code = 502
-    default_message = "Authenticatie bij provider is mislukt."
+    default_message = "Provider authentication failed."
 
 
 class RateLimitError(ApiError):
     code = "RATE_LIMIT_ERROR"
     status_code = 503
-    default_message = "Providerlimiet is bereikt."
+    default_message = "Provider rate limit was reached."
 
 
 class ProviderClientError(ApiError):
@@ -86,19 +86,19 @@ class ProviderClientError(ApiError):
 class ProviderServerError(ApiError):
     code = "PROVIDER_SERVER_ERROR"
     status_code = 503
-    default_message = "Provider is tijdelijk niet beschikbaar."
+    default_message = "Provider is temporarily unavailable."
 
 
 class TimeoutError(ApiError):
     code = "TIMEOUT_ERROR"
     status_code = 503
-    default_message = "Providerverzoek duurde te lang."
+    default_message = "Provider request timed out."
 
 
 class NetworkError(ApiError):
     code = "NETWORK_ERROR"
     status_code = 503
-    default_message = "Provider kon niet worden bereikt."
+    default_message = "Provider could not be reached."
 
 
 class InvalidProviderResponseError(ApiError):
@@ -110,13 +110,13 @@ class InvalidProviderResponseError(ApiError):
 class JudgeParseError(ApiError):
     code = "JUDGE_PARSE_ERROR"
     status_code = 502
-    default_message = "Judge-antwoord kon niet worden verwerkt."
+    default_message = "Judge response could not be processed."
 
 
 class CancelledError(ApiError):
     code = "CANCELLED"
     status_code = 409
-    default_message = "Actie is geannuleerd."
+    default_message = "Action was cancelled."
 
 
 class InternalError(ApiError):

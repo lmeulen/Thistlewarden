@@ -280,7 +280,7 @@ def test_model_discovery_client_contract_timeout_and_size_limit() -> None:
         endpoint.created_at,
         endpoint.updated_at,
     )
-    with pytest.raises(ValidationApiError, match="Models-URL"):
+    with pytest.raises(ValidationApiError, match="Models URL"):
         ModelDiscoveryClient(headers, max_response_bytes=100, transport=good).discover(without_url)
 
 
