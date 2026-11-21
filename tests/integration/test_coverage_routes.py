@@ -71,6 +71,29 @@ def test_configuration_gates_aggregates_and_run_export_routes(tmp_path: Path) ->
     assert client.get(f"/api/v1/runs/{run_id}/aggregates").status_code == 200
     assert client.get(f"/api/v1/runs/{run_id}/quality-gates").status_code == 200
 
+    lease = app.extensions["run_queue"].claim("coverage")
+    app.extensions["run_queue"].fail(lease or pytest.fail("job not claimed"), "provider_error", {})
+    rerun_preview = client.get(f"/api/v1/runs/{run_id}/rerun-failures")
+    assert rerun_preview.status_code == 200
+    preview = rerun_preview.get_json()["preview"]
+    assert preview["job_count"] == preview["active_cases"] * len(preview["models"])
+    rerun = client.post(
+        f"/api/v1/runs/{run_id}/rerun-failures",
+        json={"name": "Rerun errors", "fingerprint": preview["fingerprint"]},
+    )
+    assert rerun.status_code == 201
+    stale_preview = client.get(f"/api/v1/runs/{run_id}/rerun-failures").get_json()["preview"]
+    changed = client.put(
+        f"/api/v1/golden-sets/{golden.id}/quality-gates", json={"min_pass_rate": "0.7"}
+    )
+    assert changed.status_code == 200
+    stale = client.post(
+        f"/api/v1/runs/{run_id}/rerun-failures",
+        json={"name": "Stale rerun", "fingerprint": stale_preview["fingerprint"]},
+    )
+    assert stale.status_code == 400
+    assert "stale" in stale.get_json()["error"]["message"].lower()
+
     for format_, mimetype in (
         ("json", "application/json"),
         ("csv", "text/csv"),

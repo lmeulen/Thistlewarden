@@ -590,14 +590,28 @@ def test_bulk_delete_runs_with_select_all_control(app) -> None:
     assert client.get(f"/runs/{retained}").status_code == 200
 
 
-def test_rerun_failed_jobs_from_gui(app) -> None:
+def test_rerun_models_with_errors_requires_review_and_confirmation(app) -> None:
     client = app.test_client()
     run_id = create_run(client, app, "Failing")
     complete_run(app, run_id, status="error")
-    token = csrf(client, f"/runs/{run_id}")
+    review = client.get(f"/runs/{run_id}/rerun-failures")
+    text = review.get_data(as_text=True)
+    assert review.status_code == 200
+    assert "Rerun models with errors" in text
+    assert "Active test cases:" in text
+    assert "Expected target provider calls:" in text
+    assert "Previously successful cases rerun" in text
+    fingerprint = re.search(r'name="fingerprint" value="([a-f0-9]+)"', text)
+    assert fingerprint is not None
+    token = csrf(client, f"/runs/{run_id}/rerun-failures")
     response = client.post(
         f"/runs/{run_id}/rerun-failures",
-        data={"csrf_token": token, "name": "Retry"},
+        data={
+            "csrf_token": token,
+            "name": "Retry",
+            "fingerprint": fingerprint.group(1),
+            "confirm": "on",
+        },
         follow_redirects=False,
     )
     assert response.status_code == 302 and response.headers["Location"] != f"/runs/{run_id}"

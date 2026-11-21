@@ -488,15 +488,30 @@ def run_cancel(run_id: UUID) -> Response:
     return redirect(url_for("gui.run_detail", run_id=run_id))
 
 
-@gui.post("/runs/<uuid:run_id>/rerun-failures")
-def run_rerun_failures(run_id: UUID) -> Response:
+@gui.get("/runs/<uuid:run_id>/rerun-failures")
+def run_rerun_failures_review(run_id: UUID) -> str | Response:
     try:
-        new_id = _run_queue().rerun_failures(run_id, request.form.get("name", ""))
-        flash("New run created for failed jobs.", "success")
-        return redirect(url_for("gui.run_detail", run_id=new_id))
+        preview = _run_queue().rerun_failures_preview(run_id)
     except ApiError as exc:
         flash(_error_message(exc), "error")
         return redirect(url_for("gui.run_detail", run_id=run_id))
+    return render_template("rerun_failures_review.html", run_id=run_id, preview=preview)
+
+
+@gui.post("/runs/<uuid:run_id>/rerun-failures")
+def run_rerun_failures(run_id: UUID) -> Response:
+    try:
+        fingerprint = request.form.get("fingerprint", "")
+        if "confirm" not in request.form:
+            raise ValidationApiError("Explicitly confirm rerun scope and cost.")
+        if not fingerprint:
+            raise ValidationApiError("Review current configuration before creating a rerun.")
+        new_id = _run_queue().rerun_failures(run_id, request.form.get("name", ""), fingerprint)
+        flash("New run created for models with errored jobs.", "success")
+        return redirect(url_for("gui.run_detail", run_id=new_id))
+    except ApiError as exc:
+        flash(_error_message(exc), "error")
+        return redirect(url_for("gui.run_rerun_failures_review", run_id=run_id))
 
 
 @gui.post("/runs/delete")
