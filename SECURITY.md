@@ -4,10 +4,10 @@
 
 | Version | Supported |
 | --- | --- |
-| Latest 0.2.x beta | Yes |
+| Latest 0.3.x beta | Yes |
 | Earlier releases | No |
 
-Security fixes are provided only for latest published 0.2.x beta. Upgrade before reporting behavior already addressed in newer release.
+Security fixes are provided only for latest published 0.3.x beta. Upgrade before reporting behavior already addressed in newer release.
 
 ## Supported boundary
 

@@ -10,7 +10,7 @@ Thistlewarden is a local web application for repeatable evaluation of OpenAI-com
 
 ## Status
 
-**Version 0.2.2 is a beta release.** Use it for controlled evaluation and comparison, not as a public or multi-user service.
+**Version 0.3.0 is a beta release.** Use it for controlled evaluation and comparison, not as a public or multi-user service.
 
 Thistlewarden is designed for one trusted user on one computer. It has no login system, user roles, or tenant isolation. Keep it bound to loopback (`127.0.0.1` or `::1`) and never expose it directly to a LAN or the internet. Read the [security policy](SECURITY.md) before installation.
 
@@ -176,7 +176,7 @@ See [release guide](docs/release.md) for offline container checks, release artif
 - [User manual](docs/manual/README.md) — first evaluation, daily workflows, and complete field guidance
 - [Configuration reference](docs/configuration.md) — setting precedence, lifecycle, topology, and file formats
 - [Security policy](SECURITY.md) — supported boundary, sensitive data, backups, and vulnerability reporting
-- [0.2.2 beta release notes](docs/release-notes-0.2.2.md) — current changes and upgrade notes
+- [0.3.0 beta release notes](docs/release-notes-0.3.0.md) — current changes and upgrade notes
 - [Release guide](docs/release.md) — maintainer release procedure
 - [Contributing](.github/CONTRIBUTING.md) — development and contribution rules
 
