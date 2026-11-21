@@ -67,6 +67,10 @@ Streaming safety rule: after any response body data arrives, transport failure r
 
 Retries can still add latency and provider usage. Set endpoint retry and rate-limit values according to provider contract; they do not increase provider quota.
 
+## Internal worker diagnostics
+
+Unexpected worker defects log an `ERROR` event with correlation IDs, exception type, and bounded file/function/line traceback frames. Exception messages, source lines, locals, prompts, answers, provider payloads, credentials, and secret identifiers are excluded. Identical traceback signatures log at most once per minute to prevent repeated systemic failures from flooding logs. Expected provider, cancellation, lease-loss, guardrail, and Judge failures retain their classified result handling without internal-defect tracebacks.
+
 ## Shutdown budget
 
 Worker shutdown uses one global 30-second deadline within Compose's 40-second stop grace period. Shutdown signals limiter/retry waits, closes lifecycle-owned provider transports, then joins workers against same absolute deadline.

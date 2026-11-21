@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
+import traceback
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
@@ -101,6 +104,7 @@ _ALLOWED_FIELDS: Final = frozenset(
         "threshold",
         "total",
         "ttft_ms",
+        "traceback",
         "usage_present",
         "wait_ms",
         "workers_enabled",
@@ -109,6 +113,10 @@ _ALLOWED_FIELDS: Final = frozenset(
 MAX_LOG_LINE_BYTES: Final = 8192
 _MAX_VALUE_LENGTH: Final = 500
 _MAX_MESSAGE_LENGTH: Final = 6000
+_TRACEBACK_SUPPRESSION_SECONDS: Final = 60.0
+_TRACEBACK_CACHE_LIMIT: Final = 256
+_TRACEBACK_LOCK = threading.Lock()
+_TRACEBACK_LAST_LOGGED: dict[str, float] = {}
 
 
 class SafeLogFormatter(logging.Formatter):
@@ -199,6 +207,43 @@ def log_event(
         return
     suffix = " ".join(f"{name}={_safe_value(fields[name])}" for name in sorted(fields))
     logger.log(level, event if not suffix else f"{event} {suffix}")
+
+
+def log_unexpected_exception(
+    logger: logging.Logger,
+    event: str,
+    exception: BaseException,
+    /,
+    **fields: object,
+) -> None:
+    """Log bounded, message-free traceback frames for an internal defect.
+
+    Exception messages, source lines, and locals can contain evaluation material or
+    credentials. Emit only exception type and basename/function/line frame labels.
+    Identical defects are emitted at most once per minute.
+    """
+    frames = traceback.extract_tb(exception.__traceback__)[-12:]
+    rendered_frames = (
+        ">".join(f"{Path(frame.filename).name}:{frame.name}:{frame.lineno}" for frame in frames)
+        or "no_traceback"
+    )
+    signature = f"{type(exception).__name__}:{rendered_frames}"
+    now = time.monotonic()
+    with _TRACEBACK_LOCK:
+        last_logged = _TRACEBACK_LAST_LOGGED.get(signature)
+        if last_logged is not None and now - last_logged < _TRACEBACK_SUPPRESSION_SECONDS:
+            return
+        if len(_TRACEBACK_LAST_LOGGED) >= _TRACEBACK_CACHE_LIMIT:
+            _TRACEBACK_LAST_LOGGED.clear()
+        _TRACEBACK_LAST_LOGGED[signature] = now
+    log_event(
+        logger,
+        logging.ERROR,
+        event,
+        exception_type=type(exception).__name__,
+        traceback=rendered_frames,
+        **fields,
+    )
 
 
 def log_semantic_event(

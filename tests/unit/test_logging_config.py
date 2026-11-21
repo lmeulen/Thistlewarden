@@ -18,6 +18,7 @@ from evaluator.logging_config import (
     configure_logging,
     log_context,
     log_event,
+    log_unexpected_exception,
 )
 
 pytestmark = pytest.mark.unit
@@ -112,6 +113,25 @@ def test_log_event_converts_safe_types_escapes_lines_and_limits_values(caplog) -
     assert "status=Status.READY" in message
     assert "reason=" + ("x" * 500) in message
     assert "x" * 501 not in message
+
+
+def test_unexpected_exception_logs_safe_frames_and_bounds_repeats(caplog) -> None:
+    logger = logging.getLogger("test.defects")
+    sensitive = "prompt=do-not-log api-key=do-not-log"
+
+    with caplog.at_level(logging.ERROR, logger="test.defects"):
+        for _ in range(2):
+            try:
+                raise RuntimeError(sensitive)
+            except RuntimeError as exc:
+                log_unexpected_exception(logger, "internal_defect", exc, job_id="job-1")
+
+    records = [record for record in caplog.records if record.name == "test.defects"]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert "internal_defect" in message and "exception_type=RuntimeError" in message
+    assert "traceback=test_logging_config.py:" in message
+    assert sensitive not in message and "api-key" not in message
 
 
 def test_log_event_skips_field_conversion_when_level_is_disabled() -> None:
