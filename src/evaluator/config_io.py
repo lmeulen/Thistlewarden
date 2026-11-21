@@ -287,9 +287,10 @@ class ConfigurationExchangeService:
                 )
                 QualityGates.model_validate(item.data.get("quality_gates") or {})
             for item in bundle.golden_set_items:
-                GoldenSetItemInput.model_validate(
-                    {k: v for k, v in item.data.items() if k != "golden_set_id"}
-                )
+                item_data = {k: v for k, v in item.data.items() if k != "golden_set_id"}
+                if "user_prompts" in item_data:
+                    item_data.pop("prompt", None)
+                GoldenSetItemInput.model_validate(item_data)
             return bundle
         except (ValidationError, ValueError, TypeError) as exc:
             raise ValidationApiError("Configuration file is invalid.") from exc
@@ -561,24 +562,40 @@ class ConfigurationExchangeService:
             )
         for x in b.golden_set_items:
             d = x.data
+            user_prompts = d.get("user_prompts")
+            if user_prompts is None:
+                user_prompts = [d["prompt"]]
+            item_input = GoldenSetItemInput.model_validate(
+                {
+                    key: value
+                    for key, value in d.items()
+                    if key not in {"golden_set_id", "prompt", "user_prompts"}
+                }
+                | {"user_prompts": user_prompts}
+            )
             c.execute(
-                f"{verb} INTO golden_set_items VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                f"{verb} INTO golden_set_items("
+                "id,golden_set_id,case_id,prompt,system_prompt,expected_answer,"
+                "evaluation_method,evaluator_config_json,category,tags_json,weight,"
+                "enabled,sort_order,created_at,updated_at,user_prompts_json"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     rid(x.id),
                     rid(d["golden_set_id"]),
-                    d["case_id"],
-                    d["prompt"],
-                    d.get("system_prompt"),
-                    d.get("expected_answer"),
-                    d["evaluation_method"],
-                    json.dumps(d["evaluator_config"], separators=(",", ":")),
-                    d.get("category"),
-                    json.dumps(d.get("tags", [])),
-                    str(d.get("weight", "1")),
-                    int(d.get("enabled", True)),
-                    d["sort_order"],
+                    item_input.case_id,
+                    item_input.user_prompts[0],
+                    item_input.system_prompt,
+                    item_input.expected_answer,
+                    item_input.evaluation_method,
+                    json.dumps(item_input.evaluator_config, separators=(",", ":")),
+                    item_input.category,
+                    json.dumps(item_input.tags),
+                    str(item_input.weight),
+                    int(item_input.enabled),
+                    item_input.sort_order,
                     now,
                     now,
+                    json.dumps(item_input.user_prompts, ensure_ascii=False),
                 ),
             )
 

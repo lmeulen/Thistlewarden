@@ -64,8 +64,13 @@
 <section class="panel">
   <h2>Prompt</h2>
   {% if result.case.system_prompt %}<h3>System</h3><pre class="content">{{ result.case.system_prompt }}</pre>{% endif %}
+  {% if result.transcript %}
+  <h3>Conversation transcript</h3>
+  {% for message in result.transcript %}<h4>{{ message.role|title }}{% if loop.last and message.role == 'assistant' %} — Evaluated answer{% elif message.role == 'assistant' %} — Context response{% endif %}</h4><pre class="content">{{ message.content }}</pre>{% endfor %}
+  {% else %}
   <h3>User</h3><pre class="content">{{ result.case.prompt }}</pre>
+  {% endif %}
   <h3>Expected</h3><pre class="content">{{ result.case.expected_value or 'Not set' }}</pre>
-  <h3>{{ 'Partial candidate answer' if result.evaluation.partial_candidate else 'Candidate answer' }}</h3><pre class="content">{{ result.evaluation.candidate if result.evaluation.candidate is defined else 'Not available for older run.' }}</pre>
+  <h3>{{ 'Partial candidate answer' if result.evaluation.partial_candidate else 'Evaluated answer' }}</h3><pre class="content">{{ result.evaluated_answer if result.evaluated_answer is not none else 'Not available for older run.' }}</pre>
 </section>
 {% endblock %}

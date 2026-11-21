@@ -22,10 +22,36 @@ from evaluator.logging_config import log_semantic_event
 from evaluator.time import Clock, SystemClock, to_utc_iso
 
 _LOG = logging.getLogger(__name__)
+_CASE_SNAPSHOT_SCHEMA_VERSION = "2.0"
+
+
+def normalize_case_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Map legacy single-prompt snapshots to canonical ordered user turns in memory."""
+
+    value = dict(snapshot)
+    prompts = value.get("user_prompts")
+    if prompts is None:
+        prompt = value.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError("case snapshot must contain a prompt or user_prompts")
+        prompts = [prompt]
+    if (
+        not isinstance(prompts, list)
+        or not prompts
+        or any(not isinstance(prompt, str) or not prompt.strip() for prompt in prompts)
+    ):
+        raise ValueError("case snapshot user_prompts must be a non-empty list of strings")
+    value["user_prompts"] = list(prompts)
+    value["prompt"] = prompts[0]
+    return value
 
 
 class LeaseLost(RuntimeError):
     """Worker fencing token no longer owns a live lease."""
+
+
+class IncompleteTargetTurn(RuntimeError):
+    """A streamed target response lacks a durable completion checkpoint."""
 
 
 class RunInput(BaseModel):
@@ -190,18 +216,21 @@ class RunQueue:
                     snapshot_id = uuid4()
                     case_ids.append(snapshot_id)
                     snapshot = {
-                        key: row[key]
-                        for key in (
-                            "case_id",
-                            "prompt",
-                            "system_prompt",
-                            "expected_answer",
-                            "evaluation_method",
-                            "evaluator_config_json",
-                            "category",
-                            "tags_json",
-                            "weight",
-                        )
+                        "snapshot_schema_version": _CASE_SNAPSHOT_SCHEMA_VERSION,
+                        "case_id": row["case_id"],
+                        "user_prompts": json.loads(row["user_prompts_json"]),
+                        **{
+                            key: row[key]
+                            for key in (
+                                "system_prompt",
+                                "expected_answer",
+                                "evaluation_method",
+                                "evaluator_config_json",
+                                "category",
+                                "tags_json",
+                                "weight",
+                            )
+                        },
                     }
                     if row["evaluation_method"] == "llm_judge":
                         config = LlmJudgeConfig.model_validate(
@@ -383,6 +412,78 @@ class RunQueue:
             expiry,
             lease.recovered_after_interruption,
         )
+
+    def turn_state(self, lease: JobLease) -> list[dict[str, Any]]:
+        """Return durable turn checkpoints; reject a recovery that might replay a stream."""
+        connection = self._factory.connect()
+        try:
+            with transaction(connection):
+                self._assert_lease(connection, lease)
+                rows = connection.execute(
+                    "SELECT * FROM run_job_turns WHERE job_id=? ORDER BY turn_index",
+                    (str(lease.job_id),),
+                ).fetchall()
+                result = [dict(row) for row in rows]
+                if any(row["status"] == "started" for row in result):
+                    raise IncompleteTargetTurn("incomplete target turn cannot be replayed")
+                return result
+        finally:
+            connection.close()
+
+    def start_turn(self, lease: JobLease, turn_index: int, user_prompt: str) -> None:
+        connection = self._factory.connect()
+        try:
+            with transaction(connection):
+                self._assert_lease(connection, lease)
+                connection.execute(
+                    """INSERT INTO run_job_turns(
+                    id,job_id,turn_index,lease_generation,user_prompt,status,started_at
+                    ) VALUES (?,?,?,?,?,'started',?)""",
+                    (
+                        str(uuid4()),
+                        str(lease.job_id),
+                        turn_index,
+                        lease.generation,
+                        user_prompt,
+                        to_utc_iso(self._clock.now_utc()),
+                    ),
+                )
+        finally:
+            connection.close()
+
+    def complete_turn(
+        self,
+        lease: JobLease,
+        turn_index: int,
+        *,
+        assistant_response: str,
+        metrics: dict[str, Any],
+        attempts: tuple[dict[str, Any], ...],
+        provider_evidence: dict[str, Any],
+    ) -> None:
+        connection = self._factory.connect()
+        try:
+            with transaction(connection):
+                self._assert_lease(connection, lease)
+                cursor = connection.execute(
+                    """UPDATE run_job_turns SET status='completed',assistant_response=?,
+                    metrics_json=?,attempts_json=?,provider_evidence_json=?,completed_at=?
+                    WHERE job_id=? AND turn_index=? AND status='started' AND lease_generation=?""",
+                    (
+                        assistant_response,
+                        json.dumps(metrics, separators=(",", ":")),
+                        json.dumps(attempts, separators=(",", ":")),
+                        json.dumps(provider_evidence, separators=(",", ":")),
+                        to_utc_iso(self._clock.now_utc()),
+                        str(lease.job_id),
+                        turn_index,
+                        lease.generation,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise LeaseLost
+        finally:
+            connection.close()
 
     def record_attempt(
         self, lease: JobLease, category: str | None, metadata: dict[str, Any]
@@ -711,7 +812,7 @@ class RunQueue:
         value = json.loads(row[0])
         if not isinstance(value, dict):
             raise ValueError("snapshot must be a JSON object")
-        return value
+        return normalize_case_snapshot(value) if kind == "case" else value
 
     def _assert_lease(self, connection: sqlite3.Connection, lease: JobLease) -> None:
         row = connection.execute(

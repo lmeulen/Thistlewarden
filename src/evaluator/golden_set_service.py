@@ -467,8 +467,10 @@ class GoldenSetService:
 
     def _validate_item(self, payload: Any) -> GoldenSetItemInput:
         data = cast(GoldenSetItemInput, self._validate(GoldenSetItemInput, payload))
-        if len(data.prompt) > self._limits.max_prompt_chars:
-            raise ValidationApiError("Prompt exceeds maximum length.")
+        if any(len(prompt) > self._limits.max_prompt_chars for prompt in data.user_prompts):
+            raise ValidationApiError("User prompt exceeds maximum length.")
+        if sum(len(prompt) for prompt in data.user_prompts) > self._limits.max_prompt_chars:
+            raise ValidationApiError("User prompts exceed maximum total length.")
         if (
             data.system_prompt is not None
             and len(data.system_prompt) > self._limits.max_system_prompt_chars
@@ -513,6 +515,7 @@ def golden_item_to_dict(record: GoldenSetItemRecord) -> dict[str, Any]:
     return {
         "id": str(record.id),
         "golden_set_id": str(record.golden_set_id),
+        "prompt": record.data.prompt,
         **record.data.model_dump(mode="json"),
         "created_at": to_utc_iso(record.created_at),
         "updated_at": to_utc_iso(record.updated_at),

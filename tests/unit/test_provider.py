@@ -20,6 +20,7 @@ from evaluator.api.errors import (
 from evaluator.endpoints import EndpointInput, EndpointRecord, HeaderInput
 from evaluator.models import ModelProfileInput
 from evaluator.provider import (
+    ConversationMessage,
     OpenAIProviderClient,
     ProviderGuardrailError,
     ProviderHeaderResolver,
@@ -118,6 +119,116 @@ def test_request_body_composes_messages_optional_fields_reasoning_and_custom() -
         "reasoning": {"effort": "high"},
         "stream": False,
     }
+
+
+def test_conversation_requests_preserve_roles_order_and_system_placement() -> None:
+    profile = ModelProfileInput(model_id="model", display_name="M", max_tokens=128)
+    messages = [
+        ConversationMessage(role="user", content="First question"),
+        ConversationMessage(role="assistant", content="First answer"),
+        ConversationMessage(role="user", content="Follow-up"),
+        ConversationMessage(role="assistant", content="Second answer"),
+        ConversationMessage(role="user", content="Final question"),
+    ]
+
+    openai = build_chat_completion_request(
+        profile, messages=messages, system_prompt="System instruction"
+    )
+    anthropic = build_anthropic_completion_request(
+        profile, messages=messages, system_prompt="System instruction"
+    )
+
+    expected = [message.model_dump() for message in messages]
+    assert openai["messages"] == [
+        {"role": "system", "content": "System instruction"},
+        *expected,
+    ]
+    assert "system" not in anthropic["messages"]
+    assert anthropic["system"] == "System instruction"
+    assert anthropic["messages"] == expected
+
+
+@pytest.mark.parametrize(
+    ("messages", "match"),
+    [
+        ([], "must not be empty"),
+        ([ConversationMessage(role="assistant", content="answer")], "must alternate"),
+        (
+            [
+                ConversationMessage(role="user", content="one"),
+                ConversationMessage(role="user", content="two"),
+            ],
+            "must alternate",
+        ),
+        (
+            [
+                ConversationMessage(role="user", content="question"),
+                ConversationMessage(role="assistant", content="answer"),
+            ],
+            "must end with a user",
+        ),
+    ],
+)
+def test_conversation_request_rejects_invalid_role_sequences(
+    messages: list[ConversationMessage], match: str
+) -> None:
+    profile = ModelProfileInput(model_id="model", display_name="M")
+    with pytest.raises(ValueError, match=match):
+        build_chat_completion_request(profile, messages=messages)
+
+
+def test_conversation_request_rejects_ambiguous_or_blank_input() -> None:
+    profile = ModelProfileInput(model_id="model", display_name="M")
+    message = ConversationMessage(role="user", content="question")
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        build_chat_completion_request(profile, prompt="question", messages=[message])
+    with pytest.raises(ValueError, match="required"):
+        build_chat_completion_request(profile)
+    with pytest.raises(ValueError, match="blank"):
+        build_chat_completion_request(profile, prompt="  ")
+    with pytest.raises(ValueError, match="system prompt"):
+        build_chat_completion_request(profile, prompt="question", system_prompt="  ")
+
+
+@pytest.mark.parametrize("api_format", ["openai", "anthropic"])
+def test_non_streaming_client_sends_canonical_conversation(api_format: str) -> None:
+    messages = [
+        ConversationMessage(role="user", content="First"),
+        ConversationMessage(role="assistant", content="Answer"),
+        ConversationMessage(role="user", content="Next"),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        expected = [message.model_dump() for message in messages]
+        if api_format == "openai":
+            assert payload["messages"] == [{"role": "system", "content": "System"}, *expected]
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},
+            )
+        assert payload["system"] == "System"
+        assert payload["messages"] == expected
+        return httpx.Response(
+            200,
+            json={"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn"},
+        )
+
+    endpoint = _endpoint()
+    endpoint = EndpointRecord(
+        endpoint.id,
+        endpoint.data.model_copy(update={"api_format": api_format}),
+        None,
+        endpoint.created_at,
+        endpoint.updated_at,
+    )
+    result = _client(handler).complete(
+        endpoint,
+        ModelProfileInput(model_id="model", display_name="M", max_tokens=32),
+        messages=messages,
+        system_prompt="System",
+    )
+    assert result.content == "ok"
 
 
 def test_anthropic_request_and_response_contract() -> None:

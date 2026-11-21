@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 import simplejson
@@ -120,6 +120,42 @@ class ProviderUsage(BaseModel):
     completion_tokens_details: dict[str, Any] | None = None
 
 
+class ConversationMessage(BaseModel):
+    """Provider-neutral conversational context for target completion requests."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1)
+
+
+def _conversation_messages(
+    *,
+    prompt: str | None,
+    messages: Sequence[ConversationMessage] | None,
+) -> list[dict[str, str]]:
+    if prompt is not None and messages is not None:
+        raise ValueError("prompt and messages are mutually exclusive")
+    if messages is None:
+        if prompt is None:
+            raise ValueError("prompt or messages is required")
+        messages = (ConversationMessage(role="user", content=prompt),)
+    if not messages:
+        raise ValueError("messages must not be empty")
+    result: list[dict[str, str]] = []
+    expected_role: Literal["user", "assistant"] = "user"
+    for message in messages:
+        validated = ConversationMessage.model_validate(message)
+        if not validated.content.strip():
+            raise ValueError("message content must not be blank")
+        if validated.role != expected_role:
+            raise ValueError("messages must alternate user and assistant roles, starting with user")
+        result.append(validated.model_dump())
+        expected_role = "assistant" if expected_role == "user" else "user"
+    if result[-1]["role"] != "user":
+        raise ValueError("messages must end with a user message")
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class CompletionResult:
     content: str
@@ -147,16 +183,18 @@ class ProviderGuardrailError(ProviderClientError):
 def build_chat_completion_request(
     profile: ModelProfileInput,
     *,
-    prompt: str,
+    prompt: str | None = None,
+    messages: Sequence[ConversationMessage] | None = None,
     system_prompt: str | None = None,
 ) -> dict[str, Any]:
-    messages: list[dict[str, str]] = []
+    provider_messages = _conversation_messages(prompt=prompt, messages=messages)
     if system_prompt is not None:
-        messages.append({"role": "system", "content": system_prompt})
-    messages.append({"role": "user", "content": prompt})
+        if not system_prompt.strip():
+            raise ValueError("system prompt must not be blank")
+        provider_messages.insert(0, {"role": "system", "content": system_prompt})
     return {
         "model": profile.model_id,
-        "messages": messages,
+        "messages": provider_messages,
         **compose_inference_parameters(profile),
         "stream": False,
     }
@@ -165,7 +203,8 @@ def build_chat_completion_request(
 def build_anthropic_completion_request(
     profile: ModelProfileInput,
     *,
-    prompt: str,
+    prompt: str | None = None,
+    messages: Sequence[ConversationMessage] | None = None,
     system_prompt: str | None = None,
 ) -> dict[str, Any]:
     if profile.max_tokens is None:
@@ -184,12 +223,14 @@ def build_anthropic_completion_request(
         )
     body: dict[str, Any] = {
         "model": profile.model_id,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": _conversation_messages(prompt=prompt, messages=messages),
         "max_tokens": max_tokens,
         **parameters,
         "stream": False,
     }
     if system_prompt is not None:
+        if not system_prompt.strip():
+            raise ValueError("system prompt must not be blank")
         body["system"] = system_prompt
     return body
 
@@ -367,15 +408,20 @@ class OpenAIProviderClient:
         endpoint: EndpointRecord,
         profile: ModelProfileInput,
         *,
-        prompt: str,
+        prompt: str | None = None,
+        messages: Sequence[ConversationMessage] | None = None,
         system_prompt: str | None = None,
     ) -> CompletionResult:
         if self._transport is None:
             validate_destination(endpoint, endpoint.data.completions_url)
         body = (
-            build_anthropic_completion_request(profile, prompt=prompt, system_prompt=system_prompt)
+            build_anthropic_completion_request(
+                profile, prompt=prompt, messages=messages, system_prompt=system_prompt
+            )
             if endpoint.data.api_format == "anthropic"
-            else build_chat_completion_request(profile, prompt=prompt, system_prompt=system_prompt)
+            else build_chat_completion_request(
+                profile, prompt=prompt, messages=messages, system_prompt=system_prompt
+            )
         )
         encoded = simplejson.dumps(body, use_decimal=True, allow_nan=False).encode()
         timeout = httpx.Timeout(float(endpoint.data.timeout_seconds))

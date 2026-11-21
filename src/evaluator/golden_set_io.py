@@ -13,7 +13,7 @@ from evaluator.golden_set_contracts import GoldenSetInput, GoldenSetItemInput
 
 CSV_COLUMNS = (
     "case_id",
-    "prompt",
+    "user_prompts",
     "system_prompt",
     "expected_answer",
     "evaluation_method",
@@ -23,6 +23,7 @@ CSV_COLUMNS = (
     "weight",
     "enabled",
 )
+_LEGACY_CSV_COLUMNS = (*CSV_COLUMNS[:1], "prompt", *CSV_COLUMNS[2:])
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +42,7 @@ class ParsedGoldenSet:
 
 def canonical_document(data: GoldenSetInput, items: list[GoldenSetItemInput]) -> dict[str, Any]:
     return {
+        "schema_version": "2.0",
         "name": data.name,
         "description": data.description,
         "version": data.version,
@@ -52,7 +54,7 @@ def canonical_document(data: GoldenSetInput, items: list[GoldenSetItemInput]) ->
 def _canonical_item(item: GoldenSetItemInput) -> dict[str, Any]:
     return {
         "case_id": item.case_id,
-        "prompt": item.prompt,
+        "user_prompts": item.user_prompts,
         "system_prompt": item.system_prompt,
         "expected_answer": item.expected_answer,
         "evaluation_method": item.evaluation_method,
@@ -79,6 +81,9 @@ def export_csv(items: list[GoldenSetItemInput]) -> bytes:
         row["system_prompt"] = "" if item.system_prompt is None else item.system_prompt
         row["expected_answer"] = "" if item.expected_answer is None else item.expected_answer
         row["category"] = "" if item.category is None else item.category
+        row["user_prompts"] = json.dumps(
+            item.user_prompts, ensure_ascii=False, separators=(",", ":")
+        )
         row["evaluator_config"] = json.dumps(
             item.evaluator_config, ensure_ascii=False, separators=(",", ":")
         )
@@ -105,14 +110,19 @@ def _parse_json(text: str) -> ParsedGoldenSet:
         raise ValueError(f"Invalid JSON at line {exc.lineno}, column {exc.colno}.") from exc
     if not isinstance(document, dict):
         raise ValueError("Top-level JSON value must be an object.")
-    allowed = {"name", "description", "version", "tags", "items"}
+    allowed = {"schema_version", "name", "description", "version", "tags", "items"}
     unknown = set(document) - allowed
     if unknown:
         raise ValueError(f"Unknown JSON fields: {', '.join(sorted(unknown))}.")
     items = document.get("items")
     if not isinstance(items, list):
         raise ValueError("JSON field items must be a list.")
-    set_payload = {key: value for key, value in document.items() if key != "items"}
+    schema_version = document.get("schema_version")
+    if schema_version not in {None, "2.0"}:
+        raise ValueError("Unsupported golden-set JSON schema version.")
+    set_payload = {
+        key: value for key, value in document.items() if key not in {"items", "schema_version"}
+    }
     return ParsedGoldenSet(set_payload, items, list(range(1, len(items) + 1)))
 
 
@@ -123,8 +133,10 @@ def _parse_csv(text: str, set_name: str | None) -> ParsedGoldenSet:
     reader = csv.DictReader(stream)
     if reader.fieldnames is None:
         raise ValueError("CSV header is missing.")
-    if tuple(reader.fieldnames) != CSV_COLUMNS:
+    columns = tuple(reader.fieldnames)
+    if columns not in {CSV_COLUMNS, _LEGACY_CSV_COLUMNS}:
         raise ValueError("CSV header must contain exactly the documented columns.")
+    legacy = columns == _LEGACY_CSV_COLUMNS
     items: list[dict[str, Any]] = []
     rows: list[int] = []
     for row_number, row in enumerate(reader, start=2):
@@ -134,6 +146,7 @@ def _parse_csv(text: str, set_name: str | None) -> ParsedGoldenSet:
         try:
             config = json.loads(row["evaluator_config"])
             tags = json.loads(row["tags"])
+            user_prompts = [row["prompt"]] if legacy else json.loads(row["user_prompts"])
         except json.JSONDecodeError as exc:
             raise ValueError(f"CSV row {row_number} ({case_id}): invalid JSON field.") from exc
         enabled_text = row["enabled"].strip().lower()
@@ -142,7 +155,7 @@ def _parse_csv(text: str, set_name: str | None) -> ParsedGoldenSet:
         items.append(
             {
                 "case_id": case_id,
-                "prompt": row["prompt"],
+                "user_prompts": user_prompts,
                 "system_prompt": row["system_prompt"] or None,
                 "expected_answer": row["expected_answer"] or None,
                 "evaluation_method": row["evaluation_method"],

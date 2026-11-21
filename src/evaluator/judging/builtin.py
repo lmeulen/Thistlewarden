@@ -70,6 +70,7 @@ def build_judge_prompt(
     rubric: list[RubricCriterion],
     context: str | None,
     candidate: str,
+    conversation: list[dict[str, str]] | None = None,
     instructions: str | None = None,
     output_mode: JudgeOutputMode = "json_only",
 ) -> str:
@@ -80,6 +81,8 @@ def build_judge_prompt(
         "context": context,
         "candidate_answer": candidate,
     }
+    if conversation is not None:
+        data["conversation"] = conversation
     criterion_ids = [item.id for item in rubric]
     contract = {
         "score": "number from 0 through 1",
@@ -217,17 +220,21 @@ class OpenAICompatibleJudge:
             RubricCriterion(id=item.id, description=item.description, weight=item.weight)
             for item in request.preset.rubric
         ]
+        conversation = _conversation_data(request)
         prompt = build_judge_prompt(
             prompt=original_prompt,
             expected_answer=request.expected_result,
             rubric=rubric,
             context=request.context,
             candidate=request.actual_result,
+            conversation=conversation,
             instructions=request.instructions,
             output_mode=request.output_mode,
         )
         if request.mode == "per_metric":
-            return self._evaluate_per_metric(request, provider, original_prompt, rubric)
+            return self._evaluate_per_metric(
+                request, provider, original_prompt, rubric, conversation
+            )
         result = self._complete_with_retry(
             prompt, rubric, request.preset.threshold, provider, request.output_mode
         )
@@ -281,6 +288,7 @@ class OpenAICompatibleJudge:
         provider: JudgeProvider,
         original_prompt: str,
         rubric: list[RubricCriterion],
+        conversation: list[dict[str, str]] | None,
     ) -> JudgeDecision:
         decisions: list[JudgeCriterionDecision] = []
         raw_outputs: dict[str, str] = {}
@@ -291,6 +299,7 @@ class OpenAICompatibleJudge:
                 rubric=[criterion],
                 context=request.context,
                 candidate=request.actual_result,
+                conversation=conversation,
                 instructions=request.metric_instructions.get(criterion.id),
                 output_mode=request.output_mode,
             )
@@ -326,6 +335,17 @@ class OpenAICompatibleJudge:
             criteria=tuple(decisions),
             metadata={"mode": "per_metric", "raw_outputs": raw_outputs},
         )
+
+
+def _conversation_data(request: JudgeEvaluationRequest) -> list[dict[str, str]] | None:
+    """Include only multi-turn target context; final answer remains separately assessed."""
+
+    messages = [
+        {"role": message.role, "content": message.content}
+        for message in request.messages
+        if message.role in {"user", "assistant"}
+    ]
+    return messages if len(messages) > 1 else None
 
 
 def register_builtin_judge(registry: JudgeImplementationRegistry) -> None:

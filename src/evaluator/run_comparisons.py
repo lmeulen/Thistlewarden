@@ -11,6 +11,7 @@ from uuid import UUID
 from evaluator.api.errors import ConflictError, NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory
 from evaluator.run_views import TERMINAL_STATUSES
+from evaluator.runs import normalize_case_snapshot
 
 ComparisonFilter = Literal["all", "regression", "improvement", "unchanged", "incomparable"]
 _FILTERS = {"all", "regression", "improvement", "unchanged", "incomparable"}
@@ -179,7 +180,7 @@ class RunComparisonService:
         result = []
         for value in rows:
             row = dict(value)
-            row["case_snapshot"] = json.loads(row.pop("case_json"))
+            row["case_snapshot"] = normalize_case_snapshot(json.loads(row.pop("case_json")))
             row["model_snapshot"] = json.loads(row.pop("model_json"))
             row["key"] = (row["source_item_id"], row["source_profile_id"])
             result.append(row)
@@ -231,7 +232,7 @@ class RunComparisonService:
                 "reasons": ["Record is absent from candidate run."],
             }
         reasons = []
-        if _canonical(candidate["case_snapshot"]) != _canonical(baseline["case_snapshot"]):
+        if _semantic_case(candidate["case_snapshot"]) != _semantic_case(baseline["case_snapshot"]):
             reasons.append("Case, evaluator configuration, or weight snapshot changed.")
         if _canonical(candidate["model_snapshot"]) != _canonical(baseline["model_snapshot"]):
             reasons.append("Model identity, endpoint, pricing, or inference snapshot changed.")
@@ -349,6 +350,13 @@ def _canonical(value: Any) -> str:
 
 def _canonical_json(value: str | None) -> str:
     return _canonical(json.loads(value)) if value else "null"
+
+
+def _semantic_case(snapshot: dict[str, Any]) -> str:
+    value = normalize_case_snapshot(snapshot)
+    value.pop("prompt", None)
+    value.pop("snapshot_schema_version", None)
+    return _canonical(value)
 
 
 def _delta(candidate: Any, baseline: Any) -> str | None:

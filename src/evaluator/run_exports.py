@@ -48,6 +48,8 @@ _COLUMNS = (
     "outcome_stage",
     "outcome_code",
     "provider_evidence_json",
+    "transcript_json",
+    "evaluated_answer",
     "result_json",
 )
 
@@ -116,7 +118,7 @@ class RunExportService:
                 )
             ]
             return {
-                "schema_version": "1.0",
+                "schema_version": "2.0",
                 "run": dict(run),
                 "case_snapshots": rows("run_case_snapshots"),
                 "model_snapshots": rows("run_model_snapshots"),
@@ -252,7 +254,7 @@ class RunExportService:
             )
         stream.write(',"run":')
         self._json_value(stream, run)
-        stream.write(',"schema_version":"1.0"}')
+        stream.write(',"schema_version":"2.0"}')
 
     def _write_csv(self, connection: sqlite3.Connection, run_id: UUID, stream: TextIO) -> None:
         stream.write("\ufeff")
@@ -318,6 +320,16 @@ class RunExportService:
         result["provider_evidence_json"] = json.dumps(
             evidence if isinstance(evidence, dict) else {}, separators=(",", ":"), sort_keys=True
         )
+        transcript = payload.get("transcript") if isinstance(payload, dict) else None
+        result["transcript_json"] = json.dumps(
+            transcript if isinstance(transcript, list) else [],
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        answer = payload.get("evaluated_answer") if isinstance(payload, dict) else None
+        if not isinstance(answer, str):
+            answer = payload.get("candidate") if isinstance(payload, dict) else None
+        result["evaluated_answer"] = answer if isinstance(answer, str) else None
         return result
 
     def delete(self, run_id: UUID) -> None:

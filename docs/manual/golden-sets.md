@@ -80,13 +80,13 @@ Before assigning profile, confirm its model profile and endpoint are active and 
 
 ### Adding and editing test cases
 
-Open golden set and select **Add test case**. A test case defines one prompt, expected behavior, and evaluation method for every selected model in a run.
+Open golden set and select **Add test case**. A test case defines one or more ordered user prompts, expected behavior, and evaluation method for every selected model in a run.
 
 ![Test-case form with evaluator configuration fields](images/test-case.png)
 
 *Test-case editor using synthetic content. Method-specific form fields appear below common case fields.*
 
-Required fields are **Case ID**, **User prompt**, **Evaluation method**, evaluator configuration, and positive **Weight**. Add optional system prompt, category, tags, and enabled state as needed. Select **Save**; page stays on case so you can review saved configuration or delete it.
+Required fields are **Case ID**, at least one **User turn**, **Evaluation method**, evaluator configuration, and positive **Weight**. Add user turns in order with **Add user turn**. Each generated assistant response becomes context for next user turn; Thistlewarden evaluates only final assistant response. Add optional system prompt, category, tags, and enabled state as needed. Select **Save**; page stays on case so you can review saved configuration or delete it.
 
 Case ID must be unique within golden set. Use stable descriptive IDs such as `support-refund-policy`, `json-order-status`, or `safety-refusal-001`, rather than row numbers that change when suite evolves. Edit case by selecting its ID from golden-set page. Changes affect future runs only; existing run snapshots and results remain unchanged.
 
@@ -96,7 +96,7 @@ Evaluator configuration is stored as JSON. Form starts with valid method-specifi
 
 ### Prompts and expected values
 
-**User prompt** is required text sent to target model. Write it as representative request from intended workload. **System prompt** is optional instruction sent before user prompt; use it when target behavior depends on system-level context.
+At least one **User turn** is required text sent to target model. Write each turn as representative request from intended workload. For a multi-turn case, turns run in listed order and each generated assistant response is context for next turn; only final assistant response is scored. **System prompt** is optional instruction sent before first user turn; use it when target behavior depends on system-level context.
 
 Evaluator configuration JSON supplies method-specific reference data. **Exact match** stores required reference text as `expected_value`. **LLM judge** may store optional reference text as `expected_value`; selected published Judge can require it. Other methods use documented configuration fields.
 
@@ -110,7 +110,7 @@ Write prompts and expectations to make pass condition clear:
 - Use deterministic evaluator for exact structured or numeric requirements when possible.
 - Do not include credentials, personal data, or production secrets in any prompt or answer field.
 
-Candidate answers produced during runs, and input prompt material, become part of result detail and exports. See [Security and privacy](security-and-privacy.md#security-and-privacy) for handling sensitive content.
+Candidate answers produced during runs, ordered input prompt material, and transcript context become part of result detail and exports. See [Security and privacy](security-and-privacy.md#security-and-privacy) for handling sensitive content.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
@@ -130,7 +130,7 @@ Keep category/tag vocabulary controlled. Inconsistent forms such as `Billing`, `
 
 **Enabled** controls whether case participates in new runs. It is selected by default.
 
-- Enabled case in active golden set is included in run-size calculation and creates one job per selected model profile.
+- Enabled case in active golden set is included in run-size calculation and creates one job per selected model profile. Each configured user turn creates one target provider call per selected model; LLM-judge evaluation can add calls.
 - Disabled case remains saved with prompt, evaluator configuration, tags, weight, and history, but is excluded from future runs.
 - Re-enable case when it is ready again.
 - A run requires at least one enabled case in selected active golden set.

@@ -10,6 +10,7 @@ from uuid import UUID
 
 from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory
+from evaluator.runs import normalize_case_snapshot
 
 TERMINAL_STATUSES = {"completed", "completed_with_errors", "failed", "cancelled"}
 _RESULT_STATUSES = {"passed", "failed", "error"}
@@ -153,13 +154,15 @@ class RunViewService:
         connection = self._factory.connect()
         try:
             rows = connection.execute(
-                """SELECT g.id,g.quality_gates_json,COUNT(i.id) active_cases
+                """SELECT g.id,g.quality_gates_json,COUNT(i.id) active_cases,
+                COALESCE(SUM(json_array_length(i.user_prompts_json)),0) active_target_calls
                 FROM golden_sets g LEFT JOIN golden_set_items i
                 ON i.golden_set_id=g.id AND i.enabled=1 GROUP BY g.id"""
             ).fetchall()
             return {
                 row["id"]: {
                     "active_cases": int(row["active_cases"]),
+                    "active_target_calls": int(row["active_target_calls"]),
                     "quality_gates": json.loads(row["quality_gates_json"] or "{}"),
                 }
                 for row in rows
@@ -340,7 +343,13 @@ class RunViewService:
         row["outcome_code"] = row["evaluation"].get("outcome_code")
         evidence = row["evaluation"].get("provider_evidence")
         row["provider_evidence"] = evidence if isinstance(evidence, dict) else {}
-        row["case"] = json.loads(row.pop("case_json"))
+        transcript = row["evaluation"].get("transcript")
+        row["transcript"] = transcript if isinstance(transcript, list) else []
+        answer = row["evaluation"].get("evaluated_answer")
+        if not isinstance(answer, str):
+            answer = row["evaluation"].get("candidate")
+        row["evaluated_answer"] = answer if isinstance(answer, str) else None
+        row["case"] = normalize_case_snapshot(json.loads(row.pop("case_json")))
         config = json.loads(row["case"].get("evaluator_config_json") or "{}")
         row["case"]["expected_value"] = config.get("expected_value") or row["case"].get(
             "expected_answer"
