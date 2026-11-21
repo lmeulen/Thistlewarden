@@ -42,6 +42,12 @@ Open a saved golden set. In **Testcases**, select **JSON** or **CSV** to downloa
 - **JSON** exports golden-set metadata and test cases. Choose it for a portable suite with name, version, description, tags, activation state, and evaluator definitions.
 - **CSV** exports flat test-case data. Choose it for spreadsheet review or bulk editing. Provide a destination set name when importing CSV later.
 
+Golden-set JSON exports use schema version `2.0`. Each test case stores its ordered turns in `user_prompts`, an array of strings. Keep the array order when editing: each entry is one user turn and only the response to its final entry is evaluated.
+
+Golden-set CSV uses a `user_prompts` column containing a JSON array of strings, for example `["First request","Follow-up request"]`. Spreadsheet software can alter quoting or cell contents; preserve valid JSON in this column and validate the edited file before completing import. Do not flatten multi-turn cases into separate CSV rows because each row is a separate test case.
+
+Legacy JSON files without a schema version and legacy CSV files with a single `prompt` column remain importable. Thistlewarden treats each legacy prompt as a one-turn `user_prompts` array. New exports always use schema version `2.0` and `user_prompts`.
+
 Exports contain test material, including prompts, expected answers, evaluator configurations, and potentially sensitive content. Store them only in approved locations, restrict access, and review changes before importing edited files. A golden-set export is not a complete application backup: it does not include endpoints, model profiles, judges, run history, or secret values.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
