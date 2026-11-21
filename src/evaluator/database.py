@@ -18,6 +18,22 @@ class SQLiteConnectionFactory:
         self.database_path = database_path
         self.busy_timeout_ms = busy_timeout_ms
 
+    def connect_read_only(self, *, busy_timeout_ms: int) -> sqlite3.Connection:
+        """Open a bounded read-only connection without changing SQLite state."""
+        if busy_timeout_ms <= 0:
+            raise ValueError("busy_timeout_ms must be positive")
+        connection = sqlite3.connect(
+            f"file:{self.database_path}?mode=ro",
+            uri=True,
+            timeout=busy_timeout_ms / 1_000,
+            isolation_level=None,
+            check_same_thread=False,
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute(f"PRAGMA busy_timeout = {busy_timeout_ms}")
+        connection.execute("PRAGMA query_only = ON")
+        return connection
+
     def connect(self, *, create_parent: bool = True) -> sqlite3.Connection:
         if create_parent:
             self.database_path.parent.mkdir(parents=True, exist_ok=True)

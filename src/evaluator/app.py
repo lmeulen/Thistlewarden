@@ -36,7 +36,7 @@ from evaluator.judging.execution import JudgeCaller
 from evaluator.judging.extensions import JudgeImplementationRegistry, RegistryHook
 from evaluator.judging.profiles import JudgeProfileService, SQLiteJudgeProfileRepository
 from evaluator.logging_config import configure_logging, log_event
-from evaluator.migrations import MigrationManager
+from evaluator.migrations import LATEST_SCHEMA_VERSION, MigrationManager
 from evaluator.models import ModelProfileService, SQLiteModelProfileRepository
 from evaluator.onboarding import OnboardingService
 from evaluator.provider import OpenAIProviderClient, ProviderHeaderResolver
@@ -357,20 +357,22 @@ def create_app(
 
     @app.get("/ready")
     def ready() -> tuple[Response, int] | Response:
-        if database_factory is None:
+        """Check supported database schema without taking a writer lock."""
+        readiness_factory = cast(
+            SQLiteConnectionFactory | None, app.extensions.get("database_factory")
+        )
+        if readiness_factory is None:
             return jsonify({"status": "not_ready", "reason": "database_unavailable"}), 503
         try:
-            connection = database_factory.connect(create_parent=False)
+            connection = readiness_factory.connect_read_only(busy_timeout_ms=1_000)
             try:
-                row = connection.execute("PRAGMA quick_check").fetchone()
-                connection.execute("BEGIN IMMEDIATE")
-                connection.rollback()
+                row = connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone()
             finally:
                 connection.close()
-            if row is None or row[0] != "ok":
-                raise RuntimeError("database integrity check failed")
         except Exception:
             return jsonify({"status": "not_ready", "reason": "storage_unavailable"}), 503
+        if row is None or row[0] != LATEST_SCHEMA_VERSION:
+            return jsonify({"status": "not_ready", "reason": "schema_unsupported"}), 503
         return jsonify({"status": "ready"})
 
     @app.get("/health")

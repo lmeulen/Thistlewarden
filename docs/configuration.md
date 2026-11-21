@@ -51,6 +51,14 @@ Compose enforces one application service, one named local volume, and host-loopb
 
 Paths are resolved in runtime context. Keep database, WAL, export, temporary export, and backup paths on same trusted local filesystem class. Back up database and deployment secrets separately.
 
+## Health and readiness probes
+
+`GET /health` is process liveness only. It always returns `200` while Flask can serve requests and does not open database.
+
+`GET /ready` is container readiness. Each probe opens database read-only with a one-second SQLite busy bound and reads latest `schema_migrations` version. It returns `200 {"status":"ready"}` only when local storage is readable and schema matches application-supported version. It does not run `quick_check`, run an integrity scan, or acquire an immediate write lock, so ten-second Docker and Compose probes do not compete with application writers.
+
+A non-ready response is `503` with one reason: `database_unavailable` when runtime has no initialized database, `storage_unavailable` when database cannot be opened or read, or `schema_unsupported` when migration version differs. Startup migrations, backup creation, and restore retain full `PRAGMA integrity_check` validation. Diagnose non-ready storage or schema state before restarting container; do not treat `/health` as storage health.
+
 ## Provider retries
 
 Each provider call makes at most `max_retries + 1` physical attempts. Retry-eligible conditions are provider rate limits, temporary provider-server errors, and timeout/network failure before response body data arrives.
