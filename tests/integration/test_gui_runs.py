@@ -202,6 +202,9 @@ def test_new_run_preview_targets_creation_form_and_uses_english(app) -> None:
     assert "Choose a golden set and models." in text
     assert " en modellen" not in text
     assert "data-sets=" in text and '"active_cases": 1' in text
+    assert '"active_target_calls": 1' in text
+    assert "configured user turns" in text
+    assert "target calls" in text
 
 
 def test_rerun_opens_editable_prefilled_form_without_starting(app) -> None:
@@ -367,7 +370,7 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     finally:
         connection.close()
     detail = client.get(f"/runs/{run_id}/results/{result_id}").get_data(as_text=True)
-    assert "secret prompt" in detail and "Candidate answer" in detail and "yes" in detail
+    assert "secret prompt" in detail and "Evaluated answer" in detail and "yes" in detail
     assert 'class="evaluation-panel"' in detail
     assert 'class="evaluation-body"' in detail
     assert "<dt>Outcome</dt>" in detail and ">Passed</span>" in detail
@@ -403,6 +406,42 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         < text.index("Model metrics")
         < text.index("Model performance")
     )
+
+
+def test_multi_turn_result_detail_labels_context_and_evaluated_answer(app) -> None:
+    client = app.test_client()
+    run_id = create_run(client, app, "Transcript")
+    queue = app.extensions["run_queue"]
+    lease = queue.claim("transcript")
+    assert lease is not None
+    queue.complete(
+        lease,
+        status="passed",
+        score="1",
+        weight="1",
+        result={
+            "candidate": "final response",
+            "evaluated_answer": "final response",
+            "transcript": [
+                {"role": "user", "content": "first turn"},
+                {"role": "assistant", "content": "context response"},
+                {"role": "user", "content": "final turn"},
+                {"role": "assistant", "content": "final response"},
+            ],
+        },
+    )
+    queue.refresh_run_status(lease.run_id)
+    connection = app.extensions["database_factory"].connect()
+    try:
+        result_id = connection.execute(
+            "SELECT id FROM run_results WHERE run_id=?", (run_id,)
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    detail = client.get(f"/runs/{run_id}/results/{result_id}").get_data(as_text=True)
+    assert "Conversation transcript" in detail
+    assert "Context response" in detail and "Evaluated answer" in detail
+    assert "first turn" in detail and "final response" in detail
 
 
 def test_guardrail_is_distinct_in_ui_aggregates_and_export(app) -> None:

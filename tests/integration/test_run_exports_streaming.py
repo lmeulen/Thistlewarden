@@ -98,6 +98,48 @@ def test_exports_cross_batches_without_materializing_and_are_deterministic(
     assert b'"schema_version"' not in html_content
 
 
+def test_exports_project_transcript_and_final_answer(tmp_path: Path) -> None:
+    app, _, _ = fixture_app(tmp_path)
+    run_id = _run_with_results(app)
+    connection = app.extensions["database_factory"].connect()
+    try:
+        connection.execute(
+            "UPDATE run_results SET result_json=? WHERE run_id=?",
+            (
+                json.dumps(
+                    {
+                        "candidate": "final answer",
+                        "evaluated_answer": "final answer",
+                        "transcript": [
+                            {"role": "user", "content": "first"},
+                            {"role": "assistant", "content": "context"},
+                            {"role": "user", "content": "final"},
+                            {"role": "assistant", "content": "final answer"},
+                        ],
+                    }
+                ),
+                str(run_id),
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    service = RunExportService(app.extensions["database_factory"], temporary_directory=tmp_path)
+
+    payload = json.loads(_read_and_cleanup(service, run_id, "json"))
+    assert payload["schema_version"] == "2.0"
+    assert payload["results"][0]["evaluated_answer"] == "final answer"
+    assert json.loads(payload["results"][0]["transcript_json"])[1] == {
+        "role": "assistant",
+        "content": "context",
+    }
+    csv_content = _read_and_cleanup(service, run_id, "csv").decode("utf-8-sig")
+    assert "transcript_json,evaluated_answer" in csv_content.splitlines()[0]
+    assert "final answer" in csv_content
+    html_content = _read_and_cleanup(service, run_id, "html")
+    assert b"transcript_json" in html_content and b"final answer" in html_content
+
+
 def test_content_heavy_json_export_stays_within_peak_memory_budget(tmp_path: Path) -> None:
     app, _, _ = fixture_app(tmp_path)
     run_id = _run_with_results(app)

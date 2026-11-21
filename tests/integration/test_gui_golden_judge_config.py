@@ -58,6 +58,43 @@ def _create_set(client) -> str:
     return response.headers["Location"].rsplit("/", 1)[-1]
 
 
+def test_item_form_creates_and_edits_ordered_user_prompts(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    path = f"/golden-sets/{set_id}/items/new"
+    page = client.get(path).get_data(as_text=True)
+    assert "User prompts" in page
+    assert 'name="user_prompt"' in page
+    assert 'id="add-user-prompt"' in page
+    assert 'class="secondary compact move-user-prompt-up" disabled' in page
+    assert 'class="secondary compact move-user-prompt-down" disabled' in page
+    assert 'class="secondary compact remove-user-prompt" disabled' in page
+    assert "final response evaluated" in page
+    assert "Move up" in page and "Move down" in page
+    token = _csrf(client, path)
+    created = client.post(
+        path,
+        data={
+            "csrf_token": token,
+            "case_id": "multi-turn",
+            "user_prompt": ["First question", "Follow-up question"],
+            "evaluation_method": "exact_match",
+            "evaluator_config": '{"expected_value":"final"}',
+            "weight": "1",
+            "enabled": "on",
+        },
+        follow_redirects=False,
+    )
+    assert created.status_code == 302
+    item_path = created.headers["Location"]
+    item = app.extensions["golden_set_service"].get_item(UUID(item_path.rsplit("/", 1)[-1]))
+    assert item.data.user_prompts == ["First question", "Follow-up question"]
+    edit_page = client.get(item_path).get_data(as_text=True)
+    assert "First question" in edit_page and "Follow-up question" in edit_page
+    assert "final response evaluated" in edit_page
+    assert "move-user-prompt-up" in edit_page and "move-user-prompt-down" in edit_page
+
+
 def test_golden_set_testcases_can_be_filtered_by_test_type(app) -> None:
     client = app.test_client()
     set_id = _create_set(client)
@@ -1050,7 +1087,7 @@ def test_bulk_move_duplicate_conflict_and_deterministic_order(app) -> None:
         source,
         {
             "case_id": "two",
-            "prompt": "two",
+            "user_prompts": ["two", "follow-up"],
             "evaluation_method": "exact_match",
             "evaluator_config": {"expected_value": "2"},
         },
@@ -1087,6 +1124,7 @@ def test_bulk_move_duplicate_conflict_and_deterministic_order(app) -> None:
     assert [item.data.sort_order for item in source_items] == [0, 1]
     copied = next(item for item in source_items if item.data.case_id == "two")
     assert copied.id != two.id
+    assert copied.data.user_prompts == ["two", "follow-up"]
     reorder = service.preview_bulk_items(
         source, {"item_ids": [copied.id], "action": "reorder", "start_order": 0}
     )

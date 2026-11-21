@@ -9,7 +9,7 @@
   <label>Case ID<input name="case_id" required value="{{ d.case_id if d else '' }}"></label>
   <label>Category<input name="category" value="{{ d.category or '' if d else '' }}"></label>
   <label class="wide">System prompt<textarea name="system_prompt">{{ d.system_prompt or '' if d else '' }}</textarea></label>
-  <label class="wide">User prompt<textarea name="prompt" required rows="6">{{ d.prompt if d else '' }}</textarea></label>
+  {% set prompts = d.user_prompts if d else [''] %}<fieldset class="wide" id="user-prompts"><legend>User prompts</legend><p class="help">Send turns in order. Each assistant response becomes context for next turn; only final response is evaluated.</p><div id="user-prompt-turns">{% for prompt in prompts %}<div class="user-prompt-turn"><label>User turn {{ loop.index }}{% if loop.last %} — final response evaluated{% endif %}<textarea name="user_prompt" required rows="6">{{ prompt }}</textarea></label><div class="actions"><button type="button" class="secondary compact move-user-prompt-up"{% if loop.first %} disabled{% endif %}>Move up</button><button type="button" class="secondary compact move-user-prompt-down"{% if loop.last %} disabled{% endif %}>Move down</button><button type="button" class="secondary compact remove-user-prompt"{% if loop.length == 1 %} disabled{% endif %}>Remove turn</button></div></div>{% endfor %}</div><button type="button" class="secondary compact" id="add-user-prompt">Add user turn</button></fieldset>
   <label>Evaluation method
     <select name="evaluation_method" id="evaluation-method">
       {% for value,label in [('exact_match','Exact match'),('contains','Contains'),('regex','Regex'),('numeric','Numeric'),('json_schema','JSON Schema'),('llm_judge','LLM judge')] %}
@@ -317,7 +317,8 @@
   <button class="danger">Delete test case</button>
 </form>
 {% endif %}
-<script nonce="{{ csp_nonce() }}">
+<script nonce="{{ csp_nonce() }}">(function(){var turns=document.getElementById('user-prompt-turns'),add=document.getElementById('add-user-prompt');function number(){var all=turns.querySelectorAll('.user-prompt-turn');all.forEach(function(turn,index){turn.querySelector('label').childNodes[0].nodeValue='User turn '+(index+1)+(index===all.length-1?' — final response evaluated':'');turn.querySelector('.move-user-prompt-up').disabled=index===0;turn.querySelector('.move-user-prompt-down').disabled=index===all.length-1;turn.querySelector('.remove-user-prompt').disabled=all.length===1})}turns.addEventListener('click',function(event){var turn=event.target.closest('.user-prompt-turn');if(!turn){return}if(event.target.classList.contains('remove-user-prompt')){turn.remove()}else if(event.target.classList.contains('move-user-prompt-up')&&turn.previousElementSibling){turns.insertBefore(turn,turn.previousElementSibling)}else if(event.target.classList.contains('move-user-prompt-down')&&turn.nextElementSibling){turns.insertBefore(turn.nextElementSibling,turn)}number()});add.addEventListener('click',function(){var turn=document.createElement('div');turn.className='user-prompt-turn';turn.innerHTML='<label>User turn <textarea name="user_prompt" required rows="6"></textarea></label><div class="actions"><button type="button" class="secondary compact move-user-prompt-up">Move up</button><button type="button" class="secondary compact move-user-prompt-down">Move down</button><button type="button" class="secondary compact remove-user-prompt">Remove turn</button></div>';turns.appendChild(turn);number()})();
+
 (function () {
   var form = document.getElementById('golden-item-form');
   var method = document.getElementById('evaluation-method');

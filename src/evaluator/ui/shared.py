@@ -421,7 +421,7 @@ def _item_payload() -> dict[str, Any]:
         expected_answer = None
     return {
         "case_id": request.form.get("case_id", ""),
-        "prompt": request.form.get("prompt", ""),
+        "user_prompts": request.form.getlist("user_prompt") or [request.form.get("prompt", "")],
         "system_prompt": _optional("system_prompt"),
         "expected_answer": expected_answer,
         "evaluation_method": method,

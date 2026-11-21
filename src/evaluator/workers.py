@@ -30,7 +30,7 @@ from evaluator.judging.extensions import (
 )
 from evaluator.logging_config import log_context, log_event
 from evaluator.provider import ProviderGuardrailError
-from evaluator.runs import JobLease, LeaseLost, RunQueue
+from evaluator.runs import IncompleteTargetTurn, JobLease, LeaseLost, RunQueue
 from evaluator.time import utc_now
 
 _LOG = logging.getLogger(__name__)
@@ -123,13 +123,13 @@ class WorkerPipeline:
             )
             if cancelled is not None and cancelled.is_set():
                 raise CancelledError
-            outcome = self._target(case, model)
+            outcome, transcript = self._execute_target_turns(
+                lease, case, model, cancelled=cancelled, lost=lost
+            )
             if cancelled is not None and cancelled.is_set():
                 raise CancelledError
             if lost.is_set():
                 raise LeaseLost
-            for attempt in outcome.attempts:
-                self._queue.record_attempt(lease, attempt.get("category"), attempt)
             if not outcome.evaluate:
                 self._queue.fail(
                     lease,
@@ -152,7 +152,8 @@ class WorkerPipeline:
                     "evaluation_started",
                     evaluator_method=case["evaluation_method"],
                 )
-                result = self._evaluate(lease.run_id, case, outcome.content)
+                evaluation_case = {**case, "target_transcript": transcript}
+                result = self._evaluate(lease.run_id, evaluation_case, outcome.content)
                 metrics = dict(outcome.metrics)
                 if case["evaluation_method"] == "llm_judge":
                     metrics["judge_cost"] = result.metadata.get("judge_cost")
@@ -161,7 +162,12 @@ class WorkerPipeline:
                     status="passed" if result.passed else "failed",
                     score=str(result.score),
                     weight=str(case["weight"]),
-                    result={**result.model_dump(mode="json"), "candidate": outcome.content},
+                    result={
+                        **result.model_dump(mode="json"),
+                        "candidate": outcome.content,
+                        "evaluated_answer": outcome.content,
+                        "transcript": transcript,
+                    },
                     metrics=metrics,
                 )
                 log_event(
@@ -172,6 +178,21 @@ class WorkerPipeline:
                     score=result.score,
                     outcome="passed" if result.passed else "failed",
                 )
+        except IncompleteTargetTurn:
+            log_event(_LOG, logging.WARNING, "target_turn_not_replayed", job_id=lease.job_id)
+            try:
+                self._queue.fail(
+                    lease,
+                    "incomplete_target_turn",
+                    {
+                        "outcome_category": "interrupted",
+                        "outcome_stage": "target",
+                        "outcome_code": "incomplete_target_turn",
+                        "incomplete": True,
+                    },
+                )
+            except LeaseLost:
+                log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
         except JudgeCancelledError as exc:
             log_event(_LOG, logging.WARNING, "job_interrupted", job_id=lease.job_id)
             try:
@@ -318,11 +339,135 @@ class WorkerPipeline:
                 )
         return True
 
+    def _execute_target_turns(
+        self,
+        lease: JobLease,
+        case: dict[str, Any],
+        model: dict[str, Any],
+        *,
+        cancelled: threading.Event | None,
+        lost: threading.Event,
+    ) -> tuple[TargetOutcome, list[dict[str, str]]]:
+        prompts = case.get("user_prompts", [case["prompt"]])
+        completed = self._queue.turn_state(lease)
+        if len(completed) > len(prompts):
+            raise RuntimeError("target turn checkpoints exceed case prompts")
+        transcript: list[dict[str, str]] = []
+        outcomes: list[TargetOutcome] = []
+        for turn in completed:
+            if turn["user_prompt"] != prompts[turn["turn_index"]]:
+                raise RuntimeError("target turn checkpoint prompt does not match case snapshot")
+            response = turn["assistant_response"]
+            if not isinstance(response, str):
+                raise RuntimeError("completed target turn has no assistant response")
+            transcript.extend(
+                (
+                    {"role": "user", "content": turn["user_prompt"]},
+                    {"role": "assistant", "content": response},
+                )
+            )
+            outcomes.append(
+                TargetOutcome(
+                    response,
+                    metrics=json.loads(turn["metrics_json"] or "{}"),
+                    attempts=tuple(json.loads(turn["attempts_json"] or "[]")),
+                    provider_evidence=json.loads(turn["provider_evidence_json"] or "{}"),
+                )
+            )
+        for index in range(len(completed), len(prompts)):
+            if cancelled is not None and cancelled.is_set():
+                raise CancelledError
+            if lost.is_set():
+                raise LeaseLost
+            prompt = prompts[index]
+            self._queue.start_turn(lease, index, prompt)
+            turn_case = dict(case)
+            turn_case["prompt"] = prompt
+            turn_case["conversation_messages"] = list(transcript) + [
+                {"role": "user", "content": prompt}
+            ]
+            outcome = self._target(turn_case, model)
+            if cancelled is not None and cancelled.is_set():
+                raise CancelledError
+            if lost.is_set():
+                raise LeaseLost
+            self._queue.complete_turn(
+                lease,
+                index,
+                assistant_response=outcome.content,
+                metrics=outcome.metrics,
+                attempts=outcome.attempts,
+                provider_evidence=outcome.provider_evidence,
+            )
+            for attempt in outcome.attempts:
+                self._queue.record_attempt(lease, attempt.get("category"), attempt)
+            if not outcome.evaluate:
+                outcomes.append(outcome)
+                return (
+                    TargetOutcome(
+                        outcome.content,
+                        evaluate=False,
+                        metrics=self._aggregate_target_metrics(outcomes),
+                        attempts=outcome.attempts,
+                        error_code=outcome.error_code,
+                        outcome_category=outcome.outcome_category,
+                        provider_evidence=outcome.provider_evidence,
+                    ),
+                    transcript + [{"role": "user", "content": prompt}],
+                )
+            transcript.extend(
+                (
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": outcome.content},
+                )
+            )
+            outcomes.append(outcome)
+        if not outcomes:
+            raise RuntimeError("case has no target turns")
+        final = outcomes[-1]
+        return (
+            TargetOutcome(
+                final.content,
+                metrics=self._aggregate_target_metrics(outcomes),
+                attempts=final.attempts,
+                error_code=final.error_code,
+                outcome_category=final.outcome_category,
+                provider_evidence=final.provider_evidence,
+            ),
+            transcript,
+        )
+
+    @staticmethod
+    def _aggregate_target_metrics(outcomes: list[TargetOutcome]) -> dict[str, Any]:
+        metrics: dict[str, Any] = {}
+        for key in (
+            "target_cost",
+            "target_latency_ms",
+            "input_tokens",
+            "output_tokens",
+            "cached_input_tokens",
+            "reasoning_tokens",
+        ):
+            values = [outcome.metrics.get(key) for outcome in outcomes]
+            if all(value is not None for value in values):
+                total = sum((Decimal(str(value)) for value in values), Decimal(0))
+                token_key = key in {
+                    "input_tokens",
+                    "output_tokens",
+                    "cached_input_tokens",
+                    "reasoning_tokens",
+                }
+                metrics[key] = int(total) if token_key else str(total)
+        final_metrics = outcomes[-1].metrics
+        metrics["ttft_ms"] = final_metrics.get("ttft_ms")
+        metrics["tps"] = final_metrics.get("tps")
+        return metrics
+
     def _evaluate(self, run_id: UUID, case: dict[str, Any], candidate: str) -> EvaluationResult:
         config = json.loads(case["evaluator_config_json"])
         data = GoldenSetItemInput(
             case_id=case["case_id"],
-            prompt=case["prompt"],
+            user_prompts=case.get("user_prompts", [case["prompt"]]),
             system_prompt=case["system_prompt"],
             expected_answer=case["expected_answer"],
             evaluation_method=case["evaluation_method"],

@@ -123,7 +123,11 @@ class SQLiteGoldenSetRepository:
                     ),
                 )
                 connection.executemany(
-                    "INSERT INTO golden_set_items VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    """INSERT INTO golden_set_items(
+                    id,golden_set_id,case_id,prompt,system_prompt,expected_answer,
+                    evaluation_method,evaluator_config_json,category,tags_json,weight,
+                    enabled,sort_order,created_at,updated_at,user_prompts_json
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     [
                         (
                             str(item.id),
@@ -143,6 +147,7 @@ class SQLiteGoldenSetRepository:
                             item.data.sort_order,
                             to_utc_iso(item.created_at),
                             to_utc_iso(item.updated_at),
+                            json.dumps(item.data.user_prompts, ensure_ascii=False),
                         )
                         for item in items
                     ],
@@ -184,7 +189,11 @@ class SQLiteGoldenSetRepository:
                     ),
                 )
                 connection.executemany(
-                    "INSERT INTO golden_set_items VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    """INSERT INTO golden_set_items(
+                    id,golden_set_id,case_id,prompt,system_prompt,expected_answer,
+                    evaluation_method,evaluator_config_json,category,tags_json,weight,
+                    enabled,sort_order,created_at,updated_at,user_prompts_json
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                     [
                         (
                             str(item.id),
@@ -206,6 +215,7 @@ class SQLiteGoldenSetRepository:
                             item.data.sort_order,
                             to_utc_iso(item.created_at),
                             to_utc_iso(item.updated_at),
+                            json.dumps(item.data.user_prompts, ensure_ascii=False),
                         )
                         for item in items
                     ],
@@ -349,14 +359,18 @@ class SQLiteGoldenSetRepository:
                         ),
                     )
                 connection.execute(
-                    """INSERT INTO golden_set_items VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """INSERT INTO golden_set_items(
+                    id,golden_set_id,case_id,prompt,system_prompt,expected_answer,
+                    evaluation_method,evaluator_config_json,category,tags_json,weight,
+                    enabled,sort_order,created_at,updated_at,user_prompts_json
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     ON CONFLICT(id) DO UPDATE SET case_id=excluded.case_id,prompt=excluded.prompt,
                     system_prompt=excluded.system_prompt,expected_answer=excluded.expected_answer,
                     evaluation_method=excluded.evaluation_method,
                     evaluator_config_json=excluded.evaluator_config_json,
                     category=excluded.category,tags_json=excluded.tags_json,weight=excluded.weight,
                     enabled=excluded.enabled,sort_order=excluded.sort_order,
-                    updated_at=excluded.updated_at""",
+                    updated_at=excluded.updated_at,user_prompts_json=excluded.user_prompts_json""",
                     (
                         str(record.id),
                         str(record.golden_set_id),
@@ -373,6 +387,7 @@ class SQLiteGoldenSetRepository:
                         data.sort_order,
                         to_utc_iso(record.created_at),
                         to_utc_iso(record.updated_at),
+                        json.dumps(data.user_prompts, ensure_ascii=False),
                     ),
                 )
         finally:
@@ -514,7 +529,7 @@ class SQLiteGoldenSetRepository:
                             values[14] = now
                             connection.execute(
                                 "INSERT INTO golden_set_items "
-                                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                                 values,
                             )
             return len(rows)
@@ -619,9 +634,11 @@ class SQLiteGoldenSetRepository:
 
     @staticmethod
     def _map_item(row: sqlite3.Row) -> GoldenSetItemRecord:
+        columns = set(row.keys())
+        user_prompts_json = row["user_prompts_json"] if "user_prompts_json" in columns else None
         data = GoldenSetItemInput(
             case_id=row["case_id"],
-            prompt=row["prompt"],
+            user_prompts=json.loads(user_prompts_json) if user_prompts_json else [row["prompt"]],
             system_prompt=row["system_prompt"],
             expected_answer=row["expected_answer"],
             evaluation_method=row["evaluation_method"],

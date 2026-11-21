@@ -176,7 +176,16 @@ def test_release_configuration_passes_real_import_validation(tmp_path: Path) -> 
     plan = service.import_bundle(payload, "merge", preview=True)
     assert plan.creates == 11 and plan.missing_secrets == []
     service.import_bundle(payload, "merge", preview=False)
-    assert len(service.export().golden_set_items) == 6
+    exported = service.export()
+    assert len(exported.golden_set_items) == 6
+    assert all("user_prompts" in item.data for item in exported.golden_set_items)
+    restored_factory = SQLiteConnectionFactory(tmp_path / "restored-release.db")
+    MigrationManager(restored_factory).migrate()
+    restored = ConfigurationExchangeService(restored_factory)
+    restored.import_bundle(exported.model_dump(mode="json"), "merge", preview=False)
+    assert [item.data["user_prompts"] for item in restored.export().golden_set_items] == [
+        item.data["user_prompts"] for item in exported.golden_set_items
+    ]
 
 
 def test_container_bind_requires_explicit_container_mode() -> None:

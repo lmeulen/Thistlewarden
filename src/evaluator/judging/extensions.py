@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import CancelledError
 from decimal import Decimal
 from typing import Any, Literal, Protocol, TypeVar, runtime_checkable
@@ -272,13 +272,20 @@ RegistryHook = Callable[[JudgeImplementationRegistry], None]
 _Model = TypeVar("_Model", bound=BaseModel)
 
 
-def canonical_messages(prompt: str, system_prompt: str | None) -> tuple[JudgeMessage, ...]:
-    """Deterministically convert current single-turn cases to canonical messages."""
+def canonical_messages(
+    prompt: str,
+    system_prompt: str | None,
+    conversation: Sequence[Mapping[str, str]] | None = None,
+) -> tuple[JudgeMessage, ...]:
+    """Convert a target transcript to immutable judge context; retain single-turn compatibility."""
 
     messages: list[JudgeMessage] = []
     if system_prompt is not None:
         messages.append(JudgeMessage(role="system", content=system_prompt))
-    messages.append(JudgeMessage(role="user", content=prompt))
+    if conversation is None:
+        messages.append(JudgeMessage(role="user", content=prompt))
+    else:
+        messages.extend(JudgeMessage.model_validate(message) for message in conversation)
     return tuple(messages)
 
 

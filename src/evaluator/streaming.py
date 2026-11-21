@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import codecs
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -17,6 +18,7 @@ from evaluator.models import ModelProfileInput
 from evaluator.network_security import validate_destination
 from evaluator.provider import (
     _REQUEST_ID_HEADERS,
+    ConversationMessage,
     OpenAIProviderClient,
     ProviderHeaderResolver,
     ProviderUsage,
@@ -315,7 +317,8 @@ class OpenAIStreamingClient:
         endpoint: EndpointRecord,
         profile: ModelProfileInput,
         *,
-        prompt: str,
+        prompt: str | None = None,
+        messages: Sequence[ConversationMessage] | None = None,
         system_prompt: str | None = None,
         diagnostic_mode: bool = False,
     ) -> StreamingCompletionResult:
@@ -323,12 +326,12 @@ class OpenAIStreamingClient:
             validate_destination(endpoint, endpoint.data.completions_url)
         if endpoint.data.api_format == "anthropic":
             body = build_anthropic_completion_request(
-                profile, prompt=prompt, system_prompt=system_prompt
+                profile, prompt=prompt, messages=messages, system_prompt=system_prompt
             )
             body["stream"] = True
         else:
             body = build_chat_completion_request(
-                profile, prompt=prompt, system_prompt=system_prompt
+                profile, prompt=prompt, messages=messages, system_prompt=system_prompt
             )
             body["stream"] = True
             body["stream_options"] = {"include_usage": True}

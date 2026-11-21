@@ -199,15 +199,23 @@ Use weighted score to compare models against same run material. Do not compare s
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
+### Multi-turn cases
+
+A multi-turn case sends each configured user turn in order. Every generated assistant response becomes context for next user turn. Each case/model pair remains one job and receives one score: only final assistant response is evaluated. Earlier responses are retained as transcript context and are not independently scored.
+
+For LLM-judge cases, judge receives ordered transcript as quoted evaluation data and receives final assistant response separately as evaluated candidate. Transcript content cannot change judge instructions. Result detail labels earlier assistant messages as context responses and final assistant message as evaluated answer. JSON exports include structured transcript and explicit evaluated answer; CSV and HTML exports include serialized transcript and final-answer fields. Historical single-turn results remain readable.
+
+Before every target call, worker persists lease-fenced started turn marker. After response finishes, worker persists assistant response, bounded provider evidence, attempts, and metrics. On lease recovery, completed turns resume at next user turn. A started but incomplete streamed turn is terminalized as interrupted and never replayed, preventing duplicate target calls. Cancellation or lost lease blocks later checkpoints and turns.
+
 ### Latency, TTFT, throughput, and costs
 
 Thistlewarden reports target-model performance measurements when provider data permits:
 
-- **Latency** is target response time in milliseconds. Model comparison uses P95 latency; the overview uses average latency.
-- **TTFT** means time to first token, in milliseconds. It is especially useful for streamed interactive experiences. Model comparison and overview use P95 TTFT.
-- **TPS** means mean tokens per second for measured target output. Higher is generally better, but compare it with TTFT and output length.
-- **Tokens in/out** are aggregate input and output token counts. Individual results also show cached-input and reasoning-token counts when known.
-- **Cost** is calculated from configured model pricing and reported token usage. A cost is **known** only when required pricing and usage data are available.
+- **Latency** is aggregate target response time in milliseconds across case turns. Model comparison uses P95 latency; overview uses average latency.
+- **TTFT** means time to first token for final target turn, in milliseconds. It is especially useful for streamed interactive experiences. Model comparison and overview use P95 TTFT.
+- **TPS** means tokens per second for final target turn. Higher is generally better, but compare it with TTFT and output length.
+- **Tokens in/out** are aggregate input and output token counts across target turns. Individual results also show cached-input and reasoning-token counts when known.
+- **Cost** is sum of configured per-turn model costs and reported token usage. Cost is **known** only when required pricing and usage are available for every target turn.
 
 The model table and overview show known target costs and their coverage. Unknown costs must not be read as free calls. Update pricing configuration when provider rates change, then use new runs for estimates based on those rates; historical run snapshots retain prior configuration.
 

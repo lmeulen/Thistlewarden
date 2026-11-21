@@ -75,7 +75,87 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (19, "backfill_versioned_judge_definitions"),
             (20, "add_manual_onboarding_completion"),
             (21, "terminalize_cancelled_run_jobs"),
+            (22, "add_golden_set_user_prompts"),
+            (23, "add_durable_run_job_turns"),
         ]
+    finally:
+        connection.close()
+
+
+def test_migration_23_creates_durable_turn_checkpoints(tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "app.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:22]).migrate()
+    MigrationManager(factory).migrate()
+    connection = factory.connect()
+    try:
+        assert (
+            connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='run_job_turns'"
+            ).fetchone()
+            is not None
+        )
+    finally:
+        connection.close()
+
+
+def test_migration_22_backfills_ordered_user_prompts_and_enforces_shape(tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "app.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:21]).migrate()
+    connection = factory.connect()
+    try:
+        connection.execute(
+            """INSERT INTO golden_sets(
+            id,name,description,version,tags_json,active,created_at,updated_at
+            ) VALUES(?,?,?,?,?,?,?,?)""",
+            (
+                "10000000-0000-0000-0000-000000000001",
+                "Legacy",
+                None,
+                "1.0",
+                "[]",
+                1,
+                "2026-11-21T00:00:00Z",
+                "2026-11-21T00:00:00Z",
+            ),
+        )
+        connection.execute(
+            """INSERT INTO golden_set_items VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                "20000000-0000-0000-0000-000000000001",
+                "10000000-0000-0000-0000-000000000001",
+                "legacy-case",
+                "Unicode é\nsecond line",
+                None,
+                None,
+                "contains",
+                '{"expected_fragments":["x"],"match_mode":"any"}',
+                None,
+                "[]",
+                "1",
+                1,
+                0,
+                "2026-11-21T00:00:00Z",
+                "2026-11-21T00:00:00Z",
+            ),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert MigrationManager(factory).migrate() == LATEST_SCHEMA_VERSION
+    connection = factory.connect()
+    try:
+        stored = connection.execute("SELECT user_prompts_json FROM golden_set_items").fetchone()[0]
+        assert json.loads(stored) == ["Unicode é\nsecond line"]
+        with pytest.raises(sqlite3.IntegrityError, match="invalid user_prompts_json"):
+            connection.execute(
+                "UPDATE golden_set_items SET user_prompts_json=?",
+                ('["valid", "  "]',),
+            )
+        with pytest.raises(sqlite3.IntegrityError, match="invalid user_prompts_json"):
+            connection.execute("UPDATE golden_set_items SET user_prompts_json=NULL")
+        assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:
         connection.close()
 

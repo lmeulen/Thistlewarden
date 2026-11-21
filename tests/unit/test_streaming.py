@@ -13,7 +13,7 @@ import pytest
 from evaluator.api.errors import ProviderClientError, TimeoutError
 from evaluator.endpoints import EndpointInput, EndpointRecord
 from evaluator.models import ModelProfileInput
-from evaluator.provider import ProviderHeaderResolver
+from evaluator.provider import ConversationMessage, ProviderHeaderResolver
 from evaluator.rate_limits import CentralEndpointLimiter, ProviderCallExecutor, RetryPolicy
 from evaluator.streaming import OpenAIStreamingClient, SseParser, _AnthropicAccumulator
 
@@ -123,6 +123,47 @@ def _executor() -> ProviderCallExecutor:
     policy = RetryPolicy(jitter_ratio=0)
     policy.sleep = lambda seconds, cancelled=None: None  # type: ignore[method-assign]
     return ProviderCallExecutor(CentralEndpointLimiter(), policy)
+
+
+@pytest.mark.parametrize("api_format", ["openai", "anthropic"])
+def test_streaming_client_sends_canonical_conversation(api_format: str) -> None:
+    messages = [
+        ConversationMessage(role="user", content="First"),
+        ConversationMessage(role="assistant", content="Answer"),
+        ConversationMessage(role="user", content="Next"),
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        expected = [message.model_dump() for message in messages]
+        assert payload["stream"] is True
+        if api_format == "openai":
+            assert payload["messages"] == [{"role": "system", "content": "System"}, *expected]
+            chunks = [b'data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n']
+        else:
+            assert payload["system"] == "System"
+            assert payload["messages"] == expected
+            chunks = [
+                b'event: content_block_delta\ndata: {"type":"content_block_delta",'
+                b'"delta":{"type":"text_delta","text":"ok"}}\n\n'
+                b'event: message_stop\ndata: {"type":"message_stop"}\n\n'
+            ]
+        return httpx.Response(200, stream=Chunks(chunks))
+
+    resolver = ProviderHeaderResolver(FakeEndpoints(), FakeSecrets(), {})  # type: ignore[arg-type]
+    client = OpenAIStreamingClient(
+        resolver,
+        max_response_bytes=10_000,
+        clock=FakeClock([1.0, 1.1, 1.2]),
+        transport=httpx.MockTransport(handler),
+    )
+    result = client.complete(
+        _endpoint(api_format=api_format),
+        ModelProfileInput(model_id="model", display_name="M", max_tokens=32),
+        messages=messages,
+        system_prompt="System",
+    )
+    assert result.content == "ok"
 
 
 def test_anthropic_stream_maps_text_stop_and_usage() -> None:

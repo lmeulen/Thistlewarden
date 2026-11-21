@@ -100,8 +100,10 @@ def _populate(factory: SQLiteConnectionFactory) -> None:
             """INSERT INTO golden_set_items(
                 id, golden_set_id, case_id, prompt, evaluation_method,
                 evaluator_config_json, tags_json, weight, enabled, sort_order,
-                created_at, updated_at
-            ) VALUES (?, ?, ?, 'Prompt', 'exact_match', '{}', '[]', '1', ?, ?, ?, ?)""",
+                created_at, updated_at, user_prompts_json
+            ) VALUES (
+                ?, ?, ?, 'Prompt', 'exact_match', '{}', '[]', '1', ?, ?, ?, ?, '["Prompt"]'
+            )""",
             [
                 (
                     "case-enabled",

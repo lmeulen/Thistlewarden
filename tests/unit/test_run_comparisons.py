@@ -42,6 +42,7 @@ def _insert(
     status: str = "passed",
     score: str | None = "1",
     prompt: str = "prompt",
+    user_prompts: list[str] | None = None,
     model_id: str = "m",
     metric: str | None = "10",
 ) -> UUID:
@@ -50,10 +51,14 @@ def _insert(
         source_model = f"model-{source_case}"
     case = {
         "case_id": source_case,
-        "prompt": prompt,
         "evaluation_method": "exact_match",
         "evaluator_config_json": '{"expected_value":"a"}',
         "weight": "1",
+        **(
+            {"snapshot_schema_version": "2.0", "user_prompts": user_prompts}
+            if user_prompts is not None
+            else {"prompt": prompt}
+        ),
     }
     model = {
         "model_id": model_id,
@@ -147,6 +152,19 @@ def test_transitions_deltas_errors_changes_and_missing_records(tmp_path: Path) -
     assert rows["changed"]["change_kind"] == "changed"
     assert rows["missing-metric"]["metric_deltas"]["target_cost"] is None
     assert report["aggregate_deltas"]["error_rate"] == "-0.25"
+
+
+def test_legacy_and_versioned_single_turn_snapshots_compare_semantically(tmp_path: Path) -> None:
+    service, factory, candidate, baseline = _service(tmp_path)
+    _insert(factory, baseline, source_case="same", prompt="prompt")
+    _insert(factory, candidate, source_case="same", user_prompts=["prompt"])
+    _insert(factory, baseline, source_case="changed", prompt="prompt")
+    _insert(factory, candidate, source_case="changed", user_prompts=["prompt", "follow-up"])
+
+    rows = {row["case_id"]: row for row in service.compare(candidate, baseline)["records"]}
+
+    assert rows["same"]["change_kind"] == "none"
+    assert rows["changed"]["change_kind"] == "changed"
 
 
 def test_missing_result_is_visible_and_incomparable(tmp_path: Path) -> None:

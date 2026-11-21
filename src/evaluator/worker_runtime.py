@@ -18,6 +18,7 @@ from evaluator.endpoints import SQLiteEndpointRepository
 from evaluator.judging.execution import JudgeCaller
 from evaluator.logging_config import log_event
 from evaluator.models import ModelProfileInput, ModelProfileRecord, PricingInput
+from evaluator.provider import ConversationMessage
 from evaluator.rate_limits import ProviderCallExecutor
 from evaluator.streaming import OpenAIStreamingClient, StreamingCompletionResult
 from evaluator.workers import TargetOutcome, WorkerPipeline
@@ -177,7 +178,15 @@ class StreamingTargetCaller:
             lambda: self._client.complete(
                 endpoint,
                 profile,
-                prompt=case["prompt"],
+                prompt=(None if case.get("conversation_messages") is not None else case["prompt"]),
+                messages=(
+                    None
+                    if case.get("conversation_messages") is None
+                    else [
+                        ConversationMessage.model_validate(message)
+                        for message in case["conversation_messages"]
+                    ]
+                ),
                 system_prompt=case.get("system_prompt"),
             ),
             estimated_tokens=profile.max_tokens or 0,

@@ -55,7 +55,7 @@ class GoldenSetPatch(BaseModel):
 class GoldenSetItemInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     case_id: str = Field(min_length=1, max_length=200)
-    prompt: str = Field(min_length=1)
+    user_prompts: list[str] = Field(min_length=1, max_length=100)
     system_prompt: str | None = None
     expected_answer: str | None = None
     evaluation_method: Literal[
@@ -68,12 +68,39 @@ class GoldenSetItemInput(BaseModel):
     enabled: bool = True
     sort_order: int | None = Field(default=None, ge=0)
 
-    @field_validator("case_id", "prompt")
+    @model_validator(mode="before")
+    @classmethod
+    def map_legacy_prompt(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        has_prompt = "prompt" in value
+        has_user_prompts = "user_prompts" in value
+        if has_prompt and has_user_prompts:
+            raise ValueError("prompt and user_prompts are mutually exclusive")
+        if has_prompt:
+            value = {**value, "user_prompts": [value["prompt"]]}
+            del value["prompt"]
+        return value
+
+    @field_validator("case_id")
     @classmethod
     def not_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("must not be blank")
-        return value.strip() if len(value) <= 200 else value
+        return value.strip()
+
+    @field_validator("user_prompts")
+    @classmethod
+    def valid_user_prompts(cls, values: list[str]) -> list[str]:
+        if any(not value.strip() for value in values):
+            raise ValueError("user prompts must not be blank")
+        return values
+
+    @property
+    def prompt(self) -> str:
+        """Return first user turn for legacy single-turn consumers."""
+
+        return self.user_prompts[0]
 
     @field_validator("tags")
     @classmethod
@@ -118,7 +145,7 @@ class GoldenSetItemInput(BaseModel):
 class GoldenSetItemPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     case_id: str | None = Field(default=None, min_length=1, max_length=200)
-    prompt: str | None = Field(default=None, min_length=1)
+    user_prompts: list[str] | None = Field(default=None, min_length=1, max_length=100)
     system_prompt: str | None = None
     expected_answer: str | None = None
     evaluation_method: (
@@ -130,6 +157,27 @@ class GoldenSetItemPatch(BaseModel):
     weight: Decimal | None = Field(default=None, gt=0)
     enabled: bool | None = None
     sort_order: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_legacy_prompt(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        has_prompt = "prompt" in value
+        has_user_prompts = "user_prompts" in value
+        if has_prompt and has_user_prompts:
+            raise ValueError("prompt and user_prompts are mutually exclusive")
+        if has_prompt:
+            value = {**value, "user_prompts": [value["prompt"]]}
+            del value["prompt"]
+        return value
+
+    @field_validator("user_prompts")
+    @classmethod
+    def valid_user_prompts(cls, values: list[str] | None) -> list[str] | None:
+        if values is not None and any(not value.strip() for value in values):
+            raise ValueError("user prompts must not be blank")
+        return values
 
 
 class GoldenSetRecord(BaseModel):

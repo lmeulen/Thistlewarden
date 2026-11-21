@@ -43,9 +43,31 @@ def test_exact_match_requires_config_expected_value_or_legacy_value_and_positive
     assert configured.weight == Decimal("1.0")
 
 
-def test_prompt_is_required_and_only_one_optional_system_prompt_exists() -> None:
+def test_user_prompts_are_ordered_and_legacy_prompt_maps_to_one_turn() -> None:
+    legacy = GoldenSetItemInput.model_validate(_item())
+    assert legacy.user_prompts == ["Vraag"]
+    assert legacy.prompt == "Vraag"
+
+    payload = _item()
+    del payload["prompt"]
+    payload["user_prompts"] = ["First", "Second", "Third"]
+    multi_turn = GoldenSetItemInput.model_validate(payload)
+    assert multi_turn.user_prompts == ["First", "Second", "Third"]
+    assert multi_turn.prompt == "First"
+    assert multi_turn.model_dump()["user_prompts"] == ["First", "Second", "Third"]
+
+
+def test_user_prompts_require_one_non_blank_shape_and_reject_ambiguous_input() -> None:
     with pytest.raises(ValidationError):
         GoldenSetItemInput.model_validate(_item(prompt=""))
+    payload = _item()
+    del payload["prompt"]
+    with pytest.raises(ValidationError):
+        GoldenSetItemInput.model_validate(payload | {"user_prompts": []})
+    with pytest.raises(ValidationError, match="must not be blank"):
+        GoldenSetItemInput.model_validate(payload | {"user_prompts": ["valid", "  "]})
+    with pytest.raises(ValidationError, match="mutually exclusive"):
+        GoldenSetItemInput.model_validate(_item(user_prompts=["other"]))
     with pytest.raises(ValidationError):
         GoldenSetItemInput.model_validate(_item(messages=[]))
     assert GoldenSetItemInput.model_validate(_item(system_prompt=None)).system_prompt is None

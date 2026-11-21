@@ -502,6 +502,67 @@ def _migration_21(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_22(connection: sqlite3.Connection) -> None:
+    """Store canonical ordered user prompts without rewriting legacy prompt data."""
+
+    connection.execute(
+        """ALTER TABLE golden_set_items ADD COLUMN user_prompts_json TEXT
+        CHECK(user_prompts_json IS NULL OR (
+            json_valid(user_prompts_json)
+            AND json_type(user_prompts_json)='array'
+            AND json_array_length(user_prompts_json)>0
+        ))"""
+    )
+    connection.execute(
+        """UPDATE golden_set_items
+        SET user_prompts_json='[' || json_quote(prompt) || ']'
+        WHERE user_prompts_json IS NULL"""
+    )
+    validation = """NEW.user_prompts_json IS NULL
+        OR NOT json_valid(NEW.user_prompts_json)
+        OR json_type(NEW.user_prompts_json) != 'array'
+        OR json_array_length(NEW.user_prompts_json) = 0
+        OR EXISTS (
+            SELECT 1 FROM json_each(NEW.user_prompts_json)
+            WHERE type != 'text' OR length(trim(value)) = 0
+        )"""
+    connection.execute(
+        f"""CREATE TRIGGER golden_set_user_prompts_insert
+        BEFORE INSERT ON golden_set_items
+        WHEN {validation}
+        BEGIN SELECT RAISE(ABORT, 'invalid user_prompts_json'); END"""
+    )
+    connection.execute(
+        f"""CREATE TRIGGER golden_set_user_prompts_update
+        BEFORE UPDATE OF user_prompts_json ON golden_set_items
+        WHEN {validation}
+        BEGIN SELECT RAISE(ABORT, 'invalid user_prompts_json'); END"""
+    )
+
+
+def _migration_23(connection: sqlite3.Connection) -> None:
+    """Persist fenced target-turn checkpoints; incomplete streams are never replayed."""
+
+    connection.execute(
+        """CREATE TABLE run_job_turns (
+            id TEXT PRIMARY KEY NOT NULL,
+            job_id TEXT NOT NULL REFERENCES run_jobs(id) ON DELETE CASCADE,
+            turn_index INTEGER NOT NULL CHECK(turn_index >= 0),
+            lease_generation INTEGER NOT NULL,
+            user_prompt TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('started','completed')),
+            assistant_response TEXT,
+            metrics_json TEXT,
+            attempts_json TEXT,
+            provider_evidence_json TEXT,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            UNIQUE(job_id, turn_index)
+        )"""
+    )
+    connection.execute("CREATE INDEX idx_run_job_turns_job ON run_job_turns(job_id,turn_index)")
+
+
 def _migration_17(connection: sqlite3.Connection) -> None:
     """Persist onboarding choices and successful readiness actions."""
 
@@ -546,6 +607,8 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(19, "backfill_versioned_judge_definitions", _migration_19),
     Migration(20, "add_manual_onboarding_completion", _migration_20),
     Migration(21, "terminalize_cancelled_run_jobs", _migration_21),
+    Migration(22, "add_golden_set_user_prompts", _migration_22),
+    Migration(23, "add_durable_run_job_turns", _migration_23),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

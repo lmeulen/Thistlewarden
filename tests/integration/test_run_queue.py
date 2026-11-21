@@ -704,6 +704,63 @@ def test_cancel_terminalizes_all_active_jobs_and_preserves_completed_results(
     assert artifacts["html"].count(b"<tr>") == 3
 
 
+def test_multi_turn_snapshot_is_versioned_immutable_and_legacy_readable(tmp_path: Path) -> None:
+    app, golden, model = fixture_app(tmp_path)
+    service = app.extensions["golden_set_service"]
+    item = service._repository.list_all_items(golden.id)[0]
+    service.update_item(item.id, {"user_prompts": ["First", "Second", "Final"]})
+    queue = app.extensions["run_queue"]
+    run_id = queue.create_run(
+        {"name": "R", "golden_set_id": str(golden.id), "model_profile_ids": [str(model.id)]}
+    )
+    lease = queue.claim("snapshot-reader")
+    assert lease is not None
+
+    snapshot = queue.snapshot(lease.case_snapshot_id, "case")
+    assert snapshot["snapshot_schema_version"] == "2.0"
+    assert snapshot["user_prompts"] == ["First", "Second", "Final"]
+    assert snapshot["prompt"] == "First"
+    service.update_item(item.id, {"user_prompts": ["Changed"]})
+    assert queue.snapshot(lease.case_snapshot_id, "case")["user_prompts"] == [
+        "First",
+        "Second",
+        "Final",
+    ]
+
+    connection = app.extensions["database_factory"].connect()
+    try:
+        stored = json.loads(
+            connection.execute(
+                "SELECT snapshot_json FROM run_case_snapshots WHERE id=?",
+                (str(lease.case_snapshot_id),),
+            ).fetchone()[0]
+        )
+        assert "prompt" not in stored
+        legacy_id = uuid4()
+        legacy = {**stored, "prompt": "Legacy", "case_id": "legacy"}
+        legacy.pop("user_prompts")
+        legacy.pop("snapshot_schema_version")
+        connection.execute(
+            "INSERT INTO run_case_snapshots VALUES(?,?,?,?,?,?)",
+            (str(legacy_id), str(run_id), "legacy-source", "legacy", "1", json.dumps(legacy)),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    assert queue.snapshot(legacy_id, "case")["user_prompts"] == ["Legacy"]
+    connection = app.extensions["database_factory"].connect()
+    try:
+        unchanged = json.loads(
+            connection.execute(
+                "SELECT snapshot_json FROM run_case_snapshots WHERE id=?", (str(legacy_id),)
+            ).fetchone()[0]
+        )
+        assert "user_prompts" not in unchanged
+    finally:
+        connection.close()
+
+
 def test_atomic_snapshots_jobs_and_fenced_expiry(tmp_path: Path) -> None:
     app, golden, model = fixture_app(tmp_path)
     clock = FakeClock()

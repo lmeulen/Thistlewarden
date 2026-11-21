@@ -69,6 +69,23 @@ def test_golden_set_and_item_crud_round_trip(app) -> None:
     assert client.delete(f"/api/v1/golden-sets/{set_id}").status_code == 204
 
 
+def test_multi_turn_user_prompts_persist_in_order_with_legacy_projection(app) -> None:
+    client = app.test_client()
+    set_id = _set(client)
+    payload = _item("multi-turn")
+    del payload["prompt"]
+    payload["user_prompts"] = ["First turn", "Second turn", "Final turn"]
+
+    created = client.post(f"/api/v1/golden-sets/{set_id}/items", json=payload)
+
+    assert created.status_code == 201
+    item = created.get_json()["item"]
+    assert item["user_prompts"] == ["First turn", "Second turn", "Final turn"]
+    assert item["prompt"] == "First turn"
+    restored = client.get(f"/api/v1/golden-set-items/{item['id']}").get_json()["item"]
+    assert restored["user_prompts"] == payload["user_prompts"]
+
+
 def test_duplicate_case_id_is_case_insensitive_conflict(app) -> None:
     client = app.test_client()
     set_id = _set(client)

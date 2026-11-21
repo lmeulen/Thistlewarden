@@ -257,7 +257,11 @@ class JudgeCaller:
             snapshot.get("implementation_config", {}),
         )
         request = JudgeEvaluationRequest(
-            messages=canonical_messages(case["prompt"], case.get("system_prompt")),
+            messages=canonical_messages(
+                case["prompt"],
+                case.get("system_prompt"),
+                case.get("target_transcript"),
+            ),
             expected_result=config.expected_value,
             actual_result=candidate,
             context=config.context,
