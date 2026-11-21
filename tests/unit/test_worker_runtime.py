@@ -138,6 +138,33 @@ def test_judge_reasoning_override_requires_model_binding() -> None:
         )
 
 
+def test_worker_runtime_logs_safe_traceback_for_unexpected_iteration_defect(caplog) -> None:
+    stop = threading.Event()
+    sensitive = "prompt=never-log answer=never-log api-key=never-log"
+
+    class DefectivePipeline:
+        def run_once(self, owner: str, *, cancelled: threading.Event | None = None) -> bool:
+            del owner, cancelled
+            stop.set()
+            raise RuntimeError(sensitive)
+
+    runtime = WorkerRuntime(
+        lambda: DefectivePipeline(),  # type: ignore[arg-type]
+        concurrency=1,
+        cancellation_event=stop,
+    )
+    with caplog.at_level("ERROR", logger="evaluator.worker_runtime"):
+        runtime._loop("worker")
+
+    records = [
+        record for record in caplog.records if record.message.startswith("worker_iteration_failed")
+    ]
+    assert len(records) == 1
+    assert "exception_type=RuntimeError" in records[0].message
+    assert "traceback=" in records[0].message
+    assert sensitive not in records[0].message and "api-key" not in records[0].message
+
+
 def test_worker_runtime_is_bounded_and_stops_idle_threads() -> None:
     calls: list[str] = []
     runtime = WorkerRuntime(lambda: Pipeline(calls), concurrency=3, idle_seconds=0.01)  # type: ignore[arg-type]

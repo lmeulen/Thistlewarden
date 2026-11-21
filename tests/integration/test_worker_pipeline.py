@@ -205,6 +205,26 @@ def test_cancel_during_target_terminalizes_claimed_job(tmp_path: Path) -> None:
     assert exported["results"] == []
 
 
+def test_unexpected_pipeline_defect_persists_generic_result(tmp_path: Path) -> None:
+    app, golden, model = fixture_app(tmp_path)
+    queue = RunQueue(app.extensions["database_factory"])
+    run_id = queue.create_run(
+        {"name": "defect", "golden_set_id": str(golden.id), "model_profile_ids": [str(model.id)]}
+    )
+    sensitive = "prompt=never-log answer=never-log api-key=never-log"
+
+    def defect(case, profile):
+        del case, profile
+        raise RuntimeError(sensitive)
+
+    assert WorkerPipeline(queue, defect, heartbeat_interval=0.01).run_once("worker")
+
+    result = app.extensions["run_export_service"].data(run_id)["results"][0]
+    assert result["status"] == "error"
+    assert sensitive not in result["result_json"]
+    assert "RuntimeError" in result["result_json"]
+
+
 def test_cancel_skips_pending_jobs(tmp_path: Path) -> None:
     app, golden, model = fixture_app(tmp_path)
     queue = RunQueue(app.extensions["database_factory"])

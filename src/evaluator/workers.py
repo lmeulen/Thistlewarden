@@ -28,7 +28,7 @@ from evaluator.judging.extensions import (
     JudgeExecutionError,
     JudgeExtensionError,
 )
-from evaluator.logging_config import log_context, log_event
+from evaluator.logging_config import log_context, log_event, log_unexpected_exception
 from evaluator.provider import ProviderGuardrailError
 from evaluator.runs import IncompleteTargetTurn, JobLease, LeaseLost, RunQueue
 from evaluator.time import utc_now
@@ -302,13 +302,12 @@ class WorkerPipeline:
             except LeaseLost:
                 log_event(_LOG, logging.WARNING, "lease_lost", job_id=lease.job_id)
         except Exception as exc:
-            log_event(
+            log_unexpected_exception(
                 _LOG,
-                logging.ERROR,
                 "job_failed",
+                exc,
                 job_id=lease.job_id,
                 error_code="pipeline_error",
-                exception_type=type(exc).__name__,
                 evaluator_method=case["evaluation_method"],
             )
             try:

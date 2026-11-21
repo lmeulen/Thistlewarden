@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 from evaluator.costs import PricingSnapshot, TokenUsage, calculate_cost
 from evaluator.endpoints import SQLiteEndpointRepository
 from evaluator.judging.execution import JudgeCaller
-from evaluator.logging_config import log_event
+from evaluator.logging_config import log_event, log_unexpected_exception
 from evaluator.models import ModelProfileInput, ModelProfileRecord, PricingInput
 from evaluator.provider import ConversationMessage
 from evaluator.rate_limits import ProviderCallExecutor
@@ -324,12 +324,7 @@ class WorkerRuntime:
             try:
                 worked = pipeline.run_once(owner, cancelled=self._stop)
             except Exception as exc:
-                log_event(
-                    _LOG,
-                    logging.ERROR,
-                    "worker_iteration_failed",
-                    exception_type=type(exc).__name__,
-                )
+                log_unexpected_exception(_LOG, "worker_iteration_failed", exc)
                 worked = False
             if not worked:
                 self._stop.wait(self._idle_seconds)
