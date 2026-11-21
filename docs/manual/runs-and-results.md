@@ -133,17 +133,19 @@ Use cancellation for an incorrect selection, unexpected run size, configuration 
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
-### Rerunning failures
+### Rerunning models with errors
 
-Use **Retry failed jobs** on a run detail page when one or more jobs have status **error**. Enter a name for the new run, then select the action.
+Use **Rerun models with errors** on a run detail page when one or more jobs have status **error**. This action does not retry individual failed jobs. It starts a review page before any new run is created.
 
-> **Cost and scope warning:** This does not retry only failed test case. It creates a new run over all enabled cases for every model profile with at least one failed job. Correct invalid provider/model configuration first; otherwise calls can fail again and may incur cost.
+Review affected model profiles, active testcase count, new evaluated-job count, expected target-provider calls, and expected Judge calls. Target calls include every user turn. Judge calls are based on current active LLM-judge cases. Confirm scope and cost, enter a name, then create rerun.
 
-Thistlewarden creates a new run using source model profiles associated with failed jobs, the original golden set, and the original run-level judge selection. It does not modify or retry jobs inside the source run.
+> **Cost and scope warning:** new run covers all enabled cases for every model profile with at least one errored job. Previously successful cases rerun and provider calls may incur cost.
 
-Retry is useful after resolving transient provider failures, connectivity issues, rate limits, or temporary judge failures. Before retrying, verify affected profiles and endpoints remain active. The new run performs normal creation validation and uses current active configuration to make fresh snapshots; it is not a continuation of the original snapshot. Compare its results with source run while accounting for any configuration changes made in between.
+Thistlewarden creates new run using source run's golden set and run-level judge selection, but resolves current active configuration and makes fresh snapshots. It does not modify source run or retry its existing jobs. Correct invalid provider/model configuration first; otherwise calls can fail again and may incur cost.
 
-If no jobs failed, retry is unavailable and no new run is created.
+Review token protects against stale scope: changes to relevant current golden-set, model, endpoint, or judge configuration invalidate review. Return to review page and inspect updated counts before confirming. This is not continuation of original immutable snapshot. Compare results with source run while accounting for configuration changes.
+
+If no jobs errored, no rerun is available.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 

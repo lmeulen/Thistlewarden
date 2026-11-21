@@ -639,13 +639,22 @@ def cancel_run(run_id: UUID) -> Response:
     return jsonify({"run": _run_queue().get_run(run_id)})
 
 
+@api_v1.get("/runs/<uuid:run_id>/rerun-failures")
+def rerun_failures_preview(run_id: UUID) -> Response:
+    """Preview current-configuration rerun scope and return its stale-review fingerprint."""
+    return jsonify({"preview": _run_queue().rerun_failures_preview(run_id)})
+
+
 @api_v1.post("/runs/<uuid:run_id>/rerun-failures")
 def rerun_failures(run_id: UUID) -> tuple[Response, int]:
     payload = _json_object()
     name = payload.get("name")
+    fingerprint = payload.get("fingerprint")
     if not isinstance(name, str) or not name.strip():
         raise ValidationApiError("Name is required.")
-    new_id = _run_queue().rerun_failures(run_id, name)
+    if not isinstance(fingerprint, str) or not fingerprint:
+        raise ValidationApiError("fingerprint from rerun preview is required.")
+    new_id = _run_queue().rerun_failures(run_id, name, fingerprint)
     return jsonify({"run": _run_queue().get_run(new_id)}), 201
 
 

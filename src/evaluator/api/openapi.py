@@ -434,10 +434,22 @@ def build_openapi_document() -> dict[str, Any]:
                 }
             },
             "/api/v1/runs/{run_id}/rerun-failures": {
+                "get": {
+                    "operationId": "previewModelsWithErrorsRerun",
+                    "summary": (
+                        "Review current-configuration scope before rerunning models with errors"
+                    ),
+                    "responses": {
+                        "200": {"description": "Scope, call counts, and stale-review fingerprint"}
+                    },
+                },
                 "post": {
-                    "operationId": "rerunFailures",
+                    "operationId": "rerunModelsWithErrors",
+                    "summary": (
+                        "Create reviewed current-configuration rerun; requires preview fingerprint"
+                    ),
                     "responses": {"201": {"description": "New run"}},
-                }
+                },
             },
             "/api/v1/golden-sets": {
                 "get": {

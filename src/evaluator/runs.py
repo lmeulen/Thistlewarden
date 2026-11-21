@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sqlite3
@@ -105,7 +106,12 @@ class RunQueue:
         finally:
             connection.close()
 
-    def create_run(self, payload: Any) -> UUID:
+    def create_run(
+        self,
+        payload: Any,
+        *,
+        expected_rerun_scope: tuple[UUID, str] | None = None,
+    ) -> UUID:
         try:
             data = RunInput.model_validate(payload)
         except ValidationError as exc:
@@ -118,6 +124,13 @@ class RunQueue:
         connection = self._factory.connect()
         try:
             with transaction(connection, mode="IMMEDIATE"):
+                if expected_rerun_scope is not None:
+                    source_run_id, expected_fingerprint = expected_rerun_scope
+                    scope = self._rerun_failures_scope(connection, source_run_id)
+                    if scope["fingerprint"] != expected_fingerprint:
+                        raise ValidationApiError(
+                            "Rerun review is stale. Review current configuration again."
+                        )
                 set_row = connection.execute(
                     "SELECT * FROM golden_sets WHERE id=? AND active=1", (str(data.golden_set_id),)
                 ).fetchone()
@@ -737,34 +750,98 @@ class RunQueue:
             )
         return len(run_ids)
 
-    def rerun_failures(self, run_id: UUID, name: str) -> UUID:
+    def rerun_failures_preview(self, run_id: UUID) -> dict[str, Any]:
         connection = self._factory.connect()
         try:
-            run = connection.execute(
-                "SELECT golden_set_id,judge_profile_id FROM runs WHERE id=?", (str(run_id),)
-            ).fetchone()
-            rows = connection.execute(
-                """SELECT DISTINCT rms.source_profile_id FROM run_jobs j
-                JOIN run_model_snapshots rms ON rms.id=j.model_snapshot_id
-                WHERE j.run_id=? AND j.status='failed'""",
-                (str(run_id),),
-            ).fetchall()
+            return self._rerun_failures_scope(connection, run_id)
         finally:
             connection.close()
-        if run is None or not rows:
-            raise ValidationApiError("No failed jobs to retry.")
-        new_id = self.create_run(
-            {
-                "name": name,
-                "golden_set_id": run[0],
-                "model_profile_ids": [row[0] for row in rows],
-                "judge_profile_id": run[1],
-            }
-        )
+
+    def rerun_failures(self, run_id: UUID, name: str, fingerprint: str) -> UUID:
+        preview = self.rerun_failures_preview(run_id)
+        payload: dict[str, Any] = {
+            "name": name,
+            "golden_set_id": preview["golden_set_id"],
+            "model_profile_ids": preview["model_profile_ids"],
+        }
+        if preview["judge_profile_id"]:
+            payload["judge_profile_id"] = preview["judge_profile_id"]
+        new_id = self.create_run(payload, expected_rerun_scope=(run_id, fingerprint))
         log_semantic_event(
-            _LOG, "run_failures_rerun", object_id=new_id, source=run_id, count=len(rows)
+            _LOG,
+            "run_models_with_errors_rerun",
+            object_id=new_id,
+            source=run_id,
+            count=len(preview["model_profile_ids"]),
         )
         return new_id
+
+    def _rerun_failures_scope(self, connection: sqlite3.Connection, run_id: UUID) -> dict[str, Any]:
+        run = connection.execute(
+            "SELECT golden_set_id,judge_profile_id FROM runs WHERE id=?", (str(run_id),)
+        ).fetchone()
+        failed_models = connection.execute(
+            """SELECT DISTINCT rms.source_profile_id,m.display_name,m.model_id
+            FROM run_jobs j JOIN run_model_snapshots rms ON rms.id=j.model_snapshot_id
+            JOIN model_profiles m ON m.id=rms.source_profile_id
+            WHERE j.run_id=? AND j.status='failed' ORDER BY rms.source_profile_id""",
+            (str(run_id),),
+        ).fetchall()
+        if run is None or not failed_models:
+            raise ValidationApiError("No errored jobs found.")
+        golden_set_id = str(run["golden_set_id"])
+        cases = connection.execute(
+            "SELECT * FROM golden_set_items WHERE golden_set_id=? "
+            "AND enabled=1 ORDER BY sort_order,id",
+            (golden_set_id,),
+        ).fetchall()
+        placeholders = ",".join("?" for _ in failed_models)
+        models = connection.execute(
+            f"""SELECT m.*,e.completions_url,e.name AS endpoint_name,e.api_key_header,e.api_format,
+            e.active AS endpoint_active FROM model_profiles m JOIN endpoints e ON e.id=m.endpoint_id
+            WHERE m.id IN ({placeholders}) ORDER BY m.id""",  # noqa: S608
+            tuple(row["source_profile_id"] for row in failed_models),
+        ).fetchall()
+        set_row = connection.execute(
+            "SELECT * FROM golden_sets WHERE id=?", (golden_set_id,)
+        ).fetchone()
+        if set_row is None or not cases or len(models) != len(failed_models):
+            raise ValidationApiError("Current configuration cannot create this rerun.")
+        judge_profiles = connection.execute("SELECT * FROM judge_profiles ORDER BY id").fetchall()
+        serializable = {
+            "source_run_id": str(run_id),
+            "golden_set": dict(set_row),
+            "cases": [dict(row) for row in cases],
+            "models": [dict(row) for row in models],
+            # Include all judge profiles: current selection can fall back to global default.
+            "judge_profiles": [dict(row) for row in judge_profiles],
+            "judge_profile_id": run["judge_profile_id"],
+        }
+        fingerprint = hashlib.sha256(
+            json.dumps(serializable, sort_keys=True, separators=(",", ":"), default=str).encode()
+        ).hexdigest()
+        model_ids = [str(row["source_profile_id"]) for row in failed_models]
+        active_cases = len(cases)
+        target_calls_per_model = sum(len(json.loads(row["user_prompts_json"])) for row in cases)
+        llm_cases = sum(row["evaluation_method"] == "llm_judge" for row in cases)
+        return {
+            "fingerprint": fingerprint,
+            "golden_set_id": golden_set_id,
+            "judge_profile_id": str(run["judge_profile_id"] or ""),
+            "model_profile_ids": model_ids,
+            "models": [
+                {
+                    "id": str(row["source_profile_id"]),
+                    "name": row["display_name"],
+                    "model_identifier": row["model_id"],
+                }
+                for row in failed_models
+            ],
+            "active_cases": active_cases,
+            "job_count": active_cases * len(model_ids),
+            "target_call_count": target_calls_per_model * len(model_ids),
+            "judge_call_count": llm_cases * len(model_ids),
+        }
 
     def model_snapshot_for_source(self, run_id: UUID, source_profile_id: UUID) -> dict[str, Any]:
         connection = self._factory.connect()
