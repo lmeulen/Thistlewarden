@@ -8,6 +8,8 @@ import pytest
 from evaluator import create_app
 from evaluator.config import load_bootstrap_settings
 from evaluator.dashboard import DashboardStatistics, LatestRunStatistics
+from evaluator.database import SQLiteConnectionFactory, transaction
+from evaluator.migrations import MIGRATIONS, MigrationManager
 
 pytestmark = pytest.mark.integration
 
@@ -40,6 +42,60 @@ def test_health_has_stable_database_independent_contract(app) -> None:
         "status": "ok",
         "version": "1",
     }
+
+
+def test_readiness_reports_unavailable_database_without_affecting_health(tmp_path: Path) -> None:
+    unavailable = create_app(
+        env_file=None,
+        settings_environment={
+            "SECRET_KEY": "test-secret-key-with-at-least-32-bytes",
+            "DATABASE_PATH": str(tmp_path / "missing" / "evaluator.db"),
+        },
+        initialize_database=False,
+        test_config={"TESTING": True},
+    )
+    client = unavailable.test_client()
+
+    assert client.get("/health").get_json()["status"] == "ok"
+    response = client.get("/ready")
+    assert response.status_code == 503
+    assert response.get_json() == {"status": "not_ready", "reason": "database_unavailable"}
+
+
+def test_readiness_reports_unreadable_storage(app, tmp_path: Path) -> None:
+    database_path = tmp_path / "directory-instead-of-database"
+    database_path.mkdir()
+    app.extensions["database_factory"] = SQLiteConnectionFactory(database_path)
+
+    response = app.test_client().get("/ready")
+
+    assert response.status_code == 503
+    assert response.get_json() == {"status": "not_ready", "reason": "storage_unavailable"}
+
+
+def test_readiness_rejects_unsupported_schema(app, tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "old-schema.db")
+    MigrationManager(factory, migrations=MIGRATIONS[:1]).migrate()
+    app.extensions["database_factory"] = factory
+
+    response = app.test_client().get("/ready")
+
+    assert response.status_code == 503
+    assert response.get_json() == {"status": "not_ready", "reason": "schema_unsupported"}
+
+
+def test_readiness_succeeds_during_concurrent_write(app, tmp_path: Path) -> None:
+    factory = SQLiteConnectionFactory(tmp_path / "ready.db")
+    MigrationManager(factory).migrate()
+    app.extensions["database_factory"] = factory
+    connection = factory.connect()
+    try:
+        with transaction(connection):
+            response = app.test_client().get("/ready")
+            assert response.status_code == 200
+            assert response.get_json() == {"status": "ready"}
+    finally:
+        connection.close()
 
 
 def test_index_renders_english_page_with_empty_dashboard(app) -> None:
