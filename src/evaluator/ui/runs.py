@@ -45,6 +45,95 @@ from evaluator.ui.shared import (
     url_for,
 )
 
+_GATE_PROGRESS_METRICS = {
+    "min_weighted_score": ("Weighted score", "weighted_score"),
+    "min_pass_rate": ("Pass rate", "pass_rate"),
+    "max_error_rate": ("Error rate", "error_rate"),
+    "max_mean_latency_ms": ("Mean latency", "latency_mean"),
+    "max_p95_latency_ms": ("P95 latency", "latency_p95"),
+    "max_p95_ttft_ms": ("P95 TTFT", "ttft_p95"),
+    "min_mean_tps": ("Mean TPS", "tps_mean"),
+}
+
+
+def _gate_progress_position(measured: Decimal, threshold: Decimal) -> int:
+    if threshold == 0:
+        return 70 if measured == 0 else 100
+    return max(0, min(100, round(measured / threshold * Decimal(70))))
+
+
+def _quality_gate_progress(
+    run: dict[str, Any], aggregates: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Current, non-persistent gate measurements for an active run.
+
+    This deliberately does not call the terminal gate evaluator or assign an
+    outcome: incomplete samples cannot establish that a gate has passed.
+    """
+    if run["terminal"]:
+        return None
+    configured = run.get("quality_gates", {})
+    if not configured:
+        return None
+    expected_per_model = run["total_jobs"] // len(aggregates) if aggregates else 0
+    entries: list[dict[str, Any]] = []
+    for aggregate in aggregates:
+        model = aggregate["model"].get("display_name") or "Model"
+        coverage = (
+            f"{aggregate['total']}/{expected_per_model} results"
+            if expected_per_model
+            else "No results"
+        )
+        for gate, (label, metric) in _GATE_PROGRESS_METRICS.items():
+            raw_threshold = configured.get(gate)
+            if raw_threshold is None:
+                continue
+            threshold = Decimal(str(raw_threshold))
+            measured = aggregate.get(metric)
+            entries.append(
+                {
+                    "label": label,
+                    "model": model,
+                    "threshold": threshold,
+                    "measured": measured,
+                    "position": (
+                        None
+                        if measured is None
+                        else _gate_progress_position(Decimal(str(measured)), threshold)
+                    ),
+                    "direction": "at least" if gate.startswith("min_") else "at most",
+                    "coverage": coverage,
+                }
+            )
+    raw_cost_limit = configured.get("max_total_cost")
+    if raw_cost_limit is not None:
+        known_costs = [
+            item["known_total_cost"] for item in aggregates if item["known_total_cost"] is not None
+        ]
+        known_count = sum(item["known_cost_count"] for item in aggregates)
+        expected = run["total_jobs"]
+        projection = (
+            sum(known_costs, Decimal(0)) / Decimal(known_count) * Decimal(expected)
+            if known_count and expected
+            else None
+        )
+        threshold = Decimal(str(raw_cost_limit))
+        entries.append(
+            {
+                "label": "Total cost",
+                "model": "Entire run",
+                "threshold": threshold,
+                "measured": projection,
+                "position": None
+                if projection is None
+                else _gate_progress_position(projection, threshold),
+                "direction": "at most",
+                "coverage": f"{known_count}/{expected} costs known" if expected else "No jobs",
+                "extrapolated": True,
+            }
+        )
+    return {"entries": entries}
+
 
 def _overview_model_charts(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
     definitions = (
@@ -261,7 +350,52 @@ def _sort_model_comparison(
     return available + missing
 
 
+def _model_chooser(aggregates: list[dict[str, Any]], *, eligible: bool) -> dict[str, Any]:
+    """Return an explainable recommendation from the already displayed aggregates."""
+    if not eligible:
+        return {"model": None, "reason": "Recommendation is available after the run completes."}
+    candidates = [
+        item
+        for item in aggregates
+        if item["weighted_score"] is not None
+        and all(gate["outcome"] == "passed" for gate in item["gates"])
+    ]
+    if not candidates:
+        return {
+            "model": None,
+            "reason": "No model has a score and passes every configured model gate.",
+        }
+    chosen = min(candidates, key=lambda item: (item["rank"], item["model_snapshot_id"]))
+    alternatives = [
+        item
+        for item in aggregates
+        if item is not chosen
+        and item["total_cost"] is not None
+        and chosen["total_cost"] is not None
+        and item["total_cost"] < chosen["total_cost"]
+    ]
+    alternative = (
+        min(alternatives, key=lambda item: (item["total_cost"], item["model_snapshot_id"]))
+        if alternatives
+        else None
+    )
+    return {
+        "model": chosen,
+        "alternative": alternative,
+        "cost_savings": chosen["total_cost"] - alternative["total_cost"]
+        if alternative is not None
+        else None,
+        "error_rate_delta": alternative["error_rate"] - chosen["error_rate"]
+        if alternative is not None
+        and alternative["error_rate"] is not None
+        and chosen["error_rate"] is not None
+        else None,
+        "has_configured_gates": bool(chosen["gates"]),
+    }
+
+
 def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build an accessible quality/cost frontier from visible aggregate values."""
     plot_left = Decimal(70)
     plot_width = Decimal(660)
     plot_top = Decimal(20)
@@ -280,14 +414,12 @@ def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
         if not values:
             return floor, ceiling if ceiling is not None else floor + Decimal(1)
         low, high = min(values), max(values)
-        if low == high:
-            padding = max(
-                abs(low) * Decimal("0.1"), Decimal("0.05") if ceiling else Decimal("0.000001")
-            )
-        else:
-            padding = (high - low) * Decimal("0.1")
-        lower = max(floor, low - padding)
-        upper = high + padding
+        padding = (
+            max(abs(low) * Decimal("0.1"), Decimal("0.05") if ceiling else Decimal("0.000001"))
+            if low == high
+            else (high - low) * Decimal("0.1")
+        )
+        lower, upper = max(floor, low - padding), high + padding
         if ceiling is not None:
             upper = min(ceiling, upper)
         if lower == upper:
@@ -296,8 +428,7 @@ def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
         return lower, upper
 
     _, x_max = bounds(costs, floor=Decimal(0))
-    x_min = Decimal(0)
-    y_max = Decimal(1)
+    x_min, y_max = Decimal(0), Decimal(1)
     lowest_score = min(scores, default=Decimal(0))
     y_min = max(
         Decimal(0),
@@ -305,11 +436,64 @@ def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
     )
     if y_min == y_max:
         y_min = Decimal("0.9")
-    x_range = x_max
-    y_range = y_max - y_min
+    x_range, y_range = x_max, y_max - y_min
+    latency_values = [
+        item["latency_p95"] for item in eligible if item.get("latency_p95") is not None
+    ]
+    latency_min, latency_max = (
+        (min(latency_values), max(latency_values)) if latency_values else (None, None)
+    )
+
+    def gate_status(item: dict[str, Any]) -> str:
+        outcomes = [gate["outcome"] for gate in item.get("gates", [])]
+        if not outcomes:
+            return "unconfigured"
+        if all(outcome == "passed" for outcome in outcomes):
+            return "passed"
+        if any(outcome == "failed" for outcome in outcomes):
+            return "failed"
+        return "indeterminate"
+
+    def dominated(item: dict[str, Any]) -> bool:
+        cost, score = item["known_total_cost"], item["weighted_score"]
+        return any(
+            other is not item
+            and other["known_total_cost"] <= cost
+            and other["weighted_score"] >= score
+            and (other["known_total_cost"] < cost or other["weighted_score"] > score)
+            for other in eligible
+        )
+
+    points = []
+    for item, cost, score in zip(eligible, costs, scores, strict=True):
+        latency = item.get("latency_p95")
+        radius = Decimal(8)
+        if latency is not None and latency_min is not None and latency_max is not None:
+            radius = (
+                Decimal(11)
+                if latency_min == latency_max
+                else Decimal(6) + (latency - latency_min) / (latency_max - latency_min) * Decimal(8)
+            )
+        points.append(
+            {
+                "model": item["model"],
+                "cost": item["known_total_cost"],
+                "score": item["weighted_score"],
+                "latency": latency,
+                "radius": radius,
+                "gate_status": gate_status(item),
+                "dominated": dominated(item),
+                "x": plot_left + (cost - x_min) / x_range * plot_width,
+                "y": plot_top + (y_max - score) / y_range * plot_height,
+            }
+        )
+    frontier = sorted(
+        (point for point in points if not point["dominated"]),
+        key=lambda point: (point["cost"], point["score"]),
+    )
     x_ticks = [
         {
-            "value": x_min + x_range * Decimal(index) / Decimal(4),
+            "value": x_range * Decimal(index) / Decimal(4),
             "x": plot_left + plot_width * Decimal(index) / Decimal(4),
         }
         for index in range(5)
@@ -322,19 +506,9 @@ def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
         }
         for index in range(y_tick_count + 1)
     ]
-    points = []
-    for item, cost, score in zip(eligible, costs, scores, strict=True):
-        points.append(
-            {
-                "model": item["model"],
-                "cost": item["known_total_cost"],
-                "score": item["weighted_score"],
-                "x": plot_left + (cost - x_min) / x_range * plot_width,
-                "y": plot_top + (y_max - score) / y_range * plot_height,
-            }
-        )
     return {
         "points": points,
+        "frontier": frontier,
         "omitted": len(aggregates) - len(points),
         "x_min": x_min,
         "x_max": x_max,
@@ -389,6 +563,10 @@ def run_detail(run_id: UUID) -> str:
         aggregates=aggregates,
         model_sort=model_sort,
         model_direction=model_direction,
+        model_chooser=_model_chooser(
+            aggregates,
+            eligible=run["status"] in {"completed", "completed_with_errors"},
+        ),
         cost_score_scatter=_cost_score_scatter(aggregates),
         model_charts=_overview_model_charts(aggregates),
         model_count=len(aggregates),
@@ -398,6 +576,7 @@ def run_detail(run_id: UUID) -> str:
         query_error=query_error,
         has_next=has_next,
         gates=gate_results,
+        gate_progress=_quality_gate_progress(run, aggregates),
     )
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from concurrent.futures import CancelledError
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -112,6 +113,8 @@ class WorkerPipeline:
             evaluator_method=case["evaluation_method"],
         )
         stage = "target"
+        target_stage_ms: str | None = None
+        evaluation_stage_ms: str | None = None
         try:
             model = self._queue.snapshot(lease.model_snapshot_id, "model")
             log_event(
@@ -123,9 +126,11 @@ class WorkerPipeline:
             )
             if cancelled is not None and cancelled.is_set():
                 raise CancelledError
+            target_started = time.monotonic()
             outcome, transcript = self._execute_target_turns(
                 lease, case, model, cancelled=cancelled, lost=lost
             )
+            target_stage_ms = _duration_ms(target_started)
             if cancelled is not None and cancelled.is_set():
                 raise CancelledError
             if lost.is_set():
@@ -153,7 +158,9 @@ class WorkerPipeline:
                     evaluator_method=case["evaluation_method"],
                 )
                 evaluation_case = {**case, "target_transcript": transcript}
+                evaluation_started = time.monotonic()
                 result = self._evaluate(lease.run_id, evaluation_case, outcome.content)
+                evaluation_stage_ms = _duration_ms(evaluation_started)
                 metrics = dict(outcome.metrics)
                 if case["evaluation_method"] == "llm_judge":
                     metrics["judge_cost"] = result.metadata.get("judge_cost")
@@ -167,6 +174,11 @@ class WorkerPipeline:
                         "candidate": outcome.content,
                         "evaluated_answer": outcome.content,
                         "transcript": transcript,
+                        "timing": {
+                            "target_stage_ms": target_stage_ms,
+                            "evaluation_stage_ms": evaluation_stage_ms,
+                            "evaluation_stage": stage,
+                        },
                     },
                     metrics=metrics,
                 )
@@ -497,3 +509,8 @@ class WorkerPipeline:
             except LeaseLost:
                 lost.set()
                 return
+
+
+def _duration_ms(started: float) -> str:
+    """Return a monotonic duration rounded for durable, human-readable trace evidence."""
+    return str(Decimal(str(round((time.monotonic() - started) * 1000, 3))))

@@ -179,6 +179,22 @@ Open a run from **Runs** to see its overview. The **Run overview** panel intenti
 
 A missing metric means insufficient or unavailable measured data, not a score of zero. Do not compare an incomplete run with a finished run as though their KPI coverage were equal.
 
+### Quality-gate progress
+
+While a run is active, the **Quality-gate progress** panel shows current-sample projections for every configured gate. It shows the measured aggregate for each model, or an estimated completed-run total for the run-wide cost gate when costs are known for some completed jobs. Coverage states how much evidence the projection uses.
+
+These projections are explicitly provisional: they do not update stored gate outcomes, never claim a gate passed early, and do not turn unavailable measurements into zero. The final gate evaluation occurs only after every job has reached a terminal state.
+
+### Model frontier
+
+The **Model frontier** chart compares model quality and known target cost in one view. Its X-axis is total known target cost and its Y-axis is weighted score. Bubble size represents P95 latency when available, while bubble color represents the model's quality-gate status. A line joins the quality/cost Pareto frontier: models for which no other plotted model has both equal-or-lower cost and equal-or-higher score, with at least one strict improvement. Dominated models are faded but remain in the accompanying accessible data table. Models missing cost or score are omitted and identified; missing latency uses the neutral bubble size rather than an invented measurement.
+
+### Model chooser
+
+After a run completes, the **Model chooser** panel provides a deterministic, explainable best-balanced recommendation. It considers only models with a measured weighted score that pass every configured model gate, then uses the existing ranking: higher score, lower error rate, lower complete target cost, and stable model ID. The card repeats the selected model's visible score, complete target cost per run, P95 latency, and gate status. When another model has a lower complete target cost, it reports that model and the visible cost/error-rate trade-off.
+
+The chooser does not recommend a model while work is incomplete, when no model has a score and passes every configured model gate, or by treating unavailable scores, costs, latency, or error rates as zero. It is a transparent comparison aid, not a replacement for reviewing cases, evidence coverage, quality-gate design, or operational requirements.
+
 **Result status:** **Passed** and **failed** both mean evaluator ran; failed did not meet its configured condition. **Error** means no normal evaluation result was produced. Error results are further classified as **Provider guardrail**, **Provider error**, **Processing error**, or **Unknown error**. A provider guardrail means the provider deliberately blocked generation under its content policy; it is not a transport outage. Unknown is used conservatively for historical or unclassified errors. Investigate all error categories before interpreting score or pass rate.
 
 Guardrails remain part of the error rate because they prevented a usable evaluation result. They do not contribute to score or pass rate. Run status is therefore **Completed with errors**, or **Failed** when every job is blocked or otherwise errors. This conservative treatment prevents policy-blocked requests from making reliability look better. Result detail and exports retain only bounded evidence such as finish reason, provider code, and provider request ID. Partial content returned before intervention is labeled and retained for audit but is never evaluated as a normal answer.
@@ -218,6 +234,8 @@ Thistlewarden reports target-model performance measurements when provider data p
 - **TPS** means tokens per second for final target turn. Higher is generally better, but compare it with TTFT and output length.
 - **Tokens in/out** are aggregate input and output token counts across target turns. Individual results also show cached-input and reasoning-token counts when known.
 - **Cost** is sum of configured per-turn model costs and reported token usage. Cost is **known** only when required pricing and usage are available for every target turn.
+
+Each result detail also has a **Timing trace**. It records job wall time, queue wait before the first target turn, target-stage wall time, deterministic evaluator or LLM-Judge stage wall time, and a row for every target turn. Each turn shows durable UTC start and completion timestamps, locally observed wall time, provider-call latency, and TTFT where measured. Target-stage wall time includes local request setup and durable checkpoints, while provider latency covers the streamed provider call. Job wall time includes queue delay and any local persistence overhead, so its components do not necessarily add exactly to the total. Older results can lack per-turn checkpoints or newer stage measurements; unavailable evidence is shown as unknown, never as zero.
 
 The model table and overview show known target costs and their coverage. Unknown costs must not be read as free calls. Update pricing configuration when provider rates change, then use new runs for estimates based on those rates; historical run snapshots retain prior configuration.
 

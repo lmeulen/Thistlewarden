@@ -273,6 +273,10 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     run_id = create_run(client, app)
     poll = client.get(f"/runs/{run_id}/status").get_json()
     assert poll["progress_percent"] == 0 and not poll["terminal"]
+    active_detail = client.get(f"/runs/{run_id}").get_data(as_text=True)
+    assert "Quality-gate progress" in active_detail
+    assert "Provisional projection:" in active_detail
+    assert "never mean a gate has passed early" in active_detail
     complete_run(app, run_id)
     poll = client.get(f"/runs/{run_id}/status").get_json()
     assert poll["progress_percent"] == 100 and poll["terminal"]
@@ -284,6 +288,11 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         page.status_code == 200
         and '<div class="run-detail-blocks"><div id="run-status"' in text
         and "Run overview" in text
+        and "Model chooser" in text
+        and "Best balanced choice: <strong>Model M</strong>" in text
+        and "Score</dt><dd>1.00" in text
+        and "No lower-cost model with complete cost data" in text
+        and "Rule: among models with a score that pass every configured model gate" in text
         and "Model performance" in text
         and "Results by judge type" in text
         and "Model comparison" in text
@@ -343,9 +352,12 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     assert "Latency gem./p95" not in model_table
     assert 'class="gate-dot gate-dot-passed"' in model_table
     assert 'title="Weighted score: Passed"' in model_table
-    assert "Cost versus score" in model_table
+    assert "Model frontier" in model_table
+    assert "Bubble size shows P95 latency" in model_table
     assert 'class="scatter-chart"' in model_table
-    assert 'class="scatter-point"' in model_table
+    assert "frontier-gate-passed" in model_table
+    assert 'class="frontier-table"' in model_table
+    assert "Model frontier data" in model_table
     assert "Model M: cost 0.000001, score 1.000" in model_table
     assert (
         "total known cost from 0.000000 to 0.000002 on X-axis and weighted score from "
@@ -383,6 +395,16 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     assert "1.0000" in overview
     assert 'id="run-chart-metric"' not in overview
 
+    for section_id, title in (
+        ("model-chart-title", "Model performance"),
+        ("judge-chart-title", "Results by judge type"),
+        (None, "Quality gates"),
+        (None, "Results"),
+    ):
+        heading = f'<h2 id="{section_id}">{title}</h2>' if section_id else f"<h2>{title}</h2>"
+        assert '<details class="panel collapsible-panel"' in text and heading in text
+    assert '<details class="panel collapsible-panel" id="run-results">' in text
+    assert '<details class="panel collapsible-panel" open' not in text
     assert "<h3>Model metrics</h3>" in text
     assert "Compare models in this run using one metric." in text
     assert 'id="run-chart-metric"' in text
@@ -402,9 +424,7 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     assert "Y-axis: Weighted score. X-axis: Model." in text
     assert "chart.hidden=chart.dataset.runChart!==chartMetric.value" in text
     assert (
-        text.index("Cost versus score")
-        < text.index("Model metrics")
-        < text.index("Model performance")
+        text.index("Model frontier") < text.index("Model metrics") < text.index("Model performance")
     )
 
 
@@ -442,6 +462,8 @@ def test_multi_turn_result_detail_labels_context_and_evaluated_answer(app) -> No
     assert "Conversation transcript" in detail
     assert "Context response" in detail and "Evaluated answer" in detail
     assert "first turn" in detail and "final response" in detail
+    assert "Timing trace" in detail
+    assert "No per-turn timing checkpoints are available" in detail
 
 
 def test_guardrail_is_distinct_in_ui_aggregates_and_export(app) -> None:

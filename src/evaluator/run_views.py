@@ -11,6 +11,7 @@ from uuid import UUID
 from evaluator.api.errors import NotFoundError, ValidationApiError
 from evaluator.database import SQLiteConnectionFactory
 from evaluator.runs import normalize_case_snapshot
+from evaluator.time import from_utc_iso
 
 TERMINAL_STATUSES = {"completed", "completed_with_errors", "failed", "cancelled"}
 _RESULT_STATUSES = {"passed", "failed", "error"}
@@ -115,6 +116,7 @@ class RunViewService:
             if row is None:
                 raise NotFoundError("Run not found.")
             run = self._run_row(dict(row))
+            run["quality_gates"] = json.loads(run["quality_gates_snapshot_json"] or "{}")
             self._add_weighted_scores(connection, [run])
             return run
         finally:
@@ -269,15 +271,27 @@ class RunViewService:
         connection = self._factory.connect()
         try:
             row = connection.execute(
-                """SELECT rr.*,cs.case_id,cs.snapshot_json case_json,ms.snapshot_json model_json
-                FROM run_results rr JOIN run_case_snapshots cs ON cs.id=rr.case_snapshot_id
+                """SELECT rr.*,j.created_at job_created_at,j.updated_at job_updated_at,
+                cs.case_id,cs.snapshot_json case_json,ms.snapshot_json model_json
+                FROM run_results rr JOIN run_jobs j ON j.id=rr.job_id
+                JOIN run_case_snapshots cs ON cs.id=rr.case_snapshot_id
                 JOIN run_model_snapshots ms ON ms.id=rr.model_snapshot_id
                 WHERE rr.run_id=? AND rr.id=?""",
                 (str(run_id), str(result_id)),
             ).fetchone()
             if row is None:
                 raise NotFoundError("Result not found.")
-            return self._result(dict(row))
+            result = self._result(dict(row))
+            turns = [
+                dict(item)
+                for item in connection.execute(
+                    "SELECT turn_index,status,metrics_json,started_at,completed_at "
+                    "FROM run_job_turns WHERE job_id=? ORDER BY turn_index",
+                    (str(result["job_id"]),),
+                )
+            ]
+            result["timing"] = self._timing_trace(result, turns)
+            return result
         finally:
             connection.close()
 
@@ -357,6 +371,64 @@ class RunViewService:
         row["model"] = cls._model(json.loads(row.pop("model_json")))
         row["total_cost"] = decimal_or_none(row.get("target_cost"))
         return row
+
+    @staticmethod
+    def _timing_trace(result: dict[str, Any], turns: list[dict[str, Any]]) -> dict[str, Any]:
+        """Build safe, auditable timing evidence from durable result and turn records."""
+        evaluation = result["evaluation"]
+        recorded = evaluation.get("timing") if isinstance(evaluation, dict) else {}
+        recorded = recorded if isinstance(recorded, dict) else {}
+        target_turns = []
+        for turn in turns:
+            metrics = _json_object(turn.get("metrics_json"))
+            target_turns.append(
+                {
+                    "index": int(turn["turn_index"]) + 1,
+                    "status": turn["status"],
+                    "started_at": turn["started_at"],
+                    "completed_at": turn["completed_at"],
+                    "wall_ms": _utc_duration_ms(turn["started_at"], turn.get("completed_at")),
+                    "provider_latency_ms": decimal_or_none(metrics.get("target_latency_ms")),
+                    "ttft_ms": decimal_or_none(metrics.get("ttft_ms")),
+                }
+            )
+        job_wall_ms = _utc_duration_ms(result.get("job_created_at"), result.get("created_at"))
+        queue_wait_ms = _utc_duration_ms(
+            result.get("job_created_at"),
+            target_turns[0]["started_at"] if target_turns else None,
+        )
+        target_wall_ms = sum(
+            (item["wall_ms"] for item in target_turns if item["wall_ms"] is not None), Decimal(0)
+        )
+        return {
+            "job_created_at": result.get("job_created_at"),
+            "completed_at": result.get("created_at"),
+            "job_wall_ms": job_wall_ms,
+            "queue_wait_ms": queue_wait_ms,
+            "target_stage_ms": decimal_or_none(recorded.get("target_stage_ms")),
+            "evaluation_stage_ms": decimal_or_none(recorded.get("evaluation_stage_ms")),
+            "evaluation_stage": recorded.get("evaluation_stage"),
+            "target_turns": target_turns,
+            "target_wall_ms": target_wall_ms if target_turns else None,
+        }
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    try:
+        parsed = json.loads(value or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _utc_duration_ms(started: Any, ended: Any) -> Decimal | None:
+    if not isinstance(started, str) or not isinstance(ended, str):
+        return None
+    try:
+        elapsed = (from_utc_iso(ended) - from_utc_iso(started)).total_seconds() * 1000
+        return Decimal(str(round(elapsed, 3)))
+    except ValueError:
+        return None
 
 
 def _percentage(value: int, total: int) -> int:

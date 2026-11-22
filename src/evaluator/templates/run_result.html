@@ -61,6 +61,20 @@
     </div>
   </section>
 </div>
+<section class="panel" aria-labelledby="timing-trace-title">
+  <h2 id="timing-trace-title">Timing trace</h2>
+  <p>Durations are measured locally. Target provider latency is reported by the streaming client; wall time includes request setup and persistence. Missing values were not measured.</p>
+  <dl class="evaluation-summary">
+    <dt>Job wall time</dt><dd>{{ display_metric(result.timing.job_wall_ms, places=3, suffix=' ms') }}</dd>
+    <dt>Queue wait before first target turn</dt><dd>{{ display_metric(result.timing.queue_wait_ms, places=3, suffix=' ms') }}</dd>
+    <dt>Target stage wall time</dt><dd>{{ display_metric(result.timing.target_stage_ms, places=3, suffix=' ms') }}</dd>
+    {% if result.timing.evaluation_stage %}<dt>{{ result.timing.evaluation_stage|title }} stage wall time</dt><dd>{{ display_metric(result.timing.evaluation_stage_ms, places=3, suffix=' ms') }}</dd>{% endif %}
+    <dt>Target turns' wall time</dt><dd>{{ display_metric(result.timing.target_wall_ms, places=3, suffix=' ms') }}</dd>
+  </dl>
+  {% if result.timing.target_turns %}
+  <div class="table-wrap"><table><thead><tr><th>Target turn</th><th>Status</th><th>Started (UTC)</th><th>Completed (UTC)</th><th>Wall time</th><th>Provider latency</th><th>TTFT</th></tr></thead><tbody>{% for turn in result.timing.target_turns %}<tr><td>{{ turn.index }}</td><td>{{ turn.status|title }}</td><td><time data-utc="{{ turn.started_at }}">{{ turn.started_at }}</time></td><td>{% if turn.completed_at %}<time data-utc="{{ turn.completed_at }}">{{ turn.completed_at }}</time>{% else %}Not completed{% endif %}</td><td>{{ display_metric(turn.wall_ms, places=3, suffix=' ms') }}</td><td>{{ display_metric(turn.provider_latency_ms, places=3, suffix=' ms') }}</td><td>{{ display_metric(turn.ttft_ms, places=3, suffix=' ms') }}</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<p>No per-turn timing checkpoints are available for this historical result.</p>{% endif %}
+</section>
 <section class="panel">
   <h2>Prompt</h2>
   {% if result.case.system_prompt %}<h3>System</h3><pre class="content">{{ result.case.system_prompt }}</pre>{% endif %}

@@ -3,7 +3,13 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from evaluator.gui import _cost_score_scatter, _overview_model_charts, _sort_model_comparison
+from evaluator.gui import (
+    _cost_score_scatter,
+    _model_chooser,
+    _overview_model_charts,
+    _quality_gate_progress,
+    _sort_model_comparison,
+)
 
 
 def _aggregate(score: str, *, cost: str = "1", name: str = "Model") -> dict[str, Any]:
@@ -12,6 +18,87 @@ def _aggregate(score: str, *, cost: str = "1", name: str = "Model") -> dict[str,
         "known_total_cost": Decimal(cost),
         "model": {"display_name": name},
     }
+
+
+def test_model_chooser_uses_ranked_passing_model_and_lower_cost_tradeoff() -> None:
+    recommended = _aggregate("0.9", cost="2", name="Recommended")
+    recommended.update(
+        {
+            "rank": 1,
+            "model_snapshot_id": "recommended",
+            "total_cost": Decimal(2),
+            "error_rate": Decimal("0.1"),
+            "gates": [{"outcome": "passed"}],
+        }
+    )
+    cheaper = _aggregate("0.8", cost="1", name="Cheaper")
+    cheaper.update(
+        {
+            "rank": 2,
+            "model_snapshot_id": "cheaper",
+            "total_cost": Decimal(1),
+            "error_rate": Decimal("0.2"),
+            "gates": [{"outcome": "passed"}],
+        }
+    )
+    failing = _aggregate("1", cost="3", name="Fails gate")
+    failing.update(
+        {
+            "rank": 0,
+            "model_snapshot_id": "failing",
+            "total_cost": Decimal(3),
+            "error_rate": Decimal(0),
+            "gates": [{"outcome": "failed"}],
+        }
+    )
+
+    chooser = _model_chooser([failing, cheaper, recommended], eligible=True)
+
+    assert chooser["model"] is recommended
+    assert chooser["alternative"] is cheaper
+    assert chooser["cost_savings"] == Decimal(1)
+    assert chooser["error_rate_delta"] == Decimal("0.1")
+    assert chooser["has_configured_gates"]
+    assert _model_chooser([recommended], eligible=False)["reason"] == (
+        "Recommendation is available after the run completes."
+    )
+    assert _model_chooser([failing], eligible=True)["reason"] == (
+        "No model has a score and passes every configured model gate."
+    )
+
+
+def test_quality_gate_progress_is_provisional_and_preserves_unknowns() -> None:
+    run = {
+        "terminal": False,
+        "total_jobs": 4,
+        "quality_gates": {
+            "min_weighted_score": "0.8",
+            "max_error_rate": "0.05",
+            "max_total_cost": "3",
+        },
+    }
+    aggregate = {
+        "model": {"display_name": "Candidate"},
+        "total": 2,
+        "weighted_score": Decimal("0.76"),
+        "error_rate": None,
+        "known_total_cost": Decimal("1"),
+        "known_cost_count": 2,
+    }
+
+    progress = _quality_gate_progress(run, [aggregate])
+
+    assert progress is not None
+    score, errors, cost = progress["entries"]
+    assert score["label"] == "Weighted score"
+    assert score["measured"] == Decimal("0.76")
+    assert score["position"] == 66
+    assert errors["measured"] is None and errors["position"] is None
+    assert cost["model"] == "Entire run"
+    assert cost["measured"] == Decimal(2)
+    assert cost["coverage"] == "2/4 costs known"
+    assert cost["extrapolated"]
+    assert _quality_gate_progress({**run, "terminal": True}, [aggregate]) is None
 
 
 def test_scatter_uses_zero_cost_origin_and_tenth_score_ticks() -> None:
@@ -51,6 +138,31 @@ def test_scatter_handles_single_point_and_omits_unknowns() -> None:
     assert scatter["points"][0]["x"] == Decimal(70)
     assert scatter["points"][0]["y"] == Decimal(20)
     assert scatter["omitted"] == 1
+
+
+def test_frontier_marks_dominated_models_and_uses_latency_and_gate_evidence() -> None:
+    low_cost = _aggregate("0.8", cost="1", name="Low cost")
+    low_cost.update({"latency_p95": Decimal(10), "gates": [{"outcome": "passed"}]})
+    high_score = _aggregate("0.9", cost="2", name="High score")
+    high_score.update({"latency_p95": Decimal(30), "gates": [{"outcome": "indeterminate"}]})
+    dominated = _aggregate("0.8", cost="2", name="Dominated")
+    dominated.update({"latency_p95": None, "gates": [{"outcome": "failed"}]})
+
+    scatter = _cost_score_scatter([low_cost, high_score, dominated])
+    points = {point["model"]["display_name"]: point for point in scatter["points"]}
+
+    assert [point["model"]["display_name"] for point in scatter["frontier"]] == [
+        "Low cost",
+        "High score",
+    ]
+    assert not points["Low cost"]["dominated"]
+    assert points["Dominated"]["dominated"]
+    assert points["Low cost"]["gate_status"] == "passed"
+    assert points["High score"]["gate_status"] == "indeterminate"
+    assert points["Dominated"]["gate_status"] == "failed"
+    assert points["Low cost"]["radius"] == Decimal(6)
+    assert points["High score"]["radius"] == Decimal(14)
+    assert points["Dominated"]["radius"] == Decimal(8)
 
 
 def test_model_comparison_sorts_every_column_and_keeps_missing_values_last() -> None:

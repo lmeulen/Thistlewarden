@@ -83,6 +83,8 @@ def test_multi_turn_worker_scores_final_response_and_checkpoints_transcript(tmp_
     assert payload["transcript"][-1] == {"role": "assistant", "content": "x"}
     assert result["target_cost"] == "0.2"
     assert result["input_tokens"] == 4 and result["output_tokens"] == 6
+    assert payload["timing"]["target_stage_ms"] is not None
+    assert payload["timing"]["evaluation_stage_ms"] is not None
     connection = app.extensions["database_factory"].connect()
     try:
         assert [
