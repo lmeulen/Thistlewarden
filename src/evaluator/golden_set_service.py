@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ValidationError
@@ -29,14 +29,23 @@ from evaluator.golden_set_repository import SQLiteGoldenSetRepository
 from evaluator.logging_config import log_semantic_event
 from evaluator.time import to_utc_iso, utc_now
 
+if TYPE_CHECKING:
+    from evaluator.judging.definition_service import JudgeDefinitionService
+
 # Preserve stable structured-log component for existing operators and tests.
 _LOG = logging.getLogger("evaluator.golden_sets")
 
 
 class GoldenSetService:
-    def __init__(self, repository: SQLiteGoldenSetRepository, limits: GoldenSetLimits) -> None:
+    def __init__(
+        self,
+        repository: SQLiteGoldenSetRepository,
+        limits: GoldenSetLimits,
+        judge_definitions: JudgeDefinitionService,
+    ) -> None:
         self._repository = repository
         self._limits = limits
+        self._judge_definitions = judge_definitions
 
     @staticmethod
     def _pagination(page: int, per_page: int) -> None:
@@ -334,6 +343,7 @@ class GoldenSetService:
             raise NotFoundError("A selected test case was not found in this golden set.")
         expected = {record.id: record.updated_at for record in records}
         request = request.model_copy(update={"expected_updated_at": expected})
+        records = self._bulk_eligible_records(request, records)
         self._validate_bulk_change(set_id, request, records)
         labels = {
             "enable": ("Enable", ("enabled",)),
@@ -343,6 +353,7 @@ class GoldenSetService:
             "remove_tags": ("Remove tags", ("tags",)),
             "replace_tags": ("Replace tags", ("tags",)),
             "set_weight": ("Change weight", ("weight",)),
+            "set_judge": ("Set judge", ("judge definition", "judge version")),
             "move": ("Move", ("golden set", "order")),
             "duplicate": ("Duplicate", ("golden set", "ID", "order")),
             "reorder": ("Change order", ("order",)),
@@ -372,7 +383,9 @@ class GoldenSetService:
         records = [self.get_item(item_id) for item_id in request.item_ids]
         if any(record.golden_set_id != set_id for record in records):
             raise NotFoundError("A selected test case was not found in this golden set.")
+        records = self._bulk_eligible_records(request, records)
         self._validate_bulk_change(set_id, request, records)
+        request = request.model_copy(update={"item_ids": [record.id for record in records]})
         try:
             count = self._repository.bulk_update_items(
                 set_id, request, max_items=self._limits.max_items
@@ -393,6 +406,17 @@ class GoldenSetService:
         )
         return count
 
+    @staticmethod
+    def _bulk_eligible_records(
+        request: GoldenItemBulkRequest, records: list[GoldenSetItemRecord]
+    ) -> list[GoldenSetItemRecord]:
+        if request.action != "set_judge":
+            return records
+        eligible = [record for record in records if record.data.evaluation_method == "llm_judge"]
+        if not eligible:
+            raise ValidationApiError("Select at least one LLM-judge test case.")
+        return eligible
+
     def _validate_bulk_change(
         self,
         set_id: UUID,
@@ -407,6 +431,21 @@ class GoldenSetService:
                 updates["category"] = request.category
             elif request.action == "set_weight":
                 updates["weight"] = request.weight
+            elif request.action == "set_judge":
+                assert request.judge_definition_id is not None
+                assert request.judge_definition_version is not None
+                if (
+                    self._judge_definitions.get_version(
+                        request.judge_definition_id, request.judge_definition_version
+                    ).lifecycle
+                    != "published"
+                ):
+                    raise ValidationApiError("Choose a published Judge version.")
+                updates["evaluator_config"] = {
+                    **record.data.evaluator_config,
+                    "judge_definition_id": request.judge_definition_id,
+                    "judge_definition_version": request.judge_definition_version,
+                }
             elif request.action in {"add_tags", "remove_tags", "replace_tags"}:
                 if request.action == "add_tags":
                     tags = list(dict.fromkeys([*record.data.tags, *request.tags]))

@@ -523,6 +523,10 @@ def _cost_score_scatter(aggregates: list[dict[str, Any]]) -> dict[str, Any]:
 def run_detail(run_id: UUID) -> str:
     run = _run_views().run(run_id)
     query_error = None
+    results_panel_open = any(
+        key in request.args
+        for key in ("status", "model", "judge_type", "case", "sort", "direction", "page")
+    )
     try:
         query = ResultQuery.parse(request.args)
     except ApiError as exc:
@@ -574,6 +578,7 @@ def run_detail(run_id: UUID) -> str:
         results=result_rows[:RESULT_PAGE_SIZE],
         query=query,
         query_error=query_error,
+        results_panel_open=results_panel_open,
         has_next=has_next,
         gates=gate_results,
         gate_progress=_quality_gate_progress(run, aggregates),

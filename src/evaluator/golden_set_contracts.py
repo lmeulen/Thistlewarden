@@ -211,6 +211,7 @@ class GoldenItemBulkRequest(BaseModel):
         "remove_tags",
         "replace_tags",
         "set_weight",
+        "set_judge",
         "move",
         "duplicate",
         "reorder",
@@ -221,6 +222,12 @@ class GoldenItemBulkRequest(BaseModel):
     weight: Decimal | None = Field(default=None, gt=0)
     destination_set_id: UUID | None = None
     start_order: int | None = Field(default=None, ge=0)
+    judge_definition_id: str | None = Field(
+        default=None, pattern=r"^[a-z][a-z0-9_-]*$", max_length=100
+    )
+    judge_definition_version: str | None = Field(
+        default=None, pattern=r"^[0-9]+\.[0-9]+(?:\.[0-9]+)?$", max_length=20
+    )
 
     @field_validator("tags")
     @classmethod
@@ -234,6 +241,10 @@ class GoldenItemBulkRequest(BaseModel):
             "move": ("destination_set_id", self.destination_set_id),
             "duplicate": ("destination_set_id", self.destination_set_id),
             "reorder": ("start_order", self.start_order),
+            "set_judge": (
+                "judge_definition_id and judge_definition_version",
+                self.judge_definition_id if self.judge_definition_version is not None else None,
+            ),
         }
         if self.action in required and required[self.action][1] is None:
             raise ValueError(f"{required[self.action][0]} is required for {self.action}")

@@ -1002,6 +1002,86 @@ def test_bulk_maintenance_search_preview_apply_and_stale_conflict(app) -> None:
     assert service.get_item(second.id).data.weight == Decimal("1.0")
 
 
+def test_bulk_set_judge_updates_only_selected_llm_judge_cases(app) -> None:
+    client = app.test_client()
+    set_id = UUID(_create_set(client))
+    service = app.extensions["golden_set_service"]
+    definitions = app.extensions["judge_definition_service"]
+    definition = definitions.create(
+        {
+            "name": "Bulk judge",
+            "mode": "single_prompt",
+            "threshold": "0.7",
+            "general_instructions": "Assess correctness.",
+            "metrics": [{"metric_id": "correctness", "enabled": True, "weight": "1"}],
+        }
+    )
+    definitions.publish(definition.id, "1.0")
+    llm_case = service.create_item(
+        set_id,
+        {
+            "case_id": "judge-me",
+            "prompt": "p",
+            "evaluation_method": "llm_judge",
+            "evaluator_config": {
+                "judge_definition_id": definition.id,
+                "judge_definition_version": "1.0",
+            },
+        },
+    )
+    deterministic = service.create_item(
+        set_id,
+        {
+            "case_id": "leave-me",
+            "prompt": "p",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "x"},
+        },
+    )
+
+    page = client.get(f"/golden-sets/{set_id}").get_data(as_text=True)
+    assert '<option value="set_judge">Set judge</option>' in page
+    assert f'value="{definition.id}|1.0"' in page
+    token = _csrf(client, f"/golden-sets/{set_id}")
+    preview_response = client.post(
+        f"/golden-sets/{set_id}/items/bulk-preview",
+        data={
+            "csrf_token": token,
+            "item_ids": [str(llm_case.id), str(deterministic.id)],
+            "action": "set_judge",
+            "judge_version_ref": f"{definition.id}|1.0",
+        },
+    )
+    preview = preview_response.get_data(as_text=True)
+    assert preview_response.status_code == 200
+    assert "Affected test cases</dt><dd>1" in preview
+    token = re.search(r'name="csrf_token" value="([^"]+)"', preview).group(1)
+    versions = html.unescape(
+        re.search(r'name="expected_updated_at" value="([^"]+)"', preview).group(1)
+    )
+    applied = client.post(
+        f"/golden-sets/{set_id}/items/bulk-apply",
+        data={
+            "csrf_token": token,
+            "item_ids": [str(llm_case.id), str(deterministic.id)],
+            "action": "set_judge",
+            "judge_definition_id": definition.id,
+            "judge_definition_version": "1.0",
+            "expected_updated_at": versions,
+        },
+        follow_redirects=True,
+    )
+    assert "exactly 1 test case(s)" in applied.get_data(as_text=True)
+    assert service.get_item(llm_case.id).data.evaluator_config == {
+        "judge_definition_id": definition.id,
+        "judge_definition_version": "1.0",
+    }
+    unchanged = service.get_item(deterministic.id).data.evaluator_config
+    assert unchanged["expected_value"] == "x"
+    assert "judge_definition_id" not in unchanged
+    assert "judge_definition_version" not in unchanged
+
+
 def test_bulk_delete_is_selectable_reviewed_and_applied(app) -> None:
     client = app.test_client()
     set_id = UUID(_create_set(client))

@@ -454,6 +454,26 @@ class SQLiteGoldenSetRepository:
                         f"WHERE id IN ({placeholders})",
                         (str(request.weight), now, *ids),
                     )
+                elif request.action == "set_judge":
+                    assert request.judge_definition_id is not None
+                    assert request.judge_definition_version is not None
+                    for row in rows:
+                        config = json.loads(row["evaluator_config_json"])
+                        config.update(
+                            {
+                                "judge_definition_id": request.judge_definition_id,
+                                "judge_definition_version": request.judge_definition_version,
+                            }
+                        )
+                        connection.execute(
+                            "UPDATE golden_set_items SET evaluator_config_json=?,updated_at=? "
+                            "WHERE id=?",
+                            (
+                                json.dumps(config, sort_keys=True, separators=(",", ":")),
+                                now,
+                                row["id"],
+                            ),
+                        )
                 elif request.action in {"add_tags", "remove_tags", "replace_tags"}:
                     for row in rows:
                         current = json.loads(row["tags_json"])

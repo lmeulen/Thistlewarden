@@ -141,6 +141,7 @@ def golden_set_edit(set_id: UUID) -> str | Response:
         ],
         gates=_gate_service().defaults(set_id),
         judges=_judge_service().list_all(),
+        judge_versions=_judge_versions_for_editor(),
         selected_judge_id=_judge_service().golden_set_override(set_id),
     )
 

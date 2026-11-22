@@ -307,7 +307,7 @@ def test_start_poll_results_filters_and_detail(app) -> None:
         and "21 ms" in text
         and ">10</td>" in text
         and "<td>Model M</td><td>1.00</td><td>0.80</td>" in text
-        and 'id="run-results"' in text
+        and '<details class="panel collapsible-panel" id="run-results" open>' in text
         and f'action="/runs/{run_id}#run-results"' in text
         and 'class="filter-grid result-filter-grid"' in text
         and 'name="judge_type"' in text
@@ -403,8 +403,12 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     ):
         heading = f'<h2 id="{section_id}">{title}</h2>' if section_id else f"<h2>{title}</h2>"
         assert '<details class="panel collapsible-panel"' in text and heading in text
-    assert '<details class="panel collapsible-panel" id="run-results">' in text
-    assert '<details class="panel collapsible-panel" open' not in text
+    assert '<details class="panel collapsible-panel" id="run-results" open>' in text
+    unfiltered_text = client.get(f"/runs/{run_id}").get_data(as_text=True)
+    assert '<details class="panel collapsible-panel" id="run-results">' in unfiltered_text
+    assert '<details class="panel collapsible-panel" id="run-results" open>' not in unfiltered_text
+    unrelated_query_text = client.get(f"/runs/{run_id}?model_sort=cost").get_data(as_text=True)
+    assert '<details class="panel collapsible-panel" id="run-results">' in unrelated_query_text
     assert "<h3>Model metrics</h3>" in text
     assert "Compare models in this run using one metric." in text
     assert 'id="run-chart-metric"' in text

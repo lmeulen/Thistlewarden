@@ -398,6 +398,8 @@ def _golden_set_payload() -> dict[str, Any]:
 
 
 def _bulk_item_payload(*, include_versions: bool) -> dict[str, Any]:
+    judge_reference = request.form.get("judge_version_ref", "")
+    judge_definition_id, separator, judge_definition_version = judge_reference.partition("|")
     payload: dict[str, Any] = {
         "item_ids": request.form.getlist("item_ids"),
         "action": request.form.get("action", ""),
@@ -406,6 +408,13 @@ def _bulk_item_payload(*, include_versions: bool) -> dict[str, Any]:
         "weight": request.form.get("bulk_weight") or None,
         "destination_set_id": request.form.get("destination_set_id") or None,
         "start_order": request.form.get("start_order") or None,
+        "judge_definition_id": (
+            request.form.get("judge_definition_id") or (judge_definition_id if separator else None)
+        ),
+        "judge_definition_version": (
+            request.form.get("judge_definition_version")
+            or (judge_definition_version if separator else None)
+        ),
     }
     payload["expected_updated_at"] = (
         json.loads(request.form.get("expected_updated_at", "{}")) if include_versions else {}

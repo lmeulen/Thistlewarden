@@ -197,6 +197,7 @@ def create_app(
                 ),
                 max_import_file_bytes=resolved_settings.values.max_import_file_bytes,
             ),
+            judge_definition_service,
         )
         worker_cancelled = threading.Event()
         streaming_client = OpenAIStreamingClient(
