@@ -19,7 +19,6 @@ Each run snapshots its selected test cases, model settings, Judge configuration,
 ## Known limitations
 
 - Supported deployment is one application process on one host, using local filesystem storage.
-- Synchronous run exports support at most 50,000 jobs per run. Split larger evaluations before exporting.
 - Thistlewarden does not provide authentication, multi-user collaboration, or supported network deployment.
 
 ## Requirements
@@ -72,7 +71,7 @@ docker compose down -v              # permanently delete named volume and all ap
 
 > **Data-loss warning:** `docker compose down -v` permanently removes database and stored endpoint secrets. Export or back up required data first.
 
-## Native installation — POSIX
+## Native installation
 
 ```bash
 python3.12 -m venv .venv
@@ -87,20 +86,6 @@ python -m evaluator
 
 Open <http://127.0.0.1:5000>. Keep terminal running while using application.
 
-## Native installation — PowerShell
-
-```powershell
-py -3.12 -m venv venv
-.\venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install -e .
-Copy-Item .env.example .env
-# Generate independent SECRET_KEY and ENCRYPTION_KEY values as shown above.
-python -m evaluator
-```
-
-Open <http://127.0.0.1:5000>. Native server uses Waitress with one process and bounded worker threads.
 
 ## URLs
 
@@ -134,18 +119,6 @@ Copy `.env.example` and change only values required for your installation. `.env
 
 Prompts, expected answers, model answers, Judge material, run notes, and exports are **not encrypted by Thistlewarden**. They remain plaintext in local SQLite or downloaded files. Protect computer, database, `.env`, backups, browser profile, and exports. Never place credentials or production secrets in test material.
 
-## Database management
-
-Stop active evaluation work before maintenance. Create backup before upgrade or direct database work:
-
-```bash
-python -m evaluator.cli backup ./backups/manual.db
-python -m evaluator.cli migrate
-python -m evaluator.cli restore ./backups/manual.db ./data/restored.db
-```
-
-Restore refuses an existing target path. Database backup does not replace protected backup of `.env`; both are needed to recover encrypted endpoint credentials. See [backup guidance](docs/manual/import-export.md#backing-up-application-data).
-
 ## Automated local runs
 
 Trusted local build agents can create, process, gate, summarize, and export runs without exposing web server:
@@ -157,19 +130,6 @@ thistlewarden-admin run start --golden-set <id> --model <id> --wait --output jso
 ```
 
 CLI and server cannot own same database simultaneously. Stop server before using `run wait` or `run start --wait`. See [command-line automation](docs/manual/runs-and-results.md#automating-runs-from-command-line) for exports, gate overrides, interruption behavior, and exit codes.
-
-## Testing and release
-
-This section is for contributors and release maintainers:
-
-```bash
-python -m ruff check .
-python -m ruff format --check .
-python -m mypy src
-python -m pytest -q tests/unit tests/integration
-```
-
-See [release guide](docs/release.md) for offline container checks, release artifacts, and rollback.
 
 ## Documentation
 
