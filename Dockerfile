@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12.10-slim-bookworm AS builder
+FROM python:3.15.2-slim-bookworm AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1
@@ -9,7 +9,7 @@ COPY docs/manual ./docs/manual
 COPY src ./src
 RUN python -m pip wheel --constraint constraints.txt --wheel-dir /wheels .
 
-FROM python:3.12.10-slim-bookworm AS runtime
+FROM python:3.15.2-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
