@@ -46,9 +46,7 @@ class MyJudge:
     api_version: ClassVar[str] = JUDGE_EXTENSION_API_VERSION
     configuration_model: ClassVar[type[BaseModel]] = Configuration
 
-    def evaluate(
-        self, request: JudgeEvaluationRequest, provider: JudgeProvider
-    ) -> JudgeDecision:
+    def evaluate(self, request: JudgeEvaluationRequest, provider: JudgeProvider) -> JudgeDecision:
         config = Configuration.model_validate(request.configuration)
         provider.complete(prompt=request.actual_result, system_prompt=config.instruction)
         criteria = tuple(
@@ -56,7 +54,9 @@ class MyJudge:
             for item in request.preset.rubric
         )
         return JudgeDecision(
-            score=Decimal("1"), reason="Accepted", criteria=criteria,
+            score=Decimal("1"),
+            reason="Accepted",
+            criteria=criteria,
             metadata={"strategy": "minimal"},
         )
 
