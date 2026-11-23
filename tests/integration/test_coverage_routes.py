@@ -58,8 +58,8 @@ def test_configuration_gates_aggregates_and_run_export_routes(tmp_path: Path) ->
     preview = client.post(
         "/api/v1/configuration/import?mode=merge&preview=true", json=exported.get_json()
     )
-    assert preview.status_code == 400
-    assert preview.get_json()["error"]["code"] == "VALIDATION_ERROR"
+    assert preview.status_code == 200
+    assert preview.get_json()["mode"] == "merge"
 
     gates = client.get(f"/api/v1/golden-sets/{golden.id}/quality-gates")
     assert gates.status_code == 200
