@@ -5,7 +5,7 @@
   <div>
     <h1>Backup and restore</h1>
     <p>Download all configuration or choose categories and individual records.</p>
-    <p class="warning">Configuration backups exclude secret values, run history, and evaluation results. Add missing provider secrets after restoring.</p>
+    <p class="warning">Backups exclude secret values. Complete version 1.0 backups exclude run history and evaluation results; selective backups can include terminal runs. Add missing provider secrets after restoring.</p>
   </div>
   <a class="button" href="{{ url_for('gui.configuration_download') }}">Download complete backup</a>
 </div>
@@ -41,8 +41,8 @@
     <div class="actions"><button>Download selected backup</button></div>
   </form>
 </section>
-<section class="panel">
-  <h2>Restore configuration</h2>
+<section class="panel backup-restore-panel">
+  <h2>Restore</h2>
   <p>Choose a Thistlewarden configuration backup in JSON format. Preview all changes before restoring. Selective backups are validated against their manifest before any changes are planned.</p>
   <form method="post" action="{{ url_for('gui.configuration_import') }}" enctype="multipart/form-data" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

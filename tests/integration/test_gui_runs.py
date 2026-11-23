@@ -384,10 +384,20 @@ def test_start_poll_results_filters_and_detail(app) -> None:
     detail = client.get(f"/runs/{run_id}/results/{result_id}").get_data(as_text=True)
     assert "secret prompt" in detail and "Evaluated answer" in detail and "yes" in detail
     assert 'class="evaluation-panel"' in detail
+    assert 'id="evaluation-expand"' in detail
+    assert 'aria-haspopup="dialog"' in detail
+    assert 'aria-controls="evaluation-dialog"' in detail
+    assert 'aria-label="Expand evaluation information"' in detail
+    assert '<dialog class="evaluation-dialog" id="evaluation-dialog"' in detail
+    assert 'aria-labelledby="evaluation-dialog-title"' in detail
+    assert 'aria-label="Close evaluation information"' in detail
+    assert "dialog.showModal();close.focus()" in detail
+    assert "close.addEventListener('click',function(){dialog.close()})" in detail
+    assert "dialog.addEventListener('close',function(){trigger.focus()})" in detail
     assert 'class="evaluation-body"' in detail
     assert "<dt>Outcome</dt>" in detail and ">Passed</span>" in detail
-    assert "<h3>Criteria</h3>" in detail and "Correct" in detail
-    assert "Raw evaluation JSON" in detail
+    assert detail.count("<h3>Criteria</h3>") == 2 and detail.count("Correct") == 2
+    assert detail.count("Raw evaluation JSON") == 2
     assert "api_key_secret_id" not in detail
 
     overview = client.get("/runs").get_data(as_text=True)
