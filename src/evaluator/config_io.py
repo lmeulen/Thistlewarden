@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import sqlite3
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -26,6 +28,8 @@ from evaluator.logging_config import log_semantic_event
 from evaluator.models import ModelProfileInput
 from evaluator.time import to_utc_iso, utc_now
 
+RestoreMode = Literal["merge", "replace", "archive_all"]
+
 _LOG = logging.getLogger(__name__)
 
 
@@ -33,6 +37,21 @@ class BundleObject(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: UUID
     data: dict[str, Any]
+
+
+class RunBundle(BaseModel):
+    """One immutable run and all durable evidence needed to read it."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: UUID
+    data: dict[str, Any]
+    case_snapshots: list[dict[str, Any]] = Field(default_factory=list)
+    model_snapshots: list[dict[str, Any]] = Field(default_factory=list)
+    jobs: list[dict[str, Any]] = Field(default_factory=list)
+    attempts: list[dict[str, Any]] = Field(default_factory=list)
+    turns: list[dict[str, Any]] = Field(default_factory=list)
+    results: list[dict[str, Any]] = Field(default_factory=list)
+    quality_gates: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class JudgeDefinitionBundle(BaseModel):
@@ -50,18 +69,177 @@ class JudgeDefinitionBundle(BaseModel):
         return self
 
 
+_RUN_TABLE_COLUMNS = {
+    "runs": (
+        "id",
+        "name",
+        "golden_set_id",
+        "status",
+        "judge_profile_id",
+        "note",
+        "cancelled_at",
+        "created_at",
+        "started_at",
+        "completed_at",
+        "recovery_warning",
+        "judge_snapshot_json",
+        "quality_gates_snapshot_json",
+        "gate_status",
+    ),
+    "run_case_snapshots": (
+        "id",
+        "run_id",
+        "source_item_id",
+        "case_id",
+        "weight",
+        "snapshot_json",
+    ),
+    "run_model_snapshots": (
+        "id",
+        "run_id",
+        "source_profile_id",
+        "endpoint_id",
+        "snapshot_json",
+    ),
+    "run_jobs": (
+        "id",
+        "run_id",
+        "case_snapshot_id",
+        "model_snapshot_id",
+        "status",
+        "attempt_count",
+        "lease_owner",
+        "lease_generation",
+        "lease_expires_at",
+        "recovered_after_interruption",
+        "error_code",
+        "created_at",
+        "updated_at",
+    ),
+    "run_attempts": (
+        "id",
+        "job_id",
+        "attempt_number",
+        "category",
+        "metadata_json",
+        "created_at",
+    ),
+    "run_job_turns": (
+        "id",
+        "job_id",
+        "turn_index",
+        "lease_generation",
+        "user_prompt",
+        "status",
+        "assistant_response",
+        "metrics_json",
+        "attempts_json",
+        "provider_evidence_json",
+        "started_at",
+        "completed_at",
+    ),
+    "run_results": (
+        "id",
+        "job_id",
+        "run_id",
+        "model_snapshot_id",
+        "case_snapshot_id",
+        "status",
+        "score",
+        "weight",
+        "result_json",
+        "target_cost",
+        "judge_cost",
+        "target_latency_ms",
+        "ttft_ms",
+        "tps",
+        "input_tokens",
+        "output_tokens",
+        "cached_input_tokens",
+        "reasoning_tokens",
+        "created_at",
+    ),
+    "quality_gate_results": (
+        "id",
+        "run_id",
+        "model_snapshot_id",
+        "gate",
+        "measured_value",
+        "threshold_value",
+        "outcome",
+        "created_at",
+    ),
+}
+
+
+BACKUP_CATEGORIES = (
+    "endpoints",
+    "model_profiles",
+    "judge_profiles",
+    "judge_definitions",
+    "golden_sets",
+    "golden_set_items",
+    "runs",
+)
+
+
+class BackupCategoryManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    selected: bool = False
+    included: list[str] = Field(default_factory=list)
+    omitted_count: int = Field(default=0, ge=0)
+    automatic_dependencies: list[str] = Field(default_factory=list)
+
+
+class BackupManifest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    format_version: Literal["1.1"] = "1.1"
+    created_at: datetime
+    integrity_algorithm: Literal["sha256"] = "sha256"
+    categories: dict[str, BackupCategoryManifest]
+    integrity: dict[str, str]
+
+    @model_validator(mode="after")
+    def complete_categories(self) -> BackupManifest:
+        if set(self.categories) != set(BACKUP_CATEGORIES):
+            raise ValueError("backup manifest categories are incomplete")
+        if set(self.integrity) != set(BACKUP_CATEGORIES):
+            raise ValueError("backup manifest integrity metadata is incomplete")
+        return self
+
+
+class BackupSelection(BaseModel):
+    """Explicit categories and records requested for a selective backup."""
+
+    model_config = ConfigDict(extra="forbid")
+    categories: set[str] = Field(default_factory=set)
+    item_ids: dict[str, set[str]] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def known_categories(self) -> BackupSelection:
+        if not self.categories <= set(BACKUP_CATEGORIES):
+            raise ValueError("unknown backup category")
+        if not set(self.item_ids) <= set(BACKUP_CATEGORIES):
+            raise ValueError("unknown backup item category")
+        return self
+
+
 class ConfigurationBundle(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "1.1"] = "1.0"
+    manifest: BackupManifest | None = None
     endpoints: list[BundleObject] = Field(default_factory=list)
     model_profiles: list[BundleObject] = Field(default_factory=list)
     judge_profiles: list[BundleObject] = Field(default_factory=list)
     judge_definitions: list[JudgeDefinitionBundle] = Field(default_factory=list)
     golden_sets: list[BundleObject] = Field(default_factory=list)
     golden_set_items: list[BundleObject] = Field(default_factory=list)
+    runs: list[RunBundle] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_ids_and_references(self) -> ConfigurationBundle:
+        if (self.schema_version == "1.1") != (self.manifest is not None):
+            raise ValueError("selective backup manifest does not match schema version")
         groups = [
             self.endpoints,
             self.model_profiles,
@@ -72,6 +250,9 @@ class ConfigurationBundle(BaseModel):
         all_ids = [item.id for group in groups for item in group]
         if len(all_ids) != len(set(all_ids)):
             raise ValueError("object UUIDs must be globally unique")
+        run_ids = [item.id for item in self.runs]
+        if len(run_ids) != len(set(run_ids)):
+            raise ValueError("run IDs must be unique")
         definition_ids = [item.id for item in self.judge_definitions]
         if len(definition_ids) != len(set(definition_ids)):
             raise ValueError("judge definition IDs must be unique")
@@ -88,18 +269,34 @@ class ConfigurationBundle(BaseModel):
         for item in self.golden_set_items:
             if str(item.data.get("golden_set_id")) not in set_ids:
                 raise ValueError("item set reference is missing")
+        if self.manifest is not None:
+            data = self.model_dump(mode="json", exclude={"manifest"})
+            for category in BACKUP_CATEGORIES:
+                entry = self.manifest.categories[category]
+                actual_ids = {str(item["id"]) for item in data[category]}
+                if actual_ids != set(entry.included):
+                    raise ValueError("backup manifest contents do not match")
+                if not set(entry.automatic_dependencies) <= actual_ids:
+                    raise ValueError("backup manifest dependencies do not match")
+                if self.manifest.integrity[category] != _category_hash(data[category]):
+                    raise ValueError("backup manifest integrity check failed")
         return self
 
 
 class ImportPlan(BaseModel):
-    schema_version: Literal["1.0"] = "1.0"
-    mode: Literal["merge", "replace"]
+    schema_version: Literal["1.0", "1.1"] = "1.0"
+    mode: RestoreMode
     creates: int
     updates: int
     archives: int
     uuid_map: dict[str, str]
     conflicts: list[dict[str, str]]
     missing_secrets: list[str]
+
+
+def _category_hash(value: Any) -> str:
+    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _plain(row: sqlite3.Row, excluded: set[str] | frozenset[str] = frozenset()) -> dict[str, Any]:
@@ -109,8 +306,9 @@ def _plain(row: sqlite3.Row, excluded: set[str] | frozenset[str] = frozenset()) 
         if key not in excluded | {"id", "created_at", "updated_at"}
     }
     for key in tuple(result):
-        if key.endswith("_json") and result[key] is not None:
-            result[key.removesuffix("_json")] = json.loads(result.pop(key))
+        if key.endswith("_json"):
+            encoded = result.pop(key)
+            result[key.removesuffix("_json")] = None if encoded is None else json.loads(encoded)
         elif key in {
             "active",
             "trusted_internal_http",
@@ -132,7 +330,7 @@ class ConfigurationExchangeService:
         self._factory = factory
         self._judge_registry = judge_registry
 
-    def export(self) -> ConfigurationBundle:
+    def export(self, selection: BackupSelection | None = None) -> ConfigurationBundle:
         c = self._factory.connect()
         try:
             endpoints = []
@@ -214,6 +412,17 @@ class ConfigurationExchangeService:
                     "SELECT * FROM golden_set_items ORDER BY golden_set_id,sort_order"
                 )
             ]
+            runs = (
+                [
+                    self._export_run(c, row)
+                    for row in c.execute(
+                        "SELECT * FROM runs WHERE status IN "
+                        "('completed','completed_with_errors','failed','cancelled') ORDER BY id"
+                    )
+                ]
+                if selection is not None
+                else []
+            )
             bundle = ConfigurationBundle(
                 endpoints=endpoints,
                 model_profiles=models,
@@ -221,7 +430,10 @@ class ConfigurationExchangeService:
                 judge_definitions=definitions,
                 golden_sets=sets,
                 golden_set_items=items,
+                runs=runs,
             )
+            if selection is not None:
+                bundle = self._select(bundle, selection)
         finally:
             c.close()
         log_semantic_event(
@@ -236,10 +448,179 @@ class ConfigurationExchangeService:
                     bundle.judge_definitions,
                     bundle.golden_sets,
                     bundle.golden_set_items,
+                    bundle.runs,
                 )
             ),
         )
         return bundle
+
+    @staticmethod
+    def _export_run(c: sqlite3.Connection, row: sqlite3.Row) -> RunBundle:
+        run_id = row["id"]
+
+        def rows(table: str, order: str = "id") -> list[dict[str, Any]]:
+            return [
+                dict(item)
+                for item in c.execute(
+                    f"SELECT * FROM {table} WHERE run_id=? ORDER BY {order}", (run_id,)
+                )
+            ]
+
+        attempts = [
+            dict(item)
+            for item in c.execute(
+                "SELECT a.* FROM run_attempts a JOIN run_jobs j ON j.id=a.job_id "
+                "WHERE j.run_id=? ORDER BY a.job_id,a.attempt_number",
+                (run_id,),
+            )
+        ]
+        turns = [
+            dict(item)
+            for item in c.execute(
+                "SELECT t.* FROM run_job_turns t JOIN run_jobs j ON j.id=t.job_id "
+                "WHERE j.run_id=? ORDER BY t.job_id,t.turn_index",
+                (run_id,),
+            )
+        ]
+        return RunBundle(
+            id=run_id,
+            data=dict(row),
+            case_snapshots=rows("run_case_snapshots"),
+            model_snapshots=rows("run_model_snapshots"),
+            jobs=rows("run_jobs"),
+            attempts=attempts,
+            turns=turns,
+            results=rows("run_results", "job_id"),
+            quality_gates=rows("quality_gate_results", "model_snapshot_id,gate"),
+        )
+
+    def selection_options(self) -> dict[str, list[dict[str, str]]]:
+        """Return safe labels and stable IDs for every selectable backup record."""
+        bundle = self.export()
+        connection = self._factory.connect()
+        try:
+            runs = [
+                {"id": str(row["id"]), "label": str(row["name"])}
+                for row in connection.execute(
+                    "SELECT id,name FROM runs WHERE status IN "
+                    "('completed','completed_with_errors','failed','cancelled') "
+                    "ORDER BY created_at DESC,id"
+                )
+            ]
+        finally:
+            connection.close()
+        return {
+            "endpoints": [
+                {"id": str(item.id), "label": str(item.data["name"])} for item in bundle.endpoints
+            ],
+            "model_profiles": [
+                {"id": str(item.id), "label": str(item.data["display_name"])}
+                for item in bundle.model_profiles
+            ],
+            "judge_profiles": [
+                {"id": str(item.id), "label": str(item.data["name"])}
+                for item in bundle.judge_profiles
+            ],
+            "judge_definitions": [
+                {
+                    "id": item.id,
+                    "label": str(
+                        item.draft.name if item.draft is not None else item.versions[-1].data.name
+                    ),
+                }
+                for item in bundle.judge_definitions
+            ],
+            "golden_sets": [
+                {"id": str(item.id), "label": str(item.data["name"])} for item in bundle.golden_sets
+            ],
+            "golden_set_items": [
+                {"id": str(item.id), "label": str(item.data["case_id"])}
+                for item in bundle.golden_set_items
+            ],
+            "runs": runs,
+        }
+
+    @staticmethod
+    def _select(bundle: ConfigurationBundle, selection: BackupSelection) -> ConfigurationBundle:
+        groups: dict[str, list[Any]] = {
+            category: list(getattr(bundle, category)) for category in BACKUP_CATEGORIES
+        }
+        all_ids = {category: {str(item.id) for item in items} for category, items in groups.items()}
+        explicit = {
+            category: (
+                set(all_ids[category])
+                if category in selection.categories
+                else set(selection.item_ids.get(category, set()))
+            )
+            for category in BACKUP_CATEGORIES
+        }
+        if any(not explicit[name] <= all_ids[name] for name in BACKUP_CATEGORIES):
+            raise ValidationApiError("A selected backup record no longer exists.")
+        included = {name: set(values) for name, values in explicit.items()}
+        by_id = {
+            category: {str(item.id): item for item in items} for category, items in groups.items()
+        }
+
+        changed = True
+        while changed:
+            before = sum(len(values) for values in included.values())
+            for item_id in tuple(included["golden_set_items"]):
+                parent = str(by_id["golden_set_items"][item_id].data["golden_set_id"])
+                included["golden_sets"].add(parent)
+            for set_id in tuple(included["golden_sets"]):
+                golden_set = by_id["golden_sets"][set_id]
+                if set_id in explicit["golden_sets"]:
+                    included["golden_set_items"].update(
+                        item_id
+                        for item_id, item in by_id["golden_set_items"].items()
+                        if str(item.data["golden_set_id"]) == set_id
+                    )
+                judge_id = golden_set.data.get("judge_profile_id")
+                if judge_id is not None:
+                    included["judge_profiles"].add(str(judge_id))
+            for item_id in tuple(included["golden_set_items"]):
+                item = by_id["golden_set_items"][item_id]
+                config = item.data.get("evaluator_config") or {}
+                definition_id = config.get("judge_definition_id")
+                if definition_id is not None and str(definition_id) in all_ids["judge_definitions"]:
+                    included["judge_definitions"].add(str(definition_id))
+            for profile_id in tuple(included["judge_profiles"]):
+                model_id = str(by_id["judge_profiles"][profile_id].data["model_profile_id"])
+                included["model_profiles"].add(model_id)
+            for model_id in tuple(included["model_profiles"]):
+                endpoint_id = str(by_id["model_profiles"][model_id].data["endpoint_id"])
+                included["endpoints"].add(endpoint_id)
+            changed = before != sum(len(values) for values in included.values())
+
+        selected_data = {
+            category: [item for item in groups[category] if str(item.id) in included[category]]
+            for category in BACKUP_CATEGORIES
+        }
+        manifest_categories = {
+            category: BackupCategoryManifest(
+                selected=category in selection.categories,
+                included=sorted(included[category]),
+                omitted_count=len(all_ids[category] - included[category]),
+                automatic_dependencies=sorted(included[category] - explicit[category]),
+            )
+            for category in BACKUP_CATEGORIES
+        }
+        wire_data = {
+            category: [item.model_dump(mode="json") for item in selected_data[category]]
+            for category in BACKUP_CATEGORIES
+        }
+        manifest = BackupManifest(
+            created_at=utc_now(),
+            categories=manifest_categories,
+            integrity={
+                category: _category_hash(wire_data[category]) for category in BACKUP_CATEGORIES
+            },
+        )
+        return ConfigurationBundle(
+            schema_version="1.1",
+            manifest=manifest,
+            **selected_data,
+        )
 
     def parse(self, payload: Any) -> ConfigurationBundle:
         try:
@@ -291,11 +672,74 @@ class ConfigurationExchangeService:
                 if "user_prompts" in item_data:
                     item_data.pop("prompt", None)
                 GoldenSetItemInput.model_validate(item_data)
+            for run in bundle.runs:
+                self._validate_run(run)
             return bundle
         except (ValidationError, ValueError, TypeError) as exc:
             raise ValidationApiError("Configuration file is invalid.") from exc
 
-    def plan(self, bundle: ConfigurationBundle, mode: Literal["merge", "replace"]) -> ImportPlan:
+    @staticmethod
+    def _validate_run(run: RunBundle) -> None:
+        rows_by_table = {
+            "runs": [run.data],
+            "run_case_snapshots": run.case_snapshots,
+            "run_model_snapshots": run.model_snapshots,
+            "run_jobs": run.jobs,
+            "run_attempts": run.attempts,
+            "run_job_turns": run.turns,
+            "run_results": run.results,
+            "quality_gate_results": run.quality_gates,
+        }
+        if any(
+            set(row) != set(_RUN_TABLE_COLUMNS[table])
+            for table, rows in rows_by_table.items()
+            for row in rows
+        ):
+            raise ValueError("run evidence columns do not match")
+        if str(run.data.get("id")) != str(run.id):
+            raise ValueError("run identity does not match")
+        if run.data.get("status") not in {
+            "completed",
+            "completed_with_errors",
+            "failed",
+            "cancelled",
+        }:
+            raise ValueError("only terminal runs can be restored")
+        case_ids = {str(item.get("id")) for item in run.case_snapshots}
+        model_ids = {str(item.get("id")) for item in run.model_snapshots}
+        job_ids = {str(item.get("id")) for item in run.jobs}
+        if any(str(item.get("run_id")) != str(run.id) for item in run.case_snapshots):
+            raise ValueError("run case snapshot reference does not match")
+        if any(str(item.get("run_id")) != str(run.id) for item in run.model_snapshots):
+            raise ValueError("run model snapshot reference does not match")
+        if any(
+            str(item.get("run_id")) != str(run.id)
+            or str(item.get("case_snapshot_id")) not in case_ids
+            or str(item.get("model_snapshot_id")) not in model_ids
+            for item in run.jobs
+        ):
+            raise ValueError("run job reference does not match")
+        if any(str(item.get("job_id")) not in job_ids for item in (*run.attempts, *run.turns)):
+            raise ValueError("run job evidence reference does not match")
+        if any(
+            str(item.get("run_id")) != str(run.id)
+            or str(item.get("job_id")) not in job_ids
+            or str(item.get("case_snapshot_id")) not in case_ids
+            or str(item.get("model_snapshot_id")) not in model_ids
+            for item in run.results
+        ):
+            raise ValueError("run result reference does not match")
+        if any(
+            str(item.get("run_id")) != str(run.id)
+            or (
+                item.get("model_snapshot_id") is not None
+                and str(item["model_snapshot_id"]) not in model_ids
+            )
+            for item in run.quality_gates
+        ):
+            raise ValueError("run quality-gate reference does not match")
+
+    def plan(self, bundle: ConfigurationBundle, mode: RestoreMode) -> ImportPlan:
         c = self._factory.connect()
         try:
             existing = {
@@ -323,10 +767,16 @@ class ConfigurationExchangeService:
             mapping = {str(x.id): str(uuid4()) for x in incoming if str(x.id) in existing}
             conflicts = [{"id": old, "resolution": f"remap:{new}"} for old, new in mapping.items()]
             existing_definitions = {row[0] for row in c.execute("SELECT id FROM judge_definitions")}
+            existing_runs = {row[0] for row in c.execute("SELECT id FROM runs")}
             conflicts.extend(
                 {"id": item.id, "resolution": "reject:immutable-definition-exists"}
                 for item in bundle.judge_definitions
                 if item.id in existing_definitions
+            )
+            conflicts.extend(
+                {"id": str(item.id), "resolution": "reject:run-exists"}
+                for item in bundle.runs
+                if str(item.id) in existing_runs
             )
             missing = [
                 str(x.id)
@@ -335,14 +785,21 @@ class ConfigurationExchangeService:
                 or any(h.get("secret") for h in x.data.get("extra_headers", []))
             ]
             archives = 0
-            if mode == "replace":
+            if mode in {"replace", "archive_all"}:
+                archive_categories = (
+                    self._archivable_categories()
+                    if mode == "archive_all"
+                    else self._replace_categories(bundle)
+                )
                 archives = sum(
-                    c.execute(f"SELECT COUNT(*) FROM {t} WHERE active=1").fetchone()[0]
-                    for t in ("endpoints", "model_profiles", "judge_profiles", "golden_sets")
+                    c.execute(f"SELECT COUNT(*) FROM {table} WHERE active=1").fetchone()[0]
+                    for table in ("endpoints", "model_profiles", "judge_profiles", "golden_sets")
+                    if table in archive_categories
                 )
             return ImportPlan(
+                schema_version=bundle.schema_version,
                 mode=mode,
-                creates=len(incoming) + len(bundle.judge_definitions),
+                creates=len(incoming) + len(bundle.judge_definitions) + len(bundle.runs),
                 updates=0,
                 archives=archives,
                 uuid_map=mapping,
@@ -352,9 +809,7 @@ class ConfigurationExchangeService:
         finally:
             c.close()
 
-    def import_bundle(
-        self, payload: Any, mode: Literal["merge", "replace"], *, preview: bool
-    ) -> ImportPlan:
+    def import_bundle(self, payload: Any, mode: RestoreMode, *, preview: bool) -> ImportPlan:
         bundle = self.parse(payload)
         plan = self.plan(bundle, mode)
         if preview:
@@ -369,34 +824,45 @@ class ConfigurationExchangeService:
             )
             return plan
         if any(
-            conflict["resolution"] == "reject:immutable-definition-exists"
+            conflict["resolution"] in {"reject:immutable-definition-exists", "reject:run-exists"}
             for conflict in plan.conflicts
         ):
-            raise ConflictError("Judge definition already exists and is immutable.")
+            raise ConflictError("A Judge definition or run from this backup already exists.")
         c = self._factory.connect()
         now = to_utc_iso(utc_now())
         try:
             with transaction(c):
-                if mode == "replace":
+                if mode in {"replace", "archive_all"}:
                     suffix = f" [archived {now}]"
-                    c.execute(
-                        "UPDATE golden_sets SET active=0,name=name||?,updated_at=? WHERE active=1",
-                        (suffix, now),
+                    archive_categories = (
+                        self._archivable_categories()
+                        if mode == "archive_all"
+                        else self._replace_categories(bundle)
                     )
-                    c.execute(
-                        "UPDATE judge_profiles SET active=0,is_global_default=0,name=name||?,"
-                        "updated_at=? WHERE active=1",
-                        (suffix, now),
-                    )
-                    c.execute(
-                        "UPDATE model_profiles SET active=0,display_name=display_name||?,"
-                        "updated_at=? WHERE active=1",
-                        (suffix, now),
-                    )
-                    c.execute(
-                        "UPDATE endpoints SET active=0,name=name||?,updated_at=? WHERE active=1",
-                        (suffix, now),
-                    )
+                    if "golden_sets" in archive_categories:
+                        c.execute(
+                            "UPDATE golden_sets SET active=0,name=name||?,updated_at=? "
+                            "WHERE active=1",
+                            (suffix, now),
+                        )
+                    if "judge_profiles" in archive_categories:
+                        c.execute(
+                            "UPDATE judge_profiles SET active=0,is_global_default=0,name=name||?,"
+                            "updated_at=? WHERE active=1",
+                            (suffix, now),
+                        )
+                    if "model_profiles" in archive_categories:
+                        c.execute(
+                            "UPDATE model_profiles SET active=0,display_name=display_name||?,"
+                            "updated_at=? WHERE active=1",
+                            (suffix, now),
+                        )
+                    if "endpoints" in archive_categories:
+                        c.execute(
+                            "UPDATE endpoints SET active=0,name=name||?,updated_at=? "
+                            "WHERE active=1",
+                            (suffix, now),
+                        )
                 self._write(c, bundle, plan.uuid_map, mode, now)
         except sqlite3.IntegrityError as exc:
             raise ConflictError("Configuration import conflicts with existing names.") from exc
@@ -412,6 +878,20 @@ class ConfigurationExchangeService:
             preview=False,
         )
         return plan
+
+    @staticmethod
+    def _archivable_categories() -> set[str]:
+        return {"endpoints", "model_profiles", "judge_profiles", "golden_sets"}
+
+    @classmethod
+    def _replace_categories(cls, bundle: ConfigurationBundle) -> set[str]:
+        if bundle.manifest is None:
+            return cls._archivable_categories()
+        return {
+            category
+            for category, entry in bundle.manifest.categories.items()
+            if entry.selected or bool(set(entry.included) - set(entry.automatic_dependencies))
+        }
 
     def _write(
         self, c: sqlite3.Connection, b: ConfigurationBundle, m: dict[str, str], mode: str, now: str
@@ -598,6 +1078,38 @@ class ConfigurationExchangeService:
                     json.dumps(item_input.user_prompts, ensure_ascii=False),
                 ),
             )
+        for run in b.runs:
+            self._write_run(c, run)
+
+    @staticmethod
+    def _write_run(c: sqlite3.Connection, run: RunBundle) -> None:
+        def insert(table: str, row: dict[str, Any]) -> None:
+            columns = _RUN_TABLE_COLUMNS[table]
+            placeholders = ",".join("?" for _ in columns)
+            names = ",".join(columns)
+            c.execute(
+                f"INSERT INTO {table}({names}) VALUES ({placeholders})",
+                tuple(row[column] for column in columns),
+            )
+
+        insert("runs", run.data)
+        for row in run.case_snapshots:
+            insert("run_case_snapshots", row)
+        for row in run.model_snapshots:
+            insert("run_model_snapshots", row)
+        for row in run.jobs:
+            restored = dict(row)
+            restored["lease_owner"] = None
+            restored["lease_expires_at"] = None
+            insert("run_jobs", restored)
+        for row in run.attempts:
+            insert("run_attempts", row)
+        for row in run.turns:
+            insert("run_job_turns", row)
+        for row in run.results:
+            insert("run_results", row)
+        for row in run.quality_gates:
+            insert("quality_gate_results", row)
 
 
 def _model_wire(d: dict[str, Any]) -> dict[str, Any]:

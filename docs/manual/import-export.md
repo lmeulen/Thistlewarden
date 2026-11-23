@@ -70,20 +70,26 @@ Export before permanently deleting a run. An export is a point-in-time copy and 
 
 ### Exporting and importing application configuration
 
-Open **Configuration exchange** to download or import a version `1.0` JSON configuration bundle.
+Open **Backup and restore** to download or import a JSON configuration bundle. **Download complete backup** preserves the version `1.0` full-backup workflow. Selective backups use version `1.1`.
 
-Configuration export includes endpoints, model profiles, immutable Judge definitions/versions, Judge profiles, golden sets, and golden-set items. It excludes secret values. API keys and secret additional-header values are represented as missing rather than exported. It also is not a run-history export.
+Configuration backup supports endpoints, model profiles, immutable Judge definitions/versions, Judge execution profiles, golden sets, golden-set test cases, and terminal runs. For a selective backup, include an entire category or expand it to choose individual records. Selecting a golden set includes all its test cases. Selecting one test case includes its parent golden set without including its siblings.
+
+A selected run includes its immutable case, model, Judge, and quality-gate snapshots together with jobs, provider attempts, durable turn checkpoints, results, and quality-gate outcomes. Only completed, completed-with-errors, failed, or cancelled runs are selectable; active runs are excluded to avoid restoring executable work. Restored runs retain their historical IDs. Restore rejects a run whose ID already exists rather than merging or reinterpreting its evidence.
+
+Required dependencies are included automatically: model profiles include their endpoints, Judge execution profiles include their models and endpoints, and golden sets include configured Judge profiles and Judge definitions referenced by their test cases. The version `1.1` manifest lists included and automatically included records, gives only a count of omitted records for each category, and contains SHA-256 integrity metadata. Omitted record identifiers and names are not written to the backup.
+
+Backups exclude secret values. API keys and secret additional-header values are represented as missing rather than exported. Configuration backup is not a run-history export.
 
 To import:
 
 1. Select a JSON configuration file.
-2. Choose **Merge** or **Replace and archive existing records**.
+2. Choose **Merge**, **Replace selected categories**, or **Archive all current configuration, then import backup**.
 3. Select **Preview** and inspect counts, conflicts/remaps, archives, and missing secrets.
-4. For replace mode, explicitly confirm archiving.
+4. For either archive mode, explicitly confirm archiving.
 5. Select **Import preview** to commit.
 6. Add required API keys and secret headers through endpoint management before provider calls.
 
-Import commits atomically: valid configuration changes are applied together, or no partial bundle is written. Imported endpoints with missing secrets cannot make provider calls until secrets are entered locally.
+Import commits atomically: valid configuration changes are applied together, or no partial bundle is written. Selective-backup manifests and integrity metadata are validated before preview or restore; altered or incomplete manifests are rejected. In replace mode, a selective backup archives records only in explicitly selected categories, not omitted categories or dependencies included automatically. Archive-all mode archives every active endpoint, model profile, Judge execution profile, and golden set before importing the backup, including categories omitted from a selective backup. Immutable Judge definitions and historical runs are retained; identity conflicts remain blocking errors. Imported endpoints with missing secrets cannot make provider calls until secrets are entered locally.
 
 [Top of page](#page-top) · [Manual contents](README.md#manual-top)
 
@@ -93,7 +99,7 @@ Golden-set import creates a new set, so destination golden-set name must be uniq
 
 Configuration **Merge** adds imported objects. When incoming internal UUID already exists locally, Thistlewarden remaps incoming UUID and references to new UUIDs, shown in preview as conflicts/remaps. This avoids overwriting existing objects by identifier. Name or other database uniqueness conflicts can still prevent commit; resolve them in source or local configuration and retry.
 
-Configuration **Replace** does not delete active existing endpoints, model profiles, judge profiles, or golden sets. It archives them by deactivating and renaming them, then imports bundle. This protects historical references while removing archived records from normal selection. Replace requires explicit confirmation because it changes active operational configuration.
+Configuration **Replace** modes do not delete active existing endpoints, model profiles, Judge profiles, or golden sets. They archive applicable records by deactivating and renaming them, then import the bundle. This protects historical references while removing archived records from normal selection. Selective replace limits archiving to represented categories; archive-all applies to all four archivable categories. Both require explicit confirmation because they change active operational configuration.
 
 Always preview current file against target environment immediately before committing. Treat cross-environment imports as change-controlled operations, especially where names, active state, provider URLs, or pricing differ.
 

@@ -4,25 +4,58 @@
 <div class="heading backup-heading">
   <div>
     <h1>Backup and restore</h1>
-    <p>Download a configuration backup or restore configuration from an existing backup file.</p>
+    <p>Download all configuration or choose categories and individual records.</p>
     <p class="warning">Configuration backups exclude secret values, run history, and evaluation results. Add missing provider secrets after restoring.</p>
   </div>
-  <a class="button" href="{{ url_for('gui.configuration_download') }}">Download backup</a>
+  <a class="button" href="{{ url_for('gui.configuration_download') }}">Download complete backup</a>
 </div>
 <section class="panel">
+  <h2>Create selective backup</h2>
+  <p>Selecting a category includes every record in it. Alternatively, select individual records. Required dependencies are included automatically and identified in the backup manifest. Runs include their immutable snapshots, jobs, attempts, turn checkpoints, results, and quality-gate outcomes. Only terminal runs can be backed up.</p>
+  <form method="post" action="{{ url_for('gui.configuration_download') }}" class="backup-selection">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% set labels = {
+      'endpoints': 'Endpoints',
+      'model_profiles': 'Model profiles',
+      'judge_profiles': 'Judge execution profiles',
+      'judge_definitions': 'Judge definitions',
+      'golden_sets': 'Golden sets',
+      'golden_set_items': 'Golden-set test cases',
+      'runs': 'Runs and result history'
+    } %}
+    {% for category, records in backup_options.items() %}
+    <fieldset>
+      <legend>{{ labels[category] }}</legend>
+      <label class="check"><input type="checkbox" name="categories" value="{{ category }}"> Include complete category ({{ records|length }} record(s))</label>
+      {% if records %}
+      <details><summary>Select individual records</summary>
+        <div class="check-list backup-items">
+        {% for record in records %}
+          <label class="check"><input type="checkbox" name="items_{{ category }}" value="{{ record.id }}"> {{ record.label }}</label>
+        {% endfor %}
+        </div>
+      </details>
+      {% else %}<p class="help">No records currently exist in this category.</p>{% endif %}
+    </fieldset>
+    {% endfor %}
+    <div class="actions"><button>Download selected backup</button></div>
+  </form>
+</section>
+<section class="panel">
   <h2>Restore configuration</h2>
-  <p>Choose a Thistlewarden configuration backup in JSON format. Preview all changes before restoring.</p>
+  <p>Choose a Thistlewarden configuration backup in JSON format. Preview all changes before restoring. Selective backups are validated against their manifest before any changes are planned.</p>
   <form method="post" action="{{ url_for('gui.configuration_import') }}" enctype="multipart/form-data" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Backup file<input type="file" name="file" accept=".json" required></label>
     <label>Restore mode
       <select name="mode">
         <option value="merge">Merge backup with current configuration</option>
-        <option value="replace">Replace configuration and archive existing records</option>
+        <option value="replace">Replace selected categories and archive existing records</option>
+        <option value="archive_all">Archive all current configuration, then import backup</option>
       </select>
     </label>
     <label class="check wide warning">
-      <input type="checkbox" name="confirm_replace"> I understand that replace mode archives existing configuration records.
+      <input type="checkbox" name="confirm_replace"> I understand that replace mode archives records in categories present in the backup, while archive-all mode archives every current endpoint, model profile, Judge profile, and golden set before importing.
     </label>
     <div class="actions wide"><button name="preview">Preview restore</button></div>
   </form>
@@ -31,6 +64,7 @@
 <section class="panel">
   <h2>Restore preview</h2>
   <dl>
+    <dt>Format version</dt><dd>{{ plan.schema_version }}</dd>
     <dt>Mode</dt><dd>{{ plan.mode }}</dd>
     <dt>New objects</dt><dd>{{ plan.creates }}</dd>
     <dt>To archive</dt><dd>{{ plan.archives }}</dd>
@@ -45,12 +79,8 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="mode" value="{{ plan.mode }}">
     <textarea name="preview_payload" hidden>{{ preview_payload }}</textarea>
-    {% if plan.mode == "replace" %}
-    <input type="hidden" name="confirm_replace" value="on">
-    {% endif %}
-    <div class="actions wide">
-      <button name="commit" class="secondary">Restore this backup</button>
-    </div>
+    {% if plan.mode in ['replace', 'archive_all'] %}<input type="hidden" name="confirm_replace" value="on">{% endif %}
+    <div class="actions wide"><button name="commit" class="secondary">Restore this backup</button></div>
   </form>
 </section>
 {% endif %}

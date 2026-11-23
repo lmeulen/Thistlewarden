@@ -15,7 +15,7 @@ from werkzeug.wsgi import ClosingIterator
 from evaluator.aggregates import AggregateService, aggregate_to_dict
 from evaluator.api.errors import ValidationApiError
 from evaluator.api.openapi import build_openapi_document
-from evaluator.config_io import ConfigurationExchangeService
+from evaluator.config_io import ConfigurationExchangeService, RestoreMode
 from evaluator.costs import CostService, calculation_to_dict
 from evaluator.discovery import ModelDiscoveryService
 from evaluator.endpoints import EndpointService, endpoint_to_dict
@@ -55,14 +55,14 @@ def export_configuration() -> Response:
 @api_v1.post("/configuration/import")
 def import_configuration() -> Response:
     mode = request.args.get("mode", "merge")
-    if mode not in {"merge", "replace"}:
-        raise ValidationApiError("Import mode must be merge or replace.")
+    if mode not in {"merge", "replace", "archive_all"}:
+        raise ValidationApiError("Import mode must be merge, replace, or archive_all.")
     preview_text = request.args.get("preview", "true").lower()
     if preview_text not in {"true", "false"}:
         raise ValidationApiError("preview must be true or false.")
     preview = preview_text == "true"
     plan = _configuration_exchange_service().import_bundle(
-        _json_object(), cast(Literal["merge", "replace"], mode), preview=preview
+        _json_object(), cast(RestoreMode, mode), preview=preview
     )
     return jsonify(plan.model_dump(mode="json"))
 

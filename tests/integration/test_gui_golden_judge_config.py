@@ -854,6 +854,181 @@ def test_judge_form_and_secret_free_configuration_preview(app) -> None:
     assert "Restore preview" in privacy_browser_preview.get_data(as_text=True)
 
 
+def test_selective_backup_includes_dependencies_manifest_and_validates_integrity(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    service = app.extensions["golden_set_service"]
+    service.create_item(
+        UUID(set_id),
+        {
+            "case_id": "selected-case",
+            "prompt": "Return x",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "x"},
+        },
+    )
+
+    token = _csrf(client, "/backup")
+    response = client.post(
+        "/backup/download",
+        data={"csrf_token": token, "items_golden_sets": set_id},
+    )
+    assert response.status_code == 200
+    assert "evaluator-config-1.1.json" in response.headers["Content-Disposition"]
+    bundle = response.get_json()
+    assert bundle["schema_version"] == "1.1"
+    assert [item["id"] for item in bundle["golden_sets"]] == [set_id]
+    assert [item["data"]["case_id"] for item in bundle["golden_set_items"]] == ["selected-case"]
+    manifest = bundle["manifest"]
+    assert set(manifest["categories"]) == {
+        "endpoints",
+        "model_profiles",
+        "judge_profiles",
+        "judge_definitions",
+        "golden_sets",
+        "golden_set_items",
+        "runs",
+    }
+    assert manifest["categories"]["golden_sets"]["selected"] is False
+    assert manifest["categories"]["golden_set_items"]["automatic_dependencies"]
+    assert manifest["categories"]["endpoints"]["omitted_count"] == 0
+    assert all("omitted" not in entry for entry in manifest["categories"].values())
+    assert app.extensions["configuration_exchange_service"].parse(bundle).schema_version == "1.1"
+
+    bundle["golden_sets"][0]["data"]["name"] = "tampered"
+    with pytest.raises(ValidationApiError, match="Configuration file is invalid"):
+        app.extensions["configuration_exchange_service"].parse(bundle)
+
+
+def test_selective_backup_complete_categories_and_individual_item_parent(app) -> None:
+    client = app.test_client()
+    set_id = _create_set(client)
+    service = app.extensions["golden_set_service"]
+    first = service.create_item(
+        UUID(set_id),
+        {
+            "case_id": "first-case",
+            "prompt": "First",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "first"},
+        },
+    )
+    service.create_item(
+        UUID(set_id),
+        {
+            "case_id": "second-case",
+            "prompt": "Second",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "second"},
+        },
+    )
+
+    token = _csrf(client, "/backup")
+    one_item = client.post(
+        "/backup/download",
+        data={"csrf_token": token, "items_golden_set_items": str(first.id)},
+    ).get_json()
+    assert len(one_item["golden_sets"]) == 1
+    assert [item["data"]["case_id"] for item in one_item["golden_set_items"]] == ["first-case"]
+    assert one_item["manifest"]["categories"]["golden_sets"]["automatic_dependencies"] == [set_id]
+
+    token = _csrf(client, "/backup")
+    complete = client.post(
+        "/backup/download",
+        data={
+            "csrf_token": token,
+            "categories": [
+                "endpoints",
+                "model_profiles",
+                "judge_profiles",
+                "judge_definitions",
+                "golden_sets",
+                "golden_set_items",
+                "runs",
+            ],
+        },
+    ).get_json()
+    assert all(entry["selected"] for entry in complete["manifest"]["categories"].values())
+    assert all(entry["omitted_count"] == 0 for entry in complete["manifest"]["categories"].values())
+
+
+def test_selective_backup_round_trips_terminal_run_history(app, tmp_path: Path) -> None:
+    client = app.test_client()
+    set_id = UUID(_create_set(client))
+    golden_service = app.extensions["golden_set_service"]
+    golden_service.create_item(
+        set_id,
+        {
+            "case_id": "run-case",
+            "prompt": "Return x",
+            "evaluation_method": "exact_match",
+            "evaluator_config": {"expected_value": "x"},
+        },
+    )
+    endpoint = client.post(
+        "/api/v1/endpoints",
+        json={
+            "name": "Run provider",
+            "completions_url": "https://example.test/v1/chat/completions",
+        },
+    ).get_json()["endpoint"]
+    model = client.post(
+        f"/api/v1/endpoints/{endpoint['id']}/models",
+        json={"model_id": "run-model", "display_name": "Run model"},
+    ).get_json()["model"]
+    queue = app.extensions["run_queue"]
+    run_id = queue.create_run(
+        {"name": "Archived run", "golden_set_id": str(set_id), "model_profile_ids": [model["id"]]}
+    )
+    lease = queue.claim("backup-test")
+    assert lease is not None
+    queue.complete(
+        lease,
+        status="passed",
+        score="1",
+        weight="1",
+        result={"candidate": "x"},
+        metrics={},
+    )
+    assert queue.refresh_run_status(run_id) == "completed"
+
+    token = _csrf(client, "/backup")
+    bundle = client.post(
+        "/backup/download",
+        data={"csrf_token": token, "items_runs": str(run_id)},
+    ).get_json()
+    assert [item["id"] for item in bundle["runs"]] == [str(run_id)]
+    exported_run = bundle["runs"][0]
+    assert len(exported_run["case_snapshots"]) == 1
+    assert len(exported_run["model_snapshots"]) == 1
+    assert len(exported_run["jobs"]) == 1
+    assert len(exported_run["results"]) == 1
+    assert bundle["manifest"]["categories"]["runs"]["included"] == [str(run_id)]
+
+    restored = create_app(
+        env_file=None,
+        settings_environment={
+            "SECRET_KEY": "restored-secret-key-with-at-least-32-bytes",
+            "DATABASE_PATH": str(tmp_path / "restored-runs.db"),
+            "ENCRYPTION_KEY": base64.urlsafe_b64encode(os.urandom(32)).decode(),
+            "LOG_LEVEL": "WARNING",
+        },
+        initialize_database=True,
+        test_config={"TESTING": True},
+    )
+    exchange = restored.extensions["configuration_exchange_service"]
+    assert exchange.import_bundle(bundle, "merge", preview=True).creates == 1
+    exchange.import_bundle(bundle, "merge", preview=False)
+    restored_run = restored.extensions["run_queue"].get_run(run_id)
+    assert restored_run["status"] == "completed"
+    export = restored.extensions["run_export_service"].data(run_id)
+    assert export["run"]["name"] == "Archived run"
+    assert export["results"][0]["status"] == "passed"
+
+    with pytest.raises(ApiError, match="already exists"):
+        exchange.import_bundle(bundle, "merge", preview=False)
+
+
 def test_configuration_bundle_can_reference_previously_imported_model(app) -> None:
     client = app.test_client()
     endpoint = client.post(
@@ -889,6 +1064,66 @@ def test_configuration_bundle_can_reference_previously_imported_model(app) -> No
     bundle["judge_profiles"][0]["data"]["model_profile_id"] = "a2000000-0000-4000-8000-000000000099"
     with pytest.raises(ValidationApiError, match="Configuration file is invalid"):
         service.import_bundle(bundle, "merge", preview=True)
+
+
+def test_archive_all_restore_archives_categories_omitted_from_backup(app) -> None:
+    client = app.test_client()
+    endpoint = client.post(
+        "/api/v1/endpoints",
+        json={
+            "name": "Existing provider",
+            "completions_url": "https://example.test/v1/chat/completions",
+        },
+    ).get_json()["endpoint"]
+    set_id = _create_set(client)
+    bundle = {
+        "schema_version": "1.0",
+        "endpoints": [],
+        "model_profiles": [],
+        "judge_profiles": [],
+        "judge_definitions": [],
+        "golden_sets": [
+            {
+                "id": "a4000000-0000-4000-8000-000000000001",
+                "data": {
+                    "name": "Replacement set",
+                    "version": "1.0",
+                    "description": None,
+                    "tags": [],
+                    "judge_profile_id": None,
+                    "quality_gates": {},
+                    "active": True,
+                },
+            }
+        ],
+        "golden_set_items": [],
+        "runs": [],
+    }
+    service = app.extensions["configuration_exchange_service"]
+    plan = service.import_bundle(bundle, "archive_all", preview=True)
+    assert plan.archives == 2
+    service.import_bundle(bundle, "archive_all", preview=False)
+
+    connection = app.extensions["database_factory"].connect()
+    try:
+        assert (
+            connection.execute(
+                "SELECT active FROM endpoints WHERE id=?", (endpoint["id"],)
+            ).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute("SELECT active FROM golden_sets WHERE id=?", (set_id,)).fetchone()[0]
+            == 0
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) FROM golden_sets WHERE name='Replacement set' AND active=1"
+            ).fetchone()[0]
+            == 1
+        )
+    finally:
+        connection.close()
 
 
 def test_configuration_preview_can_be_committed_without_reselecting_file(app) -> None:

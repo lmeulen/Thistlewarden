@@ -32,7 +32,8 @@ from werkzeug.wrappers import Response
 
 from evaluator.aggregates import AggregateService
 from evaluator.api.errors import ApiError, ValidationApiError
-from evaluator.config_io import ConfigurationExchangeService, ImportPlan
+from evaluator.config_io import BackupSelection, ConfigurationExchangeService, ImportPlan
+from evaluator.config_io import RestoreMode as RestoreMode
 from evaluator.dashboard import DashboardService, DashboardStatistics
 from evaluator.discovery import ModelDiscoveryService
 from evaluator.endpoints import EndpointService, HeaderInput
@@ -59,6 +60,7 @@ from evaluator.time import to_utc_iso
 __all__ = [
     "Any",
     "ApiError",
+    "BackupSelection",
     "ComparisonFilter",
     "ConfigurationError",
     "DashboardService",
