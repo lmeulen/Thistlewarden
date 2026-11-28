@@ -72,6 +72,7 @@ class HeaderInput(BaseModel):
 
 
 EndpointApiFormat = Literal["openai", "anthropic"]
+EndpointAuthType = Literal["api_key", "oauth_client_credentials"]
 
 
 class EndpointInput(BaseModel):
@@ -81,9 +82,14 @@ class EndpointInput(BaseModel):
     api_format: EndpointApiFormat = "openai"
     completions_url: str
     models_url: str | None = None
+    auth_type: EndpointAuthType = "api_key"
     api_key: str | None = Field(default=None, max_length=16_384)
     api_key_header: str = Field(default="Authorization", max_length=256)
     api_key_prefix: str = Field(default="", max_length=100)
+    oauth_token_url: str | None = None
+    oauth_client_id: str | None = Field(default=None, max_length=16_384)
+    oauth_client_secret: str | None = Field(default=None, max_length=16_384)
+    oauth_scope: str | None = Field(default=None, max_length=16_384)
     extra_headers: list[HeaderInput] = Field(default_factory=list, max_length=100)
     timeout_seconds: int = Field(default=60, gt=0, le=3600)
     max_retries: int = Field(default=2, ge=0, le=20)
@@ -122,6 +128,22 @@ class EndpointInput(BaseModel):
             trusted_internal=self.trusted_internal_http,
             confirmed=self.security_warning_confirmed,
         )
+        self.oauth_token_url = validate_provider_url(
+            self.oauth_token_url,
+            trusted_internal=self.trusted_internal_http,
+            confirmed=self.security_warning_confirmed,
+        )
+        if self.auth_type == "oauth_client_credentials":
+            if not self.oauth_token_url or not self.oauth_client_id or not self.oauth_client_secret:
+                raise ValueError(
+                    "OAuth client credentials require token URL, client ID, and client secret"
+                )
+            if self.api_key and self.api_key_header.lower() == "authorization":
+                raise ValueError("OAuth API key header must not be Authorization")
+        elif any(
+            (self.oauth_token_url, self.oauth_client_id, self.oauth_client_secret, self.oauth_scope)
+        ):
+            raise ValueError("OAuth fields require oauth_client_credentials authentication")
         lowered = [header.name.lower() for header in self.extra_headers]
         if len(lowered) != len(set(lowered)):
             raise ValueError("extra header names must be unique")
@@ -139,9 +161,14 @@ class EndpointPatch(BaseModel):
     api_format: EndpointApiFormat | None = None
     completions_url: str | None = None
     models_url: str | None = None
+    auth_type: EndpointAuthType | None = None
     api_key: str | None = Field(default=None, max_length=16_384)
     api_key_header: str | None = Field(default=None, max_length=256)
     api_key_prefix: str | None = Field(default=None, max_length=100)
+    oauth_token_url: str | None = None
+    oauth_client_id: str | None = Field(default=None, max_length=16_384)
+    oauth_client_secret: str | None = Field(default=None, max_length=16_384)
+    oauth_scope: str | None = Field(default=None, max_length=16_384)
     extra_headers: list[HeaderInput] | None = Field(default=None, max_length=100)
     timeout_seconds: int | None = Field(default=None, gt=0, le=3600)
     max_retries: int | None = Field(default=None, ge=0, le=20)
@@ -160,6 +187,7 @@ class EndpointRecord:
     api_key_secret_id: UUID | None
     created_at: datetime
     updated_at: datetime
+    oauth_client_secret_id: UUID | None = None
 
     @property
     def has_api_key(self) -> bool:
@@ -219,6 +247,11 @@ class SQLiteEndpointRepository:
             api_key=_MASK if row["api_key_secret_id"] else None,
             api_key_header=row["api_key_header"],
             api_key_prefix=row["api_key_prefix"],
+            auth_type=row["auth_type"],
+            oauth_token_url=row["oauth_token_url"],
+            oauth_client_id=row["oauth_client_id"],
+            oauth_client_secret=_MASK if row["oauth_client_secret_id"] else None,
+            oauth_scope=row["oauth_scope"],
             extra_headers=headers,
             timeout_seconds=row["timeout_seconds"],
             max_retries=row["max_retries"],
@@ -230,12 +263,16 @@ class SQLiteEndpointRepository:
             security_warning_confirmed=bool(row["security_warning_confirmed"]),
         )
         secret_id = UUID(row["api_key_secret_id"]) if row["api_key_secret_id"] else None
+        oauth_secret_id = (
+            UUID(row["oauth_client_secret_id"]) if row["oauth_client_secret_id"] else None
+        )
         return EndpointRecord(
             UUID(row["id"]),
             data,
             secret_id,
             _parse_utc(row["created_at"]),
             _parse_utc(row["updated_at"]),
+            oauth_secret_id,
         )
 
     def insert(
@@ -243,6 +280,7 @@ class SQLiteEndpointRepository:
         endpoint_id: UUID,
         data: EndpointInput,
         api_key_secret_id: UUID | None,
+        oauth_client_secret_id: UUID | None,
         headers: list[tuple[HeaderInput, UUID | None]],
     ) -> None:
         now = to_utc_iso(utc_now())
@@ -253,10 +291,11 @@ class SQLiteEndpointRepository:
                     """
                     INSERT INTO endpoints(
                         id, name, api_format, completions_url, models_url, api_key_secret_id,
-                        api_key_header, api_key_prefix, timeout_seconds, max_retries,
+                        api_key_header, api_key_prefix, auth_type, oauth_token_url, oauth_client_id,
+                        oauth_client_secret_id, oauth_scope, timeout_seconds, max_retries,
                         requests_per_minute, tokens_per_minute, max_concurrency, active,
                         trusted_internal_http, security_warning_confirmed, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(endpoint_id),
@@ -267,6 +306,11 @@ class SQLiteEndpointRepository:
                         str(api_key_secret_id) if api_key_secret_id else None,
                         data.api_key_header,
                         data.api_key_prefix,
+                        data.auth_type,
+                        data.oauth_token_url,
+                        data.oauth_client_id,
+                        str(oauth_client_secret_id) if oauth_client_secret_id else None,
+                        data.oauth_scope,
                         data.timeout_seconds,
                         data.max_retries,
                         data.requests_per_minute,
@@ -301,6 +345,7 @@ class SQLiteEndpointRepository:
         endpoint_id: UUID,
         data: EndpointInput,
         api_key_secret_id: UUID | None,
+        oauth_client_secret_id: UUID | None,
         headers: list[tuple[HeaderInput, UUID | None]],
     ) -> None:
         connection = self._factory.connect()
@@ -311,7 +356,8 @@ class SQLiteEndpointRepository:
                     UPDATE endpoints SET
                         name = ?, api_format = ?, completions_url = ?, models_url = ?,
                         api_key_secret_id = ?, api_key_header = ?, api_key_prefix = ?,
-                        timeout_seconds = ?,
+                        auth_type = ?, oauth_token_url = ?, oauth_client_id = ?,
+                        oauth_client_secret_id = ?, oauth_scope = ?, timeout_seconds = ?,
                         max_retries = ?, requests_per_minute = ?, tokens_per_minute = ?,
                         max_concurrency = ?, active = ?, trusted_internal_http = ?,
                         security_warning_confirmed = ?, updated_at = ?
@@ -325,6 +371,11 @@ class SQLiteEndpointRepository:
                         str(api_key_secret_id) if api_key_secret_id else None,
                         data.api_key_header,
                         data.api_key_prefix,
+                        data.auth_type,
+                        data.oauth_token_url,
+                        data.oauth_client_id,
+                        str(oauth_client_secret_id) if oauth_client_secret_id else None,
+                        data.oauth_scope,
                         data.timeout_seconds,
                         data.max_retries,
                         data.requests_per_minute,
@@ -461,10 +512,17 @@ class EndpointService:
             )
             if api_secret:
                 created.append(api_secret)
+            oauth_secret = (
+                self._secrets.create("endpoint_oauth_client_secret", data.oauth_client_secret)
+                if data.oauth_client_secret
+                else None
+            )
+            if oauth_secret:
+                created.append(oauth_secret)
             headers, header_secrets = self._secret_headers(data.extra_headers)
             created.extend(header_secrets)
             endpoint_id = uuid4()
-            self._repository.insert(endpoint_id, data, api_secret, headers)
+            self._repository.insert(endpoint_id, data, api_secret, oauth_secret, headers)
             record = self.get(endpoint_id)
             log_semantic_event(_LOG, "endpoint_created", endpoint_id=endpoint_id)
             return record
@@ -482,6 +540,7 @@ class EndpointService:
         patch = self.parse_patch(payload)
         changes = patch.model_dump(exclude_unset=True)
         incoming_api_key = changes.pop("api_key", None)
+        incoming_oauth_secret = changes.pop("oauth_client_secret", None)
         incoming_headers = changes.pop("extra_headers", None)
         merged = existing.data.model_dump()
         merged.update(changes)
@@ -489,6 +548,10 @@ class EndpointService:
             merged["api_key"] = _MASK if existing.api_key_secret_id else None
         else:
             merged["api_key"] = incoming_api_key
+        if incoming_oauth_secret in {None, ""}:
+            merged["oauth_client_secret"] = _MASK if existing.oauth_client_secret_id else None
+        else:
+            merged["oauth_client_secret"] = incoming_oauth_secret
         if incoming_headers is not None:
             merged["extra_headers"] = incoming_headers
         data = self.parse_input(merged)
@@ -496,12 +559,20 @@ class EndpointService:
         new_secrets: list[UUID] = []
         old_secret_ids: list[UUID] = []
         api_secret = existing.api_key_secret_id
+        oauth_secret = existing.oauth_client_secret_id
         try:
             if incoming_api_key not in {None, ""}:
                 api_secret = self._secrets.create("endpoint_api_key", incoming_api_key)
                 new_secrets.append(api_secret)
                 if existing.api_key_secret_id:
                     old_secret_ids.append(existing.api_key_secret_id)
+            if incoming_oauth_secret not in {None, ""}:
+                oauth_secret = self._secrets.create(
+                    "endpoint_oauth_client_secret", incoming_oauth_secret
+                )
+                new_secrets.append(oauth_secret)
+                if existing.oauth_client_secret_id:
+                    old_secret_ids.append(existing.oauth_client_secret_id)
             if incoming_headers is None:
                 headers: list[tuple[HeaderInput, UUID | None]] = []
                 for header in existing.data.extra_headers:
@@ -535,7 +606,7 @@ class EndpointService:
                     for secret_id in existing_header_secrets.values()
                     if secret_id not in reused
                 )
-            self._repository.replace(endpoint_id, data, api_secret, headers)
+            self._repository.replace(endpoint_id, data, api_secret, oauth_secret, headers)
         except sqlite3.IntegrityError as exc:
             for secret_id in new_secrets:
                 self._secrets.delete(secret_id)
@@ -562,6 +633,8 @@ class EndpointService:
             ) from exc
         if existing.api_key_secret_id:
             self._secrets.delete(existing.api_key_secret_id)
+        if existing.oauth_client_secret_id:
+            self._secrets.delete(existing.oauth_client_secret_id)
         for secret_id in header_secret_ids:
             self._secrets.delete(secret_id)
         log_semantic_event(_LOG, "endpoint_deleted", endpoint_id=endpoint_id)

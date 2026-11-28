@@ -21,16 +21,16 @@ def test_product_branding_is_consistent() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     assert 'name = "thistlewarden"' in pyproject
-    assert 'version = "0.3.3"' in pyproject
+    assert 'version = "0.4.0"' in pyproject
     assert 'thistlewarden = "evaluator.server:main"' in pyproject
     assert 'thistlewarden-admin = "evaluator.cli:main"' in pyproject
     assert "name: thistlewarden" in compose
-    assert "image: thistlewarden:0.3.3" in compose
-    assert "image: thistlewarden:0.3.3" in compose_e2e
+    assert "image: thistlewarden:0.4.0" in compose
+    assert "image: thistlewarden:0.4.0" in compose_e2e
     assert "name: thistlewarden-data" in compose
     assert readme.startswith("# Thistlewarden\n")
-    assert "**Version 0.3.3 is a beta release.**" in readme
-    assert "docs/release-notes-0.3.3.md" in readme
+    assert "**Version 0.4.0 is a beta release.**" in readme
+    assert "docs/release-notes-0.4.0.md" in readme
 
     searched_roots = [ROOT / "src", ROOT / "docs", ROOT / "tests"]
     searched_files = [ROOT / "README.md", ROOT / "SECURITY.md"]

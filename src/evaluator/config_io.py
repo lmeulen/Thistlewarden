@@ -335,8 +335,9 @@ class ConfigurationExchangeService:
         try:
             endpoints = []
             for row in c.execute("SELECT * FROM endpoints ORDER BY id"):
-                data = _plain(row, {"api_key_secret_id"})
+                data = _plain(row, {"api_key_secret_id", "oauth_client_secret_id"})
                 data["api_key"] = None
+                data["oauth_client_secret"] = None
                 headers = []
                 for h in c.execute(
                     "SELECT name,value,secret_id FROM endpoint_headers "
@@ -351,7 +352,10 @@ class ConfigurationExchangeService:
                         }
                     )
                 data["extra_headers"] = headers
-                data["secret_missing"] = row["api_key_secret_id"] is not None
+                data["secret_missing"] = (
+                    row["api_key_secret_id"] is not None
+                    or row["oauth_client_secret_id"] is not None
+                )
                 endpoints.append(BundleObject(id=row["id"], data=data))
             models = [
                 BundleObject(id=r["id"], data={**_plain(r), "endpoint_id": r["endpoint_id"]})
@@ -627,7 +631,10 @@ class ConfigurationExchangeService:
             bundle = ConfigurationBundle.model_validate(payload)
             for item in bundle.endpoints:
                 d = dict(item.data)
-                d.pop("secret_missing", None)
+                secret_missing = bool(d.pop("secret_missing", None))
+                d.pop("oauth_client_secret", None)
+                if d.get("auth_type") == "oauth_client_credentials" and secret_missing:
+                    d["oauth_client_secret"] = "********"  # noqa: S105
                 for h in d.get("extra_headers", []):
                     if h.get("secret") and h.get("value") is None:
                         h["value"] = ""
@@ -907,8 +914,9 @@ class ConfigurationExchangeService:
                 "id,name,completions_url,models_url,api_key_secret_id,api_key_header,"
                 "api_key_prefix,timeout_seconds,max_retries,requests_per_minute,"
                 "tokens_per_minute,max_concurrency,active,trusted_internal_http,"
-                "security_warning_confirmed,created_at,updated_at,api_format"
-                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "security_warning_confirmed,created_at,updated_at,api_format,auth_type,oauth_token_url,"
+                "oauth_client_id,oauth_client_secret_id,oauth_scope"
+                ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     rid(x.id),
                     d["name"],
@@ -928,6 +936,11 @@ class ConfigurationExchangeService:
                     now,
                     now,
                     d.get("api_format", "openai"),
+                    d.get("auth_type", "api_key"),
+                    d.get("oauth_token_url"),
+                    d.get("oauth_client_id"),
+                    None,
+                    d.get("oauth_scope"),
                 ),
             )
             for h in d.get("extra_headers", []):

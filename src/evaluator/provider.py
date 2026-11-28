@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
+from uuid import UUID
 
 import httpx
 import simplejson
@@ -337,19 +340,115 @@ def parse_anthropic_completion_response(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _OAuthToken:
+    value: str
+    token_type: str
+    expires_at: float
+
+
+class OAuthClientCredentials:
+    """Fetch and cache OAuth 2.0 client-credentials tokens in process memory only."""
+
+    def __init__(self, secrets: SQLiteSecretRepository) -> None:
+        self._secrets = secrets
+        self._tokens: dict[UUID, _OAuthToken] = {}
+        self._lock = threading.Lock()
+        self._locks: dict[UUID, threading.Lock] = {}
+
+    def authorization_header(self, endpoint: EndpointRecord) -> str:
+        cached = self._tokens.get(endpoint.id)
+        if cached is not None and cached.expires_at > time.monotonic() + 30:
+            return f"{cached.token_type} {cached.value}"
+        with self._lock:
+            endpoint_lock = self._locks.setdefault(endpoint.id, threading.Lock())
+        with endpoint_lock:
+            cached = self._tokens.get(endpoint.id)
+            if cached is None or cached.expires_at <= time.monotonic() + 30:
+                cached = self._fetch(endpoint)
+                self._tokens[endpoint.id] = cached
+        return f"{cached.token_type} {cached.value}"
+
+    def _fetch(self, endpoint: EndpointRecord) -> _OAuthToken:
+        data = endpoint.data
+        secret_id = endpoint.oauth_client_secret_id
+        secret = self._secrets.get(secret_id) if secret_id else None
+        if not data.oauth_token_url or not data.oauth_client_id or secret is None:
+            raise ProviderClientError("OAuth client credentials are unavailable.")
+        validate_destination(endpoint, data.oauth_token_url)
+        form: dict[str, str] = {
+            "grant_type": "client_credentials",
+            "client_id": data.oauth_client_id,
+            "client_secret": secret.value,
+        }
+        if data.oauth_scope:
+            form["scope"] = data.oauth_scope
+        try:
+            with httpx.Client(
+                timeout=httpx.Timeout(float(data.timeout_seconds)),
+                follow_redirects=False,
+                trust_env=False,
+            ) as client:
+                response = client.post(
+                    data.oauth_token_url,
+                    data=form,
+                    headers={
+                        "Accept": "application/json",
+                        "Content-Type": "application/x-www-form-urlencoded",
+                    },
+                )
+        except httpx.TimeoutException as exc:
+            raise TimeoutError() from exc
+        except httpx.NetworkError as exc:
+            raise NetworkError() from exc
+        if response.status_code in {401, 403}:
+            raise AuthenticationError(
+                f"OAuth token request was rejected (HTTP {response.status_code})."
+            )
+        if response.status_code >= 500:
+            raise ProviderServerError(
+                f"OAuth token service is unavailable (HTTP {response.status_code})."
+            )
+        if response.status_code >= 400:
+            raise ProviderClientError(
+                f"OAuth token request was rejected (HTTP {response.status_code})."
+            )
+        try:
+            payload = response.json()
+            token = payload["access_token"]
+            token_type = payload.get("token_type", "Bearer")
+            expires_in = int(payload.get("expires_in", 300))
+            if (
+                not isinstance(token, str)
+                or not token
+                or not isinstance(token_type, str)
+                or not token_type
+            ):
+                raise ValueError
+            if expires_in <= 30:
+                raise ValueError
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            raise InvalidProviderResponseError("OAuth token response is invalid.") from exc
+        return _OAuthToken(token, token_type, time.monotonic() + expires_in)
+
+
 class ProviderHeaderResolver:
     def __init__(
         self,
         endpoint_repository: SQLiteEndpointRepository,
         secrets: SQLiteSecretRepository,
         environment: Mapping[str, str] | None = None,
+        oauth: OAuthClientCredentials | None = None,
     ) -> None:
         self._endpoints = endpoint_repository
         self._secrets = secrets
         self._environment = os.environ if environment is None else environment
+        self._oauth = oauth or OAuthClientCredentials(secrets)
 
     def resolve(self, endpoint: EndpointRecord) -> dict[str, str]:
         headers = {"Accept": "application/json", "Content-Type": "application/json"}
+        if endpoint.data.auth_type == "oauth_client_credentials":
+            headers["Authorization"] = self._oauth.authorization_header(endpoint)
         if endpoint.api_key_secret_id is not None:
             secret = self._secrets.get(endpoint.api_key_secret_id)
             if secret is None:

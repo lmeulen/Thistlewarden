@@ -77,6 +77,7 @@ def test_empty_database_migrates_to_latest_and_is_idempotent(tmp_path: Path) -> 
             (21, "terminalize_cancelled_run_jobs"),
             (22, "add_golden_set_user_prompts"),
             (23, "add_durable_run_job_turns"),
+            (24, "add_endpoint_oauth_client_credentials"),
         ]
     finally:
         connection.close()

@@ -607,9 +607,18 @@ def build_openapi_document() -> dict[str, Any]:
                         },
                         "completions_url": {"type": "string", "format": "uri"},
                         "models_url": {"type": ["string", "null"], "format": "uri"},
+                        "auth_type": {
+                            "type": "string",
+                            "enum": ["api_key", "oauth_client_credentials"],
+                            "default": "api_key",
+                        },
                         "api_key": {"type": ["string", "null"], "writeOnly": True},
                         "api_key_header": {"type": "string", "default": "Authorization"},
                         "api_key_prefix": {"type": "string", "maxLength": 100},
+                        "oauth_token_url": {"type": ["string", "null"], "format": "uri"},
+                        "oauth_client_id": {"type": ["string", "null"], "maxLength": 16384},
+                        "oauth_client_secret": {"type": ["string", "null"], "writeOnly": True},
+                        "oauth_scope": {"type": ["string", "null"], "maxLength": 16384},
                         "extra_headers": {
                             "type": "array",
                             "items": {"$ref": "#/components/schemas/HeaderInput"},

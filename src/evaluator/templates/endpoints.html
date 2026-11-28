@@ -12,8 +12,14 @@
   <div class="heading">
     <div>
       <h2><a href="{{ url_for('gui.endpoint_edit', endpoint_id=endpoint.id) }}">{{ endpoint.data.name }}</a></h2>
-      <p>{{ 'Anthropic-compatible' if endpoint.data.api_format == 'anthropic' else 'OpenAI-compatible' }} · <code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p>
-      {% if endpoint.has_api_key %}
+      <p>{{ 'Anthropic-compatible' if endpoint.data.api_format == 'anthropic' else 'OpenAI-compatible' }} · {{ 'OAuth client credentials' if endpoint.data.auth_type == 'oauth_client_credentials' else 'API key' }} · <code>{{ endpoint.data.completions_url }}</code> · {{ 'Active' if endpoint.data.active else 'Archived' }}</p>
+      {% if endpoint.data.auth_type == 'oauth_client_credentials' %}
+        {% if endpoint.oauth_client_secret_id %}
+        <p><span class="badge status-passed">OAuth client credentials set</span></p>
+        {% else %}
+        <p><span class="badge status-indeterminate">OAuth client credentials not set</span></p>
+        {% endif %}
+      {% elif endpoint.has_api_key %}
       <p><span class="badge status-passed">API key set</span></p>
       {% else %}
       <p><span class="badge status-indeterminate">API key not set</span></p>

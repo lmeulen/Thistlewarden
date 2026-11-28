@@ -95,6 +95,39 @@ def test_prefix_is_combined_without_trimming() -> None:
     assert endpoint.api_key_prefix == "  Token "
 
 
+def test_oauth_client_credentials_requires_complete_configuration() -> None:
+    base = {
+        "name": "OAuth provider",
+        "completions_url": "https://provider.example.test/v1",
+        "auth_type": "oauth_client_credentials",
+    }
+    with pytest.raises(ValidationError):
+        EndpointInput.model_validate(base)
+    endpoint = EndpointInput.model_validate(
+        {
+            **base,
+            "oauth_token_url": "https://auth.example.test/token",
+            "oauth_client_id": "client-id",
+            "oauth_client_secret": "client-secret",
+            "oauth_scope": "model.read",
+        }
+    )
+    assert endpoint.oauth_token_url == "https://auth.example.test/token"
+    with pytest.raises(ValidationError):
+        EndpointInput.model_validate(
+            {**base, "api_key": "static-key", "api_key_header": "Authorization"}
+        )
+
+
+def test_api_key_mode_rejects_oauth_fields() -> None:
+    with pytest.raises(ValidationError):
+        EndpointInput(
+            name="Provider",
+            completions_url="https://provider.example.test/v1",
+            oauth_token_url="https://auth.example.test/token",
+        )
+
+
 def test_duplicate_headers_and_api_header_collision_are_rejected() -> None:
     base = {"name": "Provider", "completions_url": "https://example.com/v1"}
     with pytest.raises(ValidationError):

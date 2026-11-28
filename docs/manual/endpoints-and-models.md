@@ -48,7 +48,7 @@ Authentication remains endpoint-configurable. Use provider-documented API-key he
 
 Endpoint URLs must be absolute `https://` or `http://` URLs. They must not contain embedded usernames, passwords, or URL fragments. Put credentials in the API key or additional-header fields instead.
 
-Use HTTPS for external providers. HTTP is accepted automatically only for `localhost` and loopback addresses. To save a non-loopback HTTP endpoint, you must explicitly mark it as a **Trusted internal HTTP endpoint** and confirm its security warning. Do this only for a private network endpoint that you control; unsecured HTTP can expose prompts, answers, and credentials.
+Use HTTPS for external providers. The endpoint form accepts HTTP only for `localhost` and loopback addresses. Use HTTPS for all other provider and OAuth token URLs; unsecured HTTP can expose prompts, answers, and credentials.
 
 ### Connection settings
 
@@ -67,6 +67,12 @@ Saving an endpoint validates its format but does not prove that the URL, credent
 ### Authentication and headers
 
 Configure authentication on the endpoint, not in model profiles or test material. Thistlewarden applies the endpoint credentials and headers to provider requests for every model profile under that endpoint.
+
+### OAuth 2.0 client credentials
+
+Select **OAuth 2.0 client credentials** when provider issues access tokens through OAuth client credentials. Enter provider's complete **Token URL**, client ID, client secret, and optional scope. Thistlewarden sends form-encoded `grant_type=client_credentials`, `client_id`, `client_secret`, and scope when configured. Access tokens remain only in application memory and refresh before expiry; client secret is encrypted at rest and never displayed after saving.
+
+OAuth endpoint can also use optional API key and additional headers when provider gateway requires them. OAuth-generated `Authorization` header cannot share API-key header name. Thistlewarden supports client credentials form authentication only; authorization-code, PKCE, device-code, refresh-token, and client-secret Basic flows are unsupported.
 
 ### API key authentication
 
@@ -205,7 +211,6 @@ A successful discovery proves that the Models URL responded with a compatible mo
 | Tokens/minute | Not configured |
 | Maximum concurrent requests | `2` |
 | Active | Yes |
-| Trusted internal HTTP endpoint | No |
 
 Enter the ChatNS subscription key in **API key**. Do not put it in the URL, in an additional public header, or in this manual. The key is sent without a prefix, which produces this request header:
 
@@ -219,7 +224,7 @@ Add this public additional header:
 User-Agent|public|ChatNS-Evaluator/1.0
 ```
 
-In the endpoint form, leave **Trusted internal HTTP endpoint** and its confirmation unchecked because both ChatNS URLs use HTTPS. Save the endpoint, select **Test connection and discover models**, then select the model profiles needed for evaluation.
+Save the endpoint, select **Test connection and discover models**, then select the model profiles needed for evaluation.
 
 The configured concurrency limit of `2` intentionally restricts simultaneous ChatNS calls. Do not increase it without confirming the service quota and expected workload. Keep rate-limit fields blank unless ChatNS supplies limits that should be enforced by Thistlewarden.
 

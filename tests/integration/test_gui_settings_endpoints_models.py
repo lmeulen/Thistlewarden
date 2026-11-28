@@ -537,6 +537,17 @@ def test_unexpected_model_test_exception_is_visible_without_detail(app, monkeypa
     assert sensitive_detail not in text
 
 
+def test_endpoint_form_omits_http_trust_checkboxes(app) -> None:
+    text = app.test_client().get("/endpoints/new").get_data(as_text=True)
+
+    assert 'name="trusted_internal_http"' not in text
+    assert 'name="security_warning_confirmed"' not in text
+    assert "Trusted internal HTTP endpoint" not in text
+    assert "I confirm that unsecured HTTP may expose traffic and secrets." not in text
+    assert 'class="wide oauth-client-credentials"' in text
+    assert 'class="help oauth-help"' in text
+
+
 def test_endpoints_overview_shows_api_key_status_without_exposing_secrets(app) -> None:
     service = app.extensions["endpoint_service"]
     with_key = _endpoint_form("unused", name="Endpoint with key")
@@ -554,6 +565,25 @@ def test_endpoints_overview_shows_api_key_status_without_exposing_secrets(app) -
     assert text.count("API key not set") == 1
     assert "gui-fixture-secret" not in text
     assert "********" not in text
+
+
+def test_endpoints_overview_shows_oauth_status_separately(app) -> None:
+    app.extensions["endpoint_service"].create(
+        {
+            "name": "OAuth provider",
+            "completions_url": "https://provider.example/v1/chat/completions",
+            "auth_type": "oauth_client_credentials",
+            "oauth_token_url": "https://auth.example/token",
+            "oauth_client_id": "client-id",
+            "oauth_client_secret": "client-secret",
+        }
+    )
+
+    text = app.test_client().get("/endpoints").get_data(as_text=True)
+
+    assert "OAuth client credentials set" in text
+    assert "API key not set" not in text
+    assert "client-secret" not in text
 
 
 def test_gui_creates_endpoint_preserves_blank_secrets_and_creates_model(app) -> None:

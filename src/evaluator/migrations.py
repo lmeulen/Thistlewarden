@@ -585,6 +585,20 @@ def _migration_17(connection: sqlite3.Connection) -> None:
     )
 
 
+def _migration_24_add_endpoint_oauth_client_credentials(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        "ALTER TABLE endpoints ADD COLUMN auth_type TEXT NOT NULL DEFAULT 'api_key' "
+        "CHECK(auth_type IN ('api_key', 'oauth_client_credentials'))"
+    )
+    connection.execute("ALTER TABLE endpoints ADD COLUMN oauth_token_url TEXT")
+    connection.execute("ALTER TABLE endpoints ADD COLUMN oauth_client_id TEXT")
+    connection.execute(
+        "ALTER TABLE endpoints ADD COLUMN oauth_client_secret_id TEXT "
+        "REFERENCES secret_records(id) ON DELETE RESTRICT"
+    )
+    connection.execute("ALTER TABLE endpoints ADD COLUMN oauth_scope TEXT")
+
+
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(1, "create_settings", _migration_1),
     Migration(2, "add_settings_updated_at", _migration_2),
@@ -609,6 +623,11 @@ MIGRATIONS: tuple[Migration, ...] = (
     Migration(21, "terminalize_cancelled_run_jobs", _migration_21),
     Migration(22, "add_golden_set_user_prompts", _migration_22),
     Migration(23, "add_durable_run_job_turns", _migration_23),
+    Migration(
+        24,
+        "add_endpoint_oauth_client_credentials",
+        _migration_24_add_endpoint_oauth_client_credentials,
+    ),
 )
 LATEST_SCHEMA_VERSION = MIGRATIONS[-1].version
 

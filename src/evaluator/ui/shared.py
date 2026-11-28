@@ -369,6 +369,11 @@ def _endpoint_payload() -> dict[str, Any]:
         "api_key": request.form.get("api_key") or None,
         "api_key_header": request.form.get("api_key_header", "Authorization"),
         "api_key_prefix": request.form.get("api_key_prefix", ""),
+        "auth_type": request.form.get("auth_type", "api_key"),
+        "oauth_token_url": _optional("oauth_token_url"),
+        "oauth_client_id": _optional("oauth_client_id"),
+        "oauth_client_secret": request.form.get("oauth_client_secret") or None,
+        "oauth_scope": _optional("oauth_scope"),
         "extra_headers": _headers_from_form(),
         "timeout_seconds": _integer("timeout_seconds", 60),
         "max_retries": _integer("max_retries", 2),
@@ -376,8 +381,6 @@ def _endpoint_payload() -> dict[str, Any]:
         "tokens_per_minute": _integer("tokens_per_minute"),
         "max_concurrency": _integer("max_concurrency"),
         "active": "active" in request.form,
-        "trusted_internal_http": "trusted_internal_http" in request.form,
-        "security_warning_confirmed": "security_warning_confirmed" in request.form,
     }
 
 

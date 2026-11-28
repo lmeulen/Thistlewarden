@@ -88,6 +88,31 @@ def test_endpoint_rejects_unknown_api_format(app) -> None:
     assert response.status_code == 400
 
 
+def test_oauth_endpoint_masks_client_secret_and_persists_metadata(app) -> None:
+    payload = _payload("OAuth")
+    payload.update(
+        {
+            "auth_type": "oauth_client_credentials",
+            "api_key_header": "X-Gateway-Key",
+            "api_key_prefix": "",
+            "oauth_token_url": "https://auth.example.test/token",
+            "oauth_client_id": "client-id",
+            "oauth_client_secret": "oauth-client-secret",
+            "oauth_scope": "model.read",
+        }
+    )
+    response = app.test_client().post("/api/v1/endpoints", json=payload)
+    assert response.status_code == 201
+    endpoint = response.get_json()["endpoint"]
+    assert endpoint["auth_type"] == "oauth_client_credentials"
+    assert endpoint["oauth_token_url"] == "https://auth.example.test/token"
+    assert endpoint["oauth_client_id"] == "client-id"
+    assert endpoint["oauth_client_secret"] == "********"
+    assert "oauth-client-secret" not in response.get_data(as_text=True)
+    database = app.extensions["database_factory"].database_path
+    assert b"oauth-client-secret" not in database.read_bytes()
+
+
 def test_patch_without_or_with_blank_api_key_preserves_existing_secret(app) -> None:
     client = app.test_client()
     endpoint_id = client.post("/api/v1/endpoints", json=_payload()).get_json()["endpoint"]["id"]

@@ -98,6 +98,126 @@ def test_header_resolver_composes_api_db_env_and_plain_headers() -> None:
     assert headers["X-Plain"] == "tenant"
 
 
+def test_oauth_header_resolver_uses_cached_token_and_preserves_static_key(monkeypatch) -> None:
+    api_id, oauth_id = uuid4(), uuid4()
+
+    class Secrets:
+        def get(self, record_id):
+            value = "static-key" if record_id == api_id else "client-secret"
+            return type("Secret", (), {"value": value})()
+
+    now = datetime.now(UTC)
+    endpoint = EndpointRecord(
+        uuid4(),
+        EndpointInput(
+            name="OAuth",
+            completions_url="https://provider.example.test/v1",
+            auth_type="oauth_client_credentials",
+            api_key="masked",
+            api_key_header="X-Gateway-Key",
+            oauth_token_url="https://auth.example.test/token",
+            oauth_client_id="client-id",
+            oauth_client_secret="masked",
+        ),
+        api_id,
+        now,
+        now,
+        oauth_id,
+    )
+    calls = 0
+
+    def fake_post(self, url, **kwargs):
+        nonlocal calls
+        calls += 1
+        assert url == "https://auth.example.test/token"
+        assert kwargs["data"] == {
+            "grant_type": "client_credentials",
+            "client_id": "client-id",
+            "client_secret": "client-secret",
+        }
+        assert kwargs["headers"]["Content-Type"] == "application/x-www-form-urlencoded"
+        return httpx.Response(200, json={"access_token": "access-token", "expires_in": 120})
+
+    monkeypatch.setattr(httpx.Client, "post", fake_post)
+    monkeypatch.setattr("evaluator.provider.validate_destination", lambda endpoint, url: None)
+    resolver = ProviderHeaderResolver(FakeEndpoints(), Secrets(), {})  # type: ignore[arg-type]
+    headers = resolver.resolve(endpoint)
+    assert headers["Authorization"] == "Bearer access-token"
+    assert headers["X-Gateway-Key"] == "static-key"
+    assert resolver.resolve(endpoint)["Authorization"] == "Bearer access-token"
+    assert calls == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "error"),
+    [
+        (401, AuthenticationError),
+        (400, ProviderClientError),
+        (503, ProviderServerError),
+    ],
+)
+def test_oauth_header_resolver_classifies_token_failures(monkeypatch, status, error) -> None:
+    oauth_id = uuid4()
+
+    class Secrets:
+        def get(self, record_id):
+            return type("Secret", (), {"value": "client-secret"})()
+
+    now = datetime.now(UTC)
+    endpoint = EndpointRecord(
+        uuid4(),
+        EndpointInput(
+            name="OAuth",
+            completions_url="https://provider.example.test/v1",
+            auth_type="oauth_client_credentials",
+            oauth_token_url="https://auth.example.test/token",
+            oauth_client_id="client-id",
+            oauth_client_secret="masked",
+        ),
+        None,
+        now,
+        now,
+        oauth_id,
+    )
+    monkeypatch.setattr(httpx.Client, "post", lambda self, url, **kwargs: httpx.Response(status))
+    monkeypatch.setattr("evaluator.provider.validate_destination", lambda endpoint, url: None)
+
+    with pytest.raises(error, match=f"HTTP {status}"):
+        ProviderHeaderResolver(FakeEndpoints(), Secrets(), {}).resolve(endpoint)  # type: ignore[arg-type]
+
+
+def test_oauth_header_resolver_rejects_malformed_token_response(monkeypatch) -> None:
+    oauth_id = uuid4()
+
+    class Secrets:
+        def get(self, record_id):
+            return type("Secret", (), {"value": "client-secret"})()
+
+    now = datetime.now(UTC)
+    endpoint = EndpointRecord(
+        uuid4(),
+        EndpointInput(
+            name="OAuth",
+            completions_url="https://provider.example.test/v1",
+            auth_type="oauth_client_credentials",
+            oauth_token_url="https://auth.example.test/token",
+            oauth_client_id="client-id",
+            oauth_client_secret="masked",
+        ),
+        None,
+        now,
+        now,
+        oauth_id,
+    )
+    monkeypatch.setattr(
+        httpx.Client, "post", lambda self, url, **kwargs: httpx.Response(200, json={})
+    )
+    monkeypatch.setattr("evaluator.provider.validate_destination", lambda endpoint, url: None)
+
+    with pytest.raises(InvalidProviderResponseError, match="OAuth token response is invalid"):
+        ProviderHeaderResolver(FakeEndpoints(), Secrets(), {}).resolve(endpoint)  # type: ignore[arg-type]
+
+
 def test_request_body_composes_messages_optional_fields_reasoning_and_custom() -> None:
     profile = ModelProfileInput(
         model_id="model",
